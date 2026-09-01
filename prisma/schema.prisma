@@ -113,6 +113,7 @@ model Message {
   content      String
   image        String?    // data URL for in-chat photo attachments
   system       Boolean    @default(false)
+  forwarded    Boolean    @default(false) // true when the message was forwarded from another chat
   readAt       DateTime?
   deletedAt    DateTime?  // "unsend" — soft delete, renders as an Unsent placeholder
   createdAt    DateTime   @default(now())

@@ -10,10 +10,13 @@ import {
   CheckCheck,
   Coins,
   Copy,
+  CornerUpRight,
   Flag,
+  Forward,
   GraduationCap,
   Handshake,
   ImagePlus,
+  Lock,
   MessageCircle,
   Search,
   SendHorizonal,
@@ -241,6 +244,7 @@ function MessageBubble({
   canReact,
   onReact,
   onUnsend,
+  onForward,
 }: {
   message: MessageDTO
   mine: boolean
@@ -249,6 +253,8 @@ function MessageBubble({
   onReact: (messageId: string, emoji: string) => void
   /** present when the viewer may unsend (own, non-system, persisted message) */
   onUnsend?: (messageId: string) => void
+  /** present when the viewer has other chats to forward into */
+  onForward?: (message: MessageDTO) => void
 }) {
   const [copied, setCopied] = useState(false)
   const [zoom, setZoom] = useState(false)
@@ -258,6 +264,7 @@ function MessageBubble({
   const hasText = Boolean(message.content) && message.content !== '📷 Photo'
   const hasReactions = message.reactions.length > 0
   const canUnsend = Boolean(onUnsend) && mine && !message.system && !message.deleted && !message.id.startsWith('tmp-')
+  const canForward = Boolean(onForward) && !message.system && !message.deleted && !message.id.startsWith('tmp-')
 
   // Close the reaction picker on outside interaction (mouse, touch or pen)
   useEffect(() => {
@@ -333,6 +340,17 @@ function MessageBubble({
             {copied ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5" />}
           </button>
         ) : null}
+        {!mine && canForward ? (
+          <button
+            type="button"
+            aria-label="Forward message"
+            title="Forward"
+            onClick={() => onForward?.(message)}
+            className="mb-1.5 grid size-6 shrink-0 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100"
+          >
+            <Forward className="size-3.5" />
+          </button>
+        ) : null}
         <div
           className={cn(
             'max-w-[78%] rounded-2xl px-3.5 py-2',
@@ -351,10 +369,24 @@ function MessageBubble({
                   mine ? 'bg-[#166FE5]' : 'bg-muted'
                 )}
               />
+              {message.forwarded ? (
+                <p className="flex items-center gap-1 px-2 pt-1.5 text-[10px] italic opacity-80">
+                  <CornerUpRight className="size-3" aria-hidden />
+                  Forwarded
+                </p>
+              ) : null}
               {hasText ? <p className="whitespace-pre-line break-words px-2 pb-1 pt-1.5 text-[15px]">{message.content}</p> : null}
             </>
           ) : (
-            <p className="whitespace-pre-line break-words text-[15px]">{message.content}</p>
+            <>
+              {message.forwarded ? (
+                <p className="mb-0.5 flex items-center gap-1 text-[10px] italic opacity-80">
+                  <CornerUpRight className="size-3" aria-hidden />
+                  Forwarded
+                </p>
+              ) : null}
+              <p className="whitespace-pre-line break-words text-[15px]">{message.content}</p>
+            </>
           )}
           <div className={cn('flex items-center justify-end gap-1', hasImage && !hasText && 'px-1.5 pb-0.5')}>
             <span className="text-[10px] opacity-70">{clockTime(message.createdAt)}</span>
@@ -376,6 +408,17 @@ function MessageBubble({
             className="mb-1.5 grid size-6 shrink-0 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100"
           >
             {copied ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5" />}
+          </button>
+        ) : null}
+        {mine && canForward ? (
+          <button
+            type="button"
+            aria-label="Forward message"
+            title="Forward"
+            onClick={() => onForward?.(message)}
+            className="mb-1.5 grid size-6 shrink-0 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100"
+          >
+            <Forward className="size-3.5" />
           </button>
         ) : null}
         {canUnsend ? (
@@ -474,6 +517,155 @@ function TypingBubble({ name }: { name: string }) {
 
 type ThreadDialog = 'hire' | 'reject' | 'block' | 'report' | null
 
+/** Messenger-style "Forward to…" dialog: pick one of your other chats. */
+function ForwardDialog({
+  message,
+  onClose,
+}: {
+  message: MessageDTO | null
+  onClose: () => void
+}) {
+  const [connections, setConnections] = useState<ConnectionDTO[] | null>(null)
+  const [search, setSearch] = useState('')
+  const [forwardingTo, setForwardingTo] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!message) {
+      const t = setTimeout(() => {
+        setSearch('')
+        setForwardingTo(null)
+      }, 0)
+      return () => clearTimeout(t)
+    }
+    let cancelled = false
+    const t = setTimeout(() => {
+      setConnections(null)
+      api
+        .getConnections()
+        .then((d) => {
+          if (!cancelled) setConnections(d.connections)
+        })
+        .catch(() => {
+          if (!cancelled) setConnections([])
+        })
+    }, 0)
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [message])
+
+  const targets = useMemo(() => {
+    if (!connections || !message) return []
+    const q = search.trim().toLowerCase()
+    return connections
+      .filter((c) => c.id !== message.connectionId)
+      .sort((a, b) => {
+        const ta = new Date(a.lastMessage?.createdAt ?? a.createdAt).getTime()
+        const tb = new Date(b.lastMessage?.createdAt ?? b.createdAt).getTime()
+        return tb - ta
+      })
+      .map((c) => ({ c, name: otherParty(c, message.senderId).name }))
+      .filter((t) => !q || t.name.toLowerCase().includes(q))
+  }, [connections, message, search])
+
+  async function forward(c: ConnectionDTO) {
+    if (!message || forwardingTo) return
+    const other = otherParty(c, message.senderId)
+    setForwardingTo(c.id)
+    try {
+      await api.forwardMessage(message.id, c.id)
+      toast.success(`Forwarded to ${other.name}`)
+      onClose()
+    } catch (err) {
+      toast.error('Could not forward', { description: errorMessage(err) })
+      setForwardingTo(null)
+    }
+  }
+
+  return (
+    <Dialog open={!!message} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[85dvh] overflow-hidden p-0 sm:max-w-md">
+        <DialogHeader className="px-4 pt-4">
+          <DialogTitle>Forward to…</DialogTitle>
+          <DialogDescription>
+            {message?.image && !message?.content
+              ? 'Send this photo to another chat'
+              : `Send “${(message?.content ?? '').slice(0, 60)}${(message?.content ?? '').length > 60 ? '…' : ''}” to another chat`}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="px-4 pb-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search chats"
+              className="h-9 rounded-full bg-muted pl-9"
+              aria-label="Search chats to forward to"
+            />
+          </div>
+        </div>
+        <div className="max-h-[46dvh] min-h-[120px] overflow-y-auto border-t" aria-label="Your chats">
+          {connections === null ? (
+            <div className="space-y-3 p-3">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <Skeleton className="size-10 rounded-full" />
+                  <div className="flex-1 space-y-1.5">
+                    <Skeleton className="h-3 w-2/3" />
+                    <Skeleton className="h-2.5 w-1/3" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : targets.length === 0 ? (
+            <p className="p-6 text-center text-sm text-muted-foreground">
+              {search ? 'No chats match your search.' : 'No other chats yet — start one from the feed first.'}
+            </p>
+          ) : (
+            targets.map(({ c, name }) => {
+              const locked = ['HIRED', 'REJECTED', 'EXPIRED'].includes(c.status) || !!c.blockedBy
+              const busy = forwardingTo === c.id
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  aria-disabled={locked || busy}
+                  disabled={locked || !!forwardingTo}
+                  title={locked ? 'That conversation is locked' : `Forward to ${name}`}
+                  onClick={() => void forward(c)}
+                  className={cn(
+                    'flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors',
+                    locked ? 'cursor-not-allowed opacity-50' : 'hover:bg-muted',
+                    busy && 'bg-blue-500/10'
+                  )}
+                >
+                  <UserAvatar src={otherParty(c, message!.senderId).avatar} name={name} className="size-10" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold">{name}</span>
+                    <span className="block text-[11px] text-muted-foreground">{CONNECTION_CHIP[c.status].label}</span>
+                  </span>
+                  {locked ? (
+                    <Lock className="size-4 shrink-0 text-muted-foreground" aria-label="Locked chat" />
+                  ) : busy ? (
+                    <span
+                      className="size-4 shrink-0 animate-spin rounded-full border-2 border-muted-foreground border-t-[#1877F2]"
+                      aria-label="Forwarding"
+                    />
+                  ) : (
+                    <Forward className="size-4 shrink-0 text-muted-foreground" />
+                  )}
+                </button>
+              )
+            })
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function ChatThread({
   connectionId,
   onListChanged,
@@ -497,6 +689,10 @@ function ChatThread({
   /** message id awaiting "Unsend" confirmation */
   const [pendingUnsend, setPendingUnsend] = useState<string | null>(null)
   const [unsending, setUnsending] = useState(false)
+  /** message awaiting "Forward to…" chat picker */
+  const [pendingForward, setPendingForward] = useState<MessageDTO | null>(null)
+  /** incoming messages that arrived while the thread was scrolled up (jump pill) */
+  const [newBelow, setNewBelow] = useState(0)
   /** snapshot of unseen messages when the thread was first opened (drives the "new" divider) */
   const [unreadInfo, setUnreadInfo] = useState<{ count: number; firstId: string | null } | null>(null)
   const unreadCaptured = useRef(false)
@@ -505,6 +701,8 @@ function ChatThread({
   const scrollRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  /** true while the user keeps the thread scrolled to the newest message */
+  const atBottomRef = useRef(true)
   const onlineIds = useAppStore((s) => s.onlineIds)
 
   const load = useCallback(async () => {
@@ -521,10 +719,12 @@ function ChatThread({
     }
   }, [connectionId])
 
-  // New thread → capture a fresh unread snapshot
+  // New thread → capture a fresh unread snapshot + reset scroll/jump state
   useEffect(() => {
     unreadCaptured.current = false
     setUnreadInfo(null)
+    setNewBelow(0)
+    atBottomRef.current = true
   }, [connectionId])
 
   useEffect(() => {
@@ -540,6 +740,8 @@ function ChatThread({
     const onMessage = (p: { connectionId?: string; message?: MessageDTO }) => {
       if (!p || p.connectionId !== connectionId) return
       if (p.message && p.message.senderId === me.id) return // own messages handled by send flow
+      // If the user is scrolled up reading history, count it for the jump pill
+      if (!atBottomRef.current) setNewBelow((n) => n + 1)
       void load()
     }
     const onUpdated = (p: { connectionId?: string }) => {
@@ -617,21 +819,25 @@ function ChatThread({
     }
   }, [connectionId, load, onListChanged, me.id, me.name])
 
-  // Auto-scroll to the newest message (also when typing indicator appears)
+  // Auto-scroll to the newest message while the user stays at the bottom
+  // (also when the typing indicator appears). Reading history is never interrupted.
   const messageCount = data?.messages.length ?? 0
   useEffect(() => {
     const el = scrollRef.current
-    if (el) el.scrollTop = el.scrollHeight
+    if (el && atBottomRef.current) el.scrollTop = el.scrollHeight
   }, [messageCount, connectionId, typingName])
 
   function handleScroll() {
     const el = scrollRef.current
     if (!el) return
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight
+    atBottomRef.current = distance < 80
     setShowJump(distance > 240)
+    if (distance <= 240 && newBelow > 0) setNewBelow(0)
   }
 
   function jumpToLatest() {
+    setNewBelow(0)
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }
 
@@ -672,6 +878,7 @@ function ChatThread({
       content,
       image: null,
       system: false,
+      forwarded: false,
       createdAt: new Date().toISOString(),
       readAt: null,
       deleted: false,
@@ -706,6 +913,7 @@ function ChatThread({
         content: '',
         image,
         system: false,
+        forwarded: false,
         createdAt: new Date().toISOString(),
         readAt: null,
         deleted: false,
@@ -840,6 +1048,7 @@ function ChatThread({
             canReact={!blocked}
             onReact={(id, emoji) => void react(id, emoji)}
             onUnsend={m.senderId === me.id && !m.deleted ? (id) => setPendingUnsend(id) : undefined}
+            onForward={!m.deleted && !m.system ? (msg) => setPendingForward(msg) : undefined}
           />
         )
     }
@@ -932,10 +1141,15 @@ function ChatThread({
           <button
             type="button"
             onClick={jumpToLatest}
-            aria-label="Scroll to latest messages"
-            className="absolute bottom-3 right-3 grid size-9 animate-in fade-in zoom-in-50 place-items-center rounded-full border bg-card text-muted-foreground shadow-md transition-colors hover:bg-muted hover:text-foreground duration-150"
+            aria-label={newBelow > 0 ? `${newBelow} new messages — scroll to latest` : 'Scroll to latest messages'}
+            className="absolute bottom-3 right-3 flex animate-in fade-in zoom-in-50 items-center gap-1.5 rounded-full border bg-card py-1.5 pl-2.5 pr-1.5 text-muted-foreground shadow-md transition-colors hover:bg-muted hover:text-foreground duration-150"
           >
             <ArrowDown className="size-4" />
+            {newBelow > 0 ? (
+              <span className="max-w-[110px] truncate rounded-full bg-[#1877F2] px-2 py-0.5 text-[10px] font-bold text-white">
+                {newBelow} new
+              </span>
+            ) : null}
           </button>
         ) : null}
       </div>
@@ -1144,6 +1358,7 @@ function ChatThread({
         loading={unsending}
         onConfirm={() => pendingUnsend && void unsend(pendingUnsend)}
       />
+      <ForwardDialog message={pendingForward} onClose={() => setPendingForward(null)} />
     </div>
   )
 }

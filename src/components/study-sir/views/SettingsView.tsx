@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store/useAppStore'
 import { AVATAR_OPTIONS, COVER_OPTIONS, ROLE_LABEL } from '../shared/constants'
 import { FbCard } from '../shared/bits'
+import { InstallAppCard } from '../shared/InstallAppCard'
 import { AvailabilityEditor } from '../shared/AvailabilityEditor'
 import { SafeImage } from '../shared/SafeImage'
 import { UserAvatar } from '../shared/UserAvatar'
@@ -228,6 +229,12 @@ export function SettingsView() {
       <section className="space-y-3">
         <SectionTitle>Appearance</SectionTitle>
         <AppearanceCard />
+      </section>
+
+      {/* App install (PWA) */}
+      <section className="space-y-3">
+        <SectionTitle>App</SectionTitle>
+        <InstallAppCard />
       </section>
 
       {/* Blocked users */}

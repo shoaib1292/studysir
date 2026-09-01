@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   EyeOff,
   Eye,
+  FileDown,
   MessageSquare,
   Package,
   ShieldAlert,
@@ -522,7 +523,20 @@ export function AdminView() {
                 {f.toLowerCase()}
               </button>
             ))}
-            <Button size="sm" variant="ghost" className="ml-auto" onClick={() => void loadReports()}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="ml-auto gap-1.5"
+              onClick={() => {
+                // Same-origin download (Content-Disposition attachment) — cookies ride along.
+                window.open('/api/admin/reports/export', '_blank')
+                toast.success('Exporting reports CSV', { description: 'Check your downloads folder.' })
+              }}
+            >
+              <FileDown className="size-4" />
+              Export CSV
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => void loadReports()}>
               Refresh
             </Button>
           </div>

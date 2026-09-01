@@ -183,6 +183,12 @@ export const api = {
   /** Messenger-style unsend — replaces the message with a placeholder for everyone. */
   deleteMessage: (messageId: string) =>
     request<{ ok: true }>(`/api/messages/${messageId}`, { method: 'DELETE' }),
+  /** Messenger-style forward — copy a message into another chat you belong to. */
+  forwardMessage: (messageId: string, connectionId: string) =>
+    request<{ message: MessageDTO }>(`/api/messages/${messageId}/forward`, {
+      method: 'POST',
+      body: { connectionId },
+    }),
   decide: (id: string, action: 'HIRE' | 'REJECT' | 'BLOCK' | 'UNBLOCK' | 'REPORT', reason?: string) =>
     request<{ connection: ConnectionDTO }>(`/api/connections/${id}/decide`, {
       method: 'POST',

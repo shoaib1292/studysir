@@ -288,3 +288,24 @@ Work Log:
 
 Stage Summary:
 - Chat is now Messenger-complete: unsend for everyone, reactions, photos, receipts, typing, presence. The nav has live unread badges everywhere (tab + sidenav + mobile). Admins got a real analytics dashboard (pure-CSS charts, zero deps). The app is PWA-installable with an offline shell + offline banner. Fixed a real correctness bug (deleted messages inflating unread) and a dev-hostile SW caching strategy. Next ideas: per-chat mark-as-read on open already exists; candidate features = admin ability to export reports CSV, message forwarding, PWA install-prompt UI, offline queue for outgoing messages.
+
+---
+Task ID: 11
+Agent: Z.ai Code (lead)
+Task: Status assessment + agent-browser QA + features: message forwarding, admin reports CSV export, PWA install card, jump-pill + scroll fix
+
+Work Log:
+- ASSESSMENT: worklog review (Tasks 1-10 complete) + lint/tsc clean + browser sweep of feed/chats/admin (0 console errors, APIs healthy). Stable → chose feature round from Task 10's backlog.
+- FEATURE 1 — MESSENGER-STYLE MESSAGE FORWARDING:
+  * Schema: Message.forwarded Boolean @default(false) + db:push + dev-server restart for fresh PrismaClient.
+  * API: POST /api/messages/[id]/forward {connectionId} — validates source readability (member of source chat), non-system, non-deleted; target chat open (LOCKED → 423, blocked → 423, same-chat → 400); copies content+image with forwarded=true; runs the same decider logic (decider forwarding into PENDING chat activates it + chatStartedAt); notify() to recipient; rtEmit chatMessage to both target parties. curl-verified: 201 + forwarded:true, same-chat 400, non-member 403, non-admin CSV 403.
+  * UI: Forward hover button (Forward icon, both sides of bubble, alongside Copy/React/Unsend); ForwardDialog (self-fetches connections, excludes source chat, search filter, locked/blocked chats disabled with Lock icon + tooltip, busy spinner per row, preview text quotes message with 60-char truncation); Messenger-style "↪ Forwarded" italic label inside the bubble (both text and image variants); toast "Forwarded to {name}". Optimistic literals updated with forwarded:false.
+- FEATURE 2 — ADMIN REPORTS CSV EXPORT: GET /api/admin/reports/export (admin-only) — RFC 4180 escaping, UTF-8 BOM for Excel, all 14 audit columns (status/target/label/hidden/reporter/note/timestamps), Content-Disposition attachment studysir-reports-YYYY-MM-DD.csv. AdminView Reports tab gained "Export CSV" outline button (window.open same-origin, toast confirmation). curl-verified: non-admin 403, admin 200 + text/csv + proper headers; button click e2e in browser.
+- FEATURE 3 — PWA INSTALL CARD: shared/InstallAppCard.tsx — useInstallPrompt hook captures beforeinstallprompt (preventDefault + deferred prompt), appinstalled listener (toast + state), standalone detection (matchMedia + iOS navigator.standalone). Settings gained "App" section: card with icon, Installed badge, context-aware hint (canInstall → "Install app" blue button; installed → confirmation; otherwise browser-menu instructions). Verified rendering in light + dark.
+- BUG FOUND & FIXED — AUTO-SCROLL YANK + JUMP PILL: incoming messages force-scrolled the thread to bottom even while the user was reading history (also silently killed the new pill). Fix: atBottomRef updated in handleScroll (distance<80); auto-scroll effect now only fires when at bottom; pill increments via ref check; pill/jump reset on thread switch. e2e via gateway: scrolled-up thread + live message → stays put + blue "1 new" pill on the jump button; click → smooth-scrolls to bottom + pill clears.
+- QA NOTES: realtime socket only handshakes through the Caddy gateway (:81) — direct :3000 returns Next's 308 and leaves the client engine stuck "opening"; not an app bug (production users reach the app via gateway). QA must use http://localhost:81 for live-event tests (socket verified connected:true there). Deleted 6 "Pill test" messages from DB to keep demo state clean.
+- Demo state: Mukesh↔Fatima thread now shows two forwarded messages (↪ Forwarded label) as living demo of the feature; everything else untouched.
+- Screenshots: download/qa13-*.png (forward-dialog, forwarded-toast, forwarded-label, forwarded-thread, jump-pill3, admin-csv, settings-install, install-dark).
+
+Stage Summary:
+- Chat is now Messenger-complete: forwarding (with forwarded labels + locked-chat guardrails), unsend, reactions, photos, paste-to-send, receipts, typing, presence, and a scroll system that respects the reader (no yank + "1 new" pill). Admin got a CSV audit export for reports. PWA is installable with a real install UI in Settings. Candidate next: per-chat search inside thread, message forwarding multi-select (send to N chats at once), admin analytics CSV export, offline outgoing-message queue.

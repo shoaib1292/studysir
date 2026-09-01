@@ -128,6 +128,8 @@ export interface MessageDTO {
   /** data-URL photo attachment (optional) */
   image: string | null
   system: boolean
+  /** True when this message was forwarded from another chat. */
+  forwarded: boolean
   createdAt: string
   /** Set once the other party has opened the chat (drives read receipts). */
   readAt: string | null
@@ -295,6 +297,8 @@ export interface AdminAnalytics {
 // GET  /api/saved                        -> { items: TuitionPostDTO[] }  (bookmarked tuition posts, newest save first)
 // POST /api/tuition/:id/save             -> { saved: boolean }  (toggle bookmark)
 // POST /api/connections/:id/messages { content, image? } -> { message }
+// POST /api/messages/:id/forward { connectionId }       -> { message }  (copy into another chat, forwarded=true)
+// DELETE /api/messages/:id                              -> { ok: true }  (unsend → soft delete + realtime)
 // POST /api/connections/:id/decide { action: 'HIRE'|'REJECT'|'BLOCK'|'UNBLOCK'|'REPORT' } -> { connection }
 // POST /api/reports { targetType, targetId?, targetUserId?, connectionId?, reason, details? } -> { report }  (create report)
 // GET  /api/admin/reports?status=       -> { reports: ReportDTO[], stats: AdminStats }          (admin only)

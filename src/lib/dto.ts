@@ -264,6 +264,7 @@ export function toMessageDTO(m: AnyRecord): MessageDTO {
     content: deleted ? '' : (m.content as string),
     image: deleted ? null : ((m.image as string) ?? null),
     system: m.system as boolean,
+    forwarded: Boolean(m.forwarded),
     createdAt: (m.createdAt as Date).toISOString(),
     readAt: m.readAt ? (m.readAt as Date).toISOString() : null,
     deleted,
