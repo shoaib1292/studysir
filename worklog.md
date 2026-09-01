@@ -252,3 +252,39 @@ Work Log:
 
 Stage Summary:
 - Chat is now fully Facebook-grade: reactions (live-synced), photo paste-to-send, emoji picker, copy, read receipts, typing, presence. Admin moderation can now take listings down (hide/restore + resolve-with-remove + notes + owner notifications) — completing the report→review→action loop. Realtime regression caught and fixed (missing RT key); QA hardened with __ssSocket debug handle. Next ideas: PWA service worker (offline shell), chat message deletion, per-message reaction long-press UX, admin analytics.
+
+---
+Task ID: 10
+Agent: Z.ai Code (lead)
+Task: Status assessment + agent-browser QA + features: message unsend, unread nav badges, admin analytics, PWA service worker + offline banner
+
+Work Log:
+- ASSESSMENT: worklog review + lint clean + tsc src clean + browser sweep (0 console errors). Verified header search works (routes q → feed). Chose feature round from Task 9's "next ideas"; fixed 2 bugs found during QA (see below).
+- FEATURE 1 — MESSENGER-STYLE MESSAGE UNSEND:
+  * Schema: Message.deletedAt DateTime? (soft delete; row kept for moderation) + db:push + dev-server restart for fresh PrismaClient.
+  * API: DELETE /api/messages/[id] — sender-only, non-system, idempotent; toMessageDTO now returns content='' / image=null / deleted=true for unsent (original text NEVER leaves the server after unsend); realtime chat:delete {connectionId, messageId} to both parties. RT event key added to both src/lib/realtime.ts (RT_EVENTS.chatDelete) and src/lib/socket.ts (RT.chatDelete) — double-checked after last round's missing-key incident.
+  * Chat-list preview: toConnectionDTO lastMessage content → "🚫 Message unsent" when deletedAt set.
+  * UI (ChatsView): hover Trash2 "Unsend message" button on own persisted non-deleted messages (between Copy and React, red hover); ConfirmDialog "Unsend this message?"; optimistic placeholder swap with snapshot-rollback on error; deleted render = centered italic pill "You unsent a message" / "{name} unsent a message"; MessageBubble restructured with <>…</> fragment around bubble+chips+lightbox inside the deleted ternary.
+- BUG FIX 1: deleted-but-unread messages still counted toward unread badges — added deletedAt:null to the unread count query (connections GET) AND the unseen-snapshot query (connections/[id] GET). Verified via curl: Mukesh unread dropped 2→1 after fix.
+- FEATURE 2 — UNREAD CHATS NAV BADGE (Facebook-grade):
+  * Store: unreadChats + setUnreadChats; refreshUnreadChats() sums connections[].unreadCount.
+  * StudySirApp: fetch on login/logout + socket reconnect; RT.chatMessage → optimistic +1 when senderId ≠ me; RT.chatRead/chatDelete/chatUpdated → debounced 400ms recompute.
+  * MainNav "Chats" tab: red pill badge (9+ cap) top-right of icon w/ ring-card halo + aria-label "Chats, N unread"; SideNav "Messages" row: NavRow gained badge prop (red pill, aria-label). Both verified visually on desktop + mobile 390.
+- FEATURE 3 — ADMIN ANALYTICS TAB:
+  * API: GET /api/admin/analytics (admin-only) — 24 parallel queries → users by role/banned, posts(+hidden), connections by status+refunds, coin economy (spent/purchased/refunded), money (goods revenue, money added), engagement (messages/reactions/reviews/reports/notifications), 14-day signups & messages histograms (UTC day buckets), top tuition subjects. curl-verified full JSON.
+  * UI: new views/AnalyticsTab.tsx (Panel/Metric/DayBars/ShareRow) — pure-CSS bar charts (no chart lib), hover tooltips (count · MM-DD), role & connection-status share bars, economy/money/engagement metric grids, top-subjects bars; wired as third "Analytics" tab (BarChart3 icon) in AdminView. Verified light + dark, desktop; loading skeletons + Refresh button.
+- FEATURE 4 — PWA SERVICE WORKER + OFFLINE UX:
+  * public/sw.js v2: cache-first ONLY for truly immutable (/images, /icon*, manifest); NETWORK-FIRST for /_next/static chunks + document navigations (offline → cached "/" shell; 503 HTML fallback); never intercepts /api, socket.io, webpack-hmr, XTransformPort, EIO. Lesson learned: v1 cached /_next/static cache-first → served stale dev chunks forever (caught because the offline-banner fix wouldn't load); v2 network-first keeps dev usable.
+  * ServiceWorkerRegister.tsx (client, load-event registration, https/localhost guard, silent failures) mounted in root layout.
+  * OfflineBanner in StudySirApp: fixed amber bottom bar "You are offline — …" on online/offline window events — handler is event-driven (e.type === 'online') NOT navigator.onLine (Playwright emulation desyncs onLine flag); rendered on login screen AND main shell AND banned screen covered separately. Screenshot-verified (desktop light + dark + mobile 390 wraps to 2 lines).
+- QA (agent-browser dual-session sir-a Warren / sir-b Mukesh via gateway :81):
+  * Live hire flow: Warren → Mukesh teacher card → Hire 10 coins (40→30 header sync) → thread opens; Warren msg (PENDING) → Mukesh reply activates (ACTIVE); read receipts + unread divider + presence all intact.
+  * Unsend e2e: Warren unsends "Perfect, see you Saturday then!" → confirm dialog → his side "You unsent a message" + chat list "You: 🚫 Message unsent"; Mukesh's thread live-renders "Warren Buffett unsent a message" (screenshot qa11-unsend-thread.png); DB row kept w/ deletedAt set.
+  * Badge e2e: Mukesh "Chats, 1 unread" → 2 live on Warren's message (optimistic); mobile 390 red pill on Chats tab (qa11-mobile-badge.png); SideNav Messages badge (qa11-unsend-thread.png shows both).
+  * Analytics as Warren: renders all panels w/ real data (85 coins spent, 650 purchased, 13 messages, 6 connections…), dark mode coherent (qa11-analytics*.png).
+  * SW: registered on gateway origin, v2 active, old cache purged; offline reload serves cached shell (login screen renders offline); offline banner screenshot-verified.
+  * lint 0 errors; tsc src clean (only pre-existing skills/ error); dev.log clean.
+- Demo state: Warren↔Mukesh ACTIVE chat (10 coins, 1 unsent placeholder, live 😇🙏 message from the user's own preview-panel session); Mukesh unread badge = 1 ("Badge test ping!").
+
+Stage Summary:
+- Chat is now Messenger-complete: unsend for everyone, reactions, photos, receipts, typing, presence. The nav has live unread badges everywhere (tab + sidenav + mobile). Admins got a real analytics dashboard (pure-CSS charts, zero deps). The app is PWA-installable with an offline shell + offline banner. Fixed a real correctness bug (deleted messages inflating unread) and a dev-hostile SW caching strategy. Next ideas: per-chat mark-as-read on open already exists; candidate features = admin ability to export reports CSV, message forwarding, PWA install-prompt UI, offline queue for outgoing messages.

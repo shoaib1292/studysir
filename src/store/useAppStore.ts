@@ -37,6 +37,9 @@ interface AppState {
   back: () => void
   notifCount: number
   setNotifCount: (n: number) => void
+  /** total unread messages across all chats (nav badge) */
+  unreadChats: number
+  setUnreadChats: (n: number) => void
   /** ids of users currently online (realtime presence) */
   onlineIds: string[]
   setOnlineIds: (ids: string[]) => void
@@ -75,6 +78,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   notifCount: 0,
   setNotifCount: (notifCount) => set({ notifCount }),
+  unreadChats: 0,
+  setUnreadChats: (unreadChats) => set({ unreadChats }),
   onlineIds: [],
   setOnlineIds: (onlineIds) => set({ onlineIds }),
   applyPresence: (userId, online) =>

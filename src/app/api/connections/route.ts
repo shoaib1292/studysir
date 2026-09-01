@@ -24,7 +24,7 @@ export async function GET() {
       const [lastMessage, unreadCount] = await Promise.all([
         db.message.findFirst({ where: { connectionId: c.id }, orderBy: { createdAt: 'desc' } }),
         db.message.count({
-          where: { connectionId: c.id, senderId: { not: me.id }, readAt: null, system: false },
+          where: { connectionId: c.id, senderId: { not: me.id }, readAt: null, system: false, deletedAt: null },
         }),
       ])
       dtos.push(toConnectionDTO(c as never, me.id, lastMessage, unreadCount))

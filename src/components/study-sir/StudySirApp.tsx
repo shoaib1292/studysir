@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { WifiOff } from 'lucide-react'
 import { api } from '@/lib/api'
 import { getSocket, onConnect, onEvent, RT } from '@/lib/socket'
 import { useAppStore } from '@/store/useAppStore'
@@ -53,6 +54,35 @@ function renderView(view: ViewName) {
   }
 }
 
+interface ChatMessagePayload {
+  connectionId: string
+  message: { senderId: string }
+}
+
+/** Recompute the total unread-messages badge from the connections list. */
+async function refreshUnreadChats(): Promise<void> {
+  try {
+    const { connections } = await api.getConnections()
+    const total = connections.reduce((acc, c) => acc + (c.unreadCount ?? 0), 0)
+    useAppStore.getState().setUnreadChats(total)
+  } catch {
+    // badge is non-critical — ignore failures
+  }
+}
+
+function OfflineBanner({ online }: { online: boolean }) {
+  if (online) return null
+  return (
+    <div
+      role="status"
+      className="fixed inset-x-0 bottom-0 z-[60] flex items-center justify-center gap-2 bg-amber-500 px-4 py-2 text-sm font-semibold text-amber-950 shadow-lg animate-in fade-in slide-in-from-bottom-2"
+    >
+      <WifiOff className="size-4" />
+      You are offline — some features may be unavailable until you reconnect.
+    </div>
+  )
+}
+
 export default function StudySirApp() {
   const me = useAppStore((s) => s.me)
   const setMe = useAppStore((s) => s.setMe)
@@ -61,6 +91,19 @@ export default function StudySirApp() {
   const nonce = useAppStore((s) => s.nonce)
 
   const [loading, setLoading] = useState(true)
+  const [online, setOnline] = useState(true)
+
+  // Browser online/offline indicator
+  useEffect(() => {
+    const update = (e?: Event) => setOnline(e ? e.type === 'online' : navigator.onLine)
+    update()
+    window.addEventListener('online', update)
+    window.addEventListener('offline', update)
+    return () => {
+      window.removeEventListener('online', update)
+      window.removeEventListener('offline', update)
+    }
+  }, [])
 
   // Reset window scroll on view change so sticky header never hides view headers
   useEffect(() => {
@@ -106,6 +149,16 @@ export default function StudySirApp() {
     }
   }, [me, setNotifCount])
 
+  // Unread chats badge: fetch on login + on socket reconnect; live events below
+  const unreadRef = useRef(refreshUnreadChats)
+  useEffect(() => {
+    if (!me) {
+      useAppStore.getState().setUnreadChats(0)
+      return
+    }
+    void unreadRef.current()
+  }, [me])
+
   // Realtime: socket identity + live badge/wallet/presence updates
   const meId = me?.id
   useEffect(() => {
@@ -115,10 +168,17 @@ export default function StudySirApp() {
 
     // debounced wallet refresh (many wallet events can burst)
     let walletTimer: ReturnType<typeof setTimeout> | null = null
+    // debounced unread-badge recompute (read receipts / unsends arrive in bursts)
+    let unreadTimer: ReturnType<typeof setTimeout> | null = null
+    const scheduleUnreadRefresh = () => {
+      if (unreadTimer) clearTimeout(unreadTimer)
+      unreadTimer = setTimeout(() => void refreshUnreadChats(), 400)
+    }
 
     onConnect(() => {
       // fresh state after reconnect
       void api.getNotifications().then((d) => useAppStore.getState().setNotifCount(d.unread)).catch(() => null)
+      void refreshUnreadChats()
     })
     onEvent(RT.notifNew, () => {
       const s = useAppStore.getState()
@@ -134,14 +194,29 @@ export default function StudySirApp() {
     onEvent<{ userId: string; online: boolean }>(RT.presenceUpdate, (p) => {
       if (p?.userId) useAppStore.getState().applyPresence(p.userId, p.online)
     })
+    // Unread nav badge: incoming message → optimistic increment; read/unsent → recompute
+    onEvent<ChatMessagePayload>(RT.chatMessage, (p) => {
+      if (p?.message && p.message.senderId !== meId) {
+        const s = useAppStore.getState()
+        s.setUnreadChats(s.unreadChats + 1)
+      }
+    })
+    onEvent(RT.chatRead, scheduleUnreadRefresh)
+    onEvent(RT.chatDelete, scheduleUnreadRefresh)
+    onEvent(RT.chatUpdated, scheduleUnreadRefresh)
 
     return () => {
       if (walletTimer) clearTimeout(walletTimer)
+      if (unreadTimer) clearTimeout(unreadTimer)
       socket.off('connect')
       socket.off(RT.notifNew)
       socket.off(RT.walletChanged)
       socket.off(RT.presenceSnapshot)
       socket.off(RT.presenceUpdate)
+      socket.off(RT.chatMessage)
+      socket.off(RT.chatRead)
+      socket.off(RT.chatDelete)
+      socket.off(RT.chatUpdated)
     }
   }, [meId])
 
@@ -156,7 +231,12 @@ export default function StudySirApp() {
   }
 
   if (!me) {
-    return <LoginScreen />
+    return (
+      <>
+        <LoginScreen />
+        <OfflineBanner online={online} />
+      </>
+    )
   }
 
   // Suspended account screen — session user was banned while logged in
@@ -199,6 +279,7 @@ export default function StudySirApp() {
       </div>
 
       <Footer />
+      <OfflineBanner online={online} />
     </div>
   )
 }

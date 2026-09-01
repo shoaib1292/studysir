@@ -131,6 +131,8 @@ export interface MessageDTO {
   createdAt: string
   /** Set once the other party has opened the chat (drives read receipts). */
   readAt: string | null
+  /** True when the sender unsent this message (renders as a placeholder). */
+  deleted: boolean
   /** Facebook-style reaction groups (client derives "mine" via userIds). */
   reactions: MessageReactionGroup[]
 }
@@ -254,8 +256,25 @@ export interface AdminStats {
   bannedUsers: number
 }
 
-// GET /api/admin/reports -> { reports, stats }
-// GET /api/admin/users   -> { users: AdminUserDTO[] }
+// ===== Admin analytics =====
+export interface DailyCount {
+  date: string // YYYY-MM-DD
+  count: number
+}
+
+export interface AdminAnalytics {
+  users: { total: number; students: number; parents: number; teachers: number; admins: number; banned: number }
+  posts: { tuition: number; courses: number; goods: number; hidden: number }
+  connections: { total: number; pending: number; active: number; hired: number; rejected: number; expired: number; refunds: number }
+  economy: { coinsSpent: number; coinsPurchased: number; goodsRevenue: number; moneyAdded: number }
+  activity: { messages: number; reactions: number; reviews: number; reports: number; notifications: number }
+  signupsPerDay: DailyCount[] // last 14 days
+  messagesPerDay: DailyCount[] // last 14 days
+  topSubjects: { label: string; count: number }[] // tuition post subjects
+}
+
+// GET /api/admin/analytics            -> { analytics: AdminAnalytics }                          (admin only)
+// DELETE /api/messages/:id            -> { ok: true }  (sender unsend → soft delete + realtime)
 
 // ===== API endpoints =====
 // GET  /api/session                      -> { user: UserDTO | null }

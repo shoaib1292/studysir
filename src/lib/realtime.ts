@@ -26,6 +26,7 @@ export const RT_EVENTS = {
   chatUpdated: 'chat:updated',
   chatRead: 'chat:read',
   chatReaction: 'chat:reaction',
+  chatDelete: 'chat:delete',
   notifNew: 'notif:new',
   walletChanged: 'wallet:changed',
 } as const

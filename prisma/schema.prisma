@@ -114,6 +114,7 @@ model Message {
   image        String?    // data URL for in-chat photo attachments
   system       Boolean    @default(false)
   readAt       DateTime?
+  deletedAt    DateTime?  // "unsend" — soft delete, renders as an Unsent placeholder
   createdAt    DateTime   @default(now())
 
   reactions Reaction[]

@@ -20,7 +20,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 
     // Snapshot unseen incoming messages BEFORE marking read (drives the "new messages" divider)
     const unseen = await db.message.findMany({
-      where: { connectionId: id, senderId: { not: me.id }, readAt: null, system: false },
+      where: { connectionId: id, senderId: { not: me.id }, readAt: null, system: false, deletedAt: null },
       orderBy: { createdAt: 'asc' },
       select: { id: true },
     })

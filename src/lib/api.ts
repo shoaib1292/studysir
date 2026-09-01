@@ -1,6 +1,7 @@
 // Typed fetch helpers for the StudySir API.
 // Always sends cookies (credentials: 'include'), always relative URLs.
 import type {
+  AdminAnalytics,
   AdminStats,
   AdminUserDTO,
   AvailabilityDTO,
@@ -179,6 +180,9 @@ export const api = {
       method: 'POST',
       body: { emoji },
     }),
+  /** Messenger-style unsend — replaces the message with a placeholder for everyone. */
+  deleteMessage: (messageId: string) =>
+    request<{ ok: true }>(`/api/messages/${messageId}`, { method: 'DELETE' }),
   decide: (id: string, action: 'HIRE' | 'REJECT' | 'BLOCK' | 'UNBLOCK' | 'REPORT', reason?: string) =>
     request<{ connection: ConnectionDTO }>(`/api/connections/${id}/decide`, {
       method: 'POST',
@@ -246,6 +250,7 @@ export const api = {
   getAdminUsers: () => request<{ users: AdminUserDTO[] }>('/api/admin/users'),
   adminSetUserStatus: (id: string, status: 'BANNED' | 'ACTIVE') =>
     request<{ user: UserDTO }>(`/api/admin/users/${id}`, { method: 'PATCH', body: { status } }),
+  getAdminAnalytics: () => request<{ analytics: AdminAnalytics }>('/api/admin/analytics'),
 }
 
 export function errorMessage(e: unknown): string {

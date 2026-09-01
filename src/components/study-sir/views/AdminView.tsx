@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Ban,
+  BarChart3,
   BookOpen,
   CheckCircle2,
   EyeOff,
@@ -31,6 +32,7 @@ import { cn } from '@/lib/utils'
 import { UserAvatar } from '../shared/UserAvatar'
 import { EmptyState } from '../shared/EmptyState'
 import { timeAgo } from '../shared/format'
+import { AnalyticsTab } from './AnalyticsTab'
 
 const TARGET_META: Record<string, { icon: typeof Package; label: string; chip: string }> = {
   CHAT: { icon: MessageSquare, label: 'Chat', chip: 'bg-blue-500/15 text-blue-700 dark:text-blue-300' },
@@ -416,7 +418,7 @@ export function AdminView() {
   const me = useAppStore((s) => s.me)!
   const isAdmin = me.isAdmin
 
-  const [tab, setTab] = useState<'reports' | 'users'>('reports')
+  const [tab, setTab] = useState<'reports' | 'users' | 'analytics'>('reports')
   const [filter, setFilter] = useState<'ALL' | ReportStatus>('OPEN')
   const [reports, setReports] = useState<ReportDTO[] | null>(null)
   const [stats, setStats] = useState<AdminStats | null>(null)
@@ -475,7 +477,7 @@ export function AdminView() {
         </div>
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as 'reports' | 'users')} className="mt-4">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as 'reports' | 'users' | 'analytics')} className="mt-4">
         <TabsList className="w-full sm:w-auto">
           <TabsTrigger value="reports" className="gap-1.5">
             <ShieldAlert className="size-4" />
@@ -489,6 +491,10 @@ export function AdminView() {
           <TabsTrigger value="users" className="gap-1.5">
             <Users className="size-4" />
             Users
+          </TabsTrigger>
+          <TabsTrigger value="analytics" className="gap-1.5">
+            <BarChart3 className="size-4" />
+            Analytics
           </TabsTrigger>
         </TabsList>
 
@@ -552,6 +558,10 @@ export function AdminView() {
           ) : (
             users.map((u) => <UserRow key={u.id} user={u} onChanged={() => void loadUsers()} />)
           )}
+        </TabsContent>
+
+        <TabsContent value="analytics" className="mt-3">
+          <AnalyticsTab />
         </TabsContent>
       </Tabs>
     </div>

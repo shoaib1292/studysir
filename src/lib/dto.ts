@@ -233,7 +233,7 @@ export function toConnectionDTO(
       : null,
     lastMessage: lastMessage
       ? {
-          content: lastMessage.content as string,
+          content: lastMessage.deletedAt ? '🚫 Message unsent' : (lastMessage.content as string),
           createdAt: (lastMessage.createdAt as Date).toISOString(),
           senderId: lastMessage.senderId as string,
         }
@@ -254,16 +254,19 @@ export function toMessageDTO(m: AnyRecord): MessageDTO {
     if (uid) arr.push(uid)
     groups.set(emoji, arr)
   }
+  const deleted = Boolean(m.deletedAt)
   return {
     id: m.id as string,
     connectionId: m.connectionId as string,
     senderId: m.senderId as string,
     sender: pickUser(m.sender as AnyRecord),
-    content: m.content as string,
-    image: (m.image as string) ?? null,
+    // Unsent messages never leak their original content to clients.
+    content: deleted ? '' : (m.content as string),
+    image: deleted ? null : ((m.image as string) ?? null),
     system: m.system as boolean,
     createdAt: (m.createdAt as Date).toISOString(),
     readAt: m.readAt ? (m.readAt as Date).toISOString() : null,
+    deleted,
     reactions: [...groups.entries()].map(([emoji, userIds]) => ({ emoji, count: userIds.length, userIds })),
   }
 }

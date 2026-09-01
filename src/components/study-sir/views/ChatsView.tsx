@@ -19,6 +19,7 @@ import {
   SendHorizonal,
   Smile,
   SmilePlus,
+  Trash2,
   X,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -239,12 +240,15 @@ function MessageBubble({
   meId,
   canReact,
   onReact,
+  onUnsend,
 }: {
   message: MessageDTO
   mine: boolean
   meId: string
   canReact: boolean
   onReact: (messageId: string, emoji: string) => void
+  /** present when the viewer may unsend (own, non-system, persisted message) */
+  onUnsend?: (messageId: string) => void
 }) {
   const [copied, setCopied] = useState(false)
   const [zoom, setZoom] = useState(false)
@@ -253,6 +257,7 @@ function MessageBubble({
   const hasImage = Boolean(message.image)
   const hasText = Boolean(message.content) && message.content !== '📷 Photo'
   const hasReactions = message.reactions.length > 0
+  const canUnsend = Boolean(onUnsend) && mine && !message.system && !message.deleted && !message.id.startsWith('tmp-')
 
   // Close the reaction picker on outside interaction (mouse, touch or pen)
   useEffect(() => {
@@ -276,6 +281,14 @@ function MessageBubble({
 
   return (
     <div className={cn('flex animate-in flex-col fade-in slide-in-from-bottom-1 duration-200', mine ? 'items-end' : 'items-start')}>
+      {/* Messenger-style unsent placeholder */}
+      {message.deleted ? (
+        <p className="rounded-full bg-muted px-3 py-1 text-xs italic text-muted-foreground">
+          <Trash2 className="mr-1 inline size-3" aria-hidden />
+          {mine ? 'You unsent a message' : `${message.sender.name} unsent a message`}
+        </p>
+      ) : (
+        <>
       <div className={cn('group relative flex items-end gap-2', mine ? 'justify-end' : 'justify-start')}>
         {/* Facebook-style quick-reaction bar (above the bubble) */}
         {canReact && pickerOpen ? (
@@ -365,6 +378,17 @@ function MessageBubble({
             {copied ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5" />}
           </button>
         ) : null}
+        {canUnsend ? (
+          <button
+            type="button"
+            aria-label="Unsend message"
+            title="Unsend"
+            onClick={() => onUnsend?.(message.id)}
+            className="mb-1.5 grid size-6 shrink-0 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-red-500/10 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100"
+          >
+            <Trash2 className="size-3.5" />
+          </button>
+        ) : null}
         {canReact ? (
           <button
             type="button"
@@ -425,6 +449,8 @@ function MessageBubble({
           />
         </DialogContent>
       </Dialog>
+        </>
+      )}
     </div>
   )
 }
@@ -468,6 +494,9 @@ function ChatThread({
   const [reportReason, setReportReason] = useState('')
   const [typingName, setTypingName] = useState<string | null>(null)
   const [showJump, setShowJump] = useState(false)
+  /** message id awaiting "Unsend" confirmation */
+  const [pendingUnsend, setPendingUnsend] = useState<string | null>(null)
+  const [unsending, setUnsending] = useState(false)
   /** snapshot of unseen messages when the thread was first opened (drives the "new" divider) */
   const [unreadInfo, setUnreadInfo] = useState<{ count: number; firstId: string | null } | null>(null)
   const unreadCaptured = useRef(false)
@@ -544,6 +573,19 @@ function ChatThread({
           : d
       )
     }
+    const onDelete = (p: { connectionId?: string; messageId?: string }) => {
+      if (!p || p.connectionId !== connectionId || !p.messageId) return
+      setData((d) =>
+        d
+          ? {
+              ...d,
+              messages: d.messages.map((m) =>
+                m.id === p.messageId ? { ...m, deleted: true, content: '', image: null } : m
+              ),
+            }
+          : d
+      )
+    }
     const onTyping = (p: { connectionId?: string; userId?: string; name?: string; isTyping?: boolean }) => {
       if (!p || p.connectionId !== connectionId || p.userId === me.id) return
       if (typingTimer.current) clearTimeout(typingTimer.current)
@@ -559,6 +601,7 @@ function ChatThread({
     onEvent(RT.chatUpdated, onUpdated)
     onEvent(RT.chatRead, onRead)
     onEvent(RT.chatReaction, onReaction)
+    onEvent(RT.chatDelete, onDelete)
     onEvent('typing', onTyping)
 
     const timer = setInterval(() => void load(), 15000)
@@ -568,6 +611,7 @@ function ChatThread({
       offEvent(RT.chatUpdated, onUpdated)
       offEvent(RT.chatRead, onRead)
       offEvent(RT.chatReaction, onReaction)
+      offEvent(RT.chatDelete, onDelete)
       offEvent('typing', onTyping)
       if (typingTimer.current) clearTimeout(typingTimer.current)
     }
@@ -630,6 +674,7 @@ function ChatThread({
       system: false,
       createdAt: new Date().toISOString(),
       readAt: null,
+      deleted: false,
       reactions: [],
     }
     setData((d) => (d ? { ...d, messages: [...d.messages, optimistic] } : d))
@@ -663,6 +708,7 @@ function ChatThread({
         system: false,
         createdAt: new Date().toISOString(),
         readAt: null,
+        deleted: false,
         reactions: [],
       }
       setData((d) => (d ? { ...d, messages: [...d.messages, optimistic] } : d))
@@ -692,6 +738,33 @@ function ChatThread({
       )
     } catch (err) {
       toast.error('Reaction failed', { description: errorMessage(err) })
+    }
+  }
+
+  /** Messenger-style unsend: optimistic placeholder, server soft-delete, realtime to the other side. */
+  async function unsend(messageId: string) {
+    if (!data || unsending) return
+    const snapshot = data.messages
+    setUnsending(true)
+    setPendingUnsend(null)
+    setData((d) =>
+      d
+        ? {
+            ...d,
+            messages: d.messages.map((m) =>
+              m.id === messageId ? { ...m, deleted: true, content: '', image: null, reactions: [] } : m
+            ),
+          }
+        : d
+    )
+    try {
+      await api.deleteMessage(messageId)
+      onListChanged()
+    } catch (err) {
+      setData((d) => (d ? { ...d, messages: snapshot } : d))
+      toast.error('Could not unsend', { description: errorMessage(err) })
+    } finally {
+      setUnsending(false)
     }
   }
 
@@ -766,6 +839,7 @@ function ChatThread({
             meId={me.id}
             canReact={!blocked}
             onReact={(id, emoji) => void react(id, emoji)}
+            onUnsend={m.senderId === me.id && !m.deleted ? (id) => setPendingUnsend(id) : undefined}
           />
         )
     }
@@ -1060,6 +1134,16 @@ function ChatThread({
           className="mb-2"
         />
       </ConfirmDialog>
+      <ConfirmDialog
+        open={!!pendingUnsend}
+        onOpenChange={(o) => !o && setPendingUnsend(null)}
+        title="Unsend this message?"
+        message="It will be replaced with an “unsent” placeholder for everyone in the chat. This cannot be undone."
+        confirmLabel="Unsend"
+        danger
+        loading={unsending}
+        onConfirm={() => pendingUnsend && void unsend(pendingUnsend)}
+      />
     </div>
   )
 }

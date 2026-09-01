@@ -30,11 +30,13 @@ function NavRow({
   label,
   active,
   onClick,
+  badge,
 }: {
   icon: LucideIcon
   label: string
   active: boolean
   onClick: () => void
+  badge?: number
 }) {
   return (
     <button
@@ -54,7 +56,15 @@ function NavRow({
       >
         <Icon className="size-5" />
       </span>
-      <span className="min-w-0 truncate">{label}</span>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {badge && badge > 0 ? (
+        <span
+          aria-label={`${badge} unread`}
+          className="grid min-w-[20px] shrink-0 place-items-center rounded-full bg-red-600 px-1.5 py-0.5 text-[11px] font-bold leading-none text-white"
+        >
+          {badge > 9 ? '9+' : badge}
+        </span>
+      ) : null}
     </button>
   )
 }
@@ -63,6 +73,7 @@ export function SideNav() {
   const me = useAppStore((s) => s.me)!
   const view = useAppStore((s) => s.view)
   const go = useAppStore((s) => s.go)
+  const unreadChats = useAppStore((s) => s.unreadChats)
 
   const nav = (v: ViewName, params?: ViewParams) => () => go(v, params)
 
@@ -84,7 +95,7 @@ export function SideNav() {
       <SectionLabel>Menu</SectionLabel>
       <div className="space-y-1">
         <NavRow icon={Wallet} label="Wallet" active={view === 'wallet'} onClick={nav('wallet')} />
-        <NavRow icon={MessageCircle} label="Messages" active={view === 'chats'} onClick={nav('chats')} />
+        <NavRow icon={MessageCircle} label="Messages" active={view === 'chats'} onClick={nav('chats')} badge={unreadChats} />
         <NavRow icon={GraduationCap} label="Tution" active={view === 'tuition'} onClick={nav('tuition')} />
         <NavRow icon={ShoppingBag} label="Digital Store" active={view === 'store'} onClick={nav('store')} />
       </div>
