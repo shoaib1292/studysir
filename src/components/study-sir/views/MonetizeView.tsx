@@ -9,28 +9,29 @@ import { useAppStore } from '@/store/useAppStore'
 import { clientCoinCost } from '../shared/constants'
 import { FbCard } from '../shared/bits'
 
+/* Alpha-based icon chips so they stay readable on light AND dark surfaces. */
 const INFO_CARDS: Array<{ icon: LucideIcon; color: string; title: string; body: string }> = [
   {
     icon: GraduationCap,
-    color: 'bg-blue-100 text-[#1877F2]',
+    color: 'bg-blue-500/15 text-[#1877F2] dark:text-blue-400',
     title: 'Free tuition posts',
     body: 'Students & parents post tuition requests for free. Posting never costs a single coin.',
   },
   {
     icon: Coins,
-    color: 'bg-amber-100 text-amber-600',
+    color: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
     title: 'Weighted contact cost',
     body: 'Teachers spend 5–50 coins to approach a tuition — cost scales with fee range and mode (home tuition weighs more).',
   },
   {
     icon: Undo2,
-    color: 'bg-green-100 text-green-600',
+    color: 'bg-green-500/15 text-green-600 dark:text-green-400',
     title: 'Fair refunds',
     body: 'Rejected before any chat = full refund · no reply within 10 days = auto refund · rejected after chat started = no refund.',
   },
   {
     icon: Handshake,
-    color: 'bg-purple-100 text-purple-600',
+    color: 'bg-purple-500/15 text-purple-600 dark:text-purple-400',
     title: 'Hire keeps value',
     body: 'On hire, the spent coins keep the platform running — quality teachers reach real students.',
   },

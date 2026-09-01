@@ -175,7 +175,7 @@ export function ProfileView() {
                   {ROLE_LABEL[user.role]}
                 </span>
                 {isTeacher && user.feeMin !== null && user.feeMax !== null ? (
-                  <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                  <span className="rounded bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
                     Fee ${user.feeMin}–${user.feeMax}
                   </span>
                 ) : null}

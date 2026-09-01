@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
-import { Bell, Coins, LogOut, Search, Settings, User, Wallet, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Bell, Coins, LogOut, Moon, Search, Settings, Sun, User, Wallet, X } from 'lucide-react'
+import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -42,19 +43,44 @@ function SearchField({
         }}
         placeholder="Search Tution"
         aria-label="Search Tution"
-        className="h-10 w-full rounded-full bg-[#F0F2F5] pl-9 pr-9 text-sm outline-none placeholder:text-muted-foreground focus:bg-[#E8EBEF]"
+        className="h-10 w-full rounded-full bg-muted pl-9 pr-9 text-sm outline-none placeholder:text-muted-foreground focus:bg-secondary"
       />
       {value ? (
         <button
           type="button"
           aria-label="Clear search"
           onClick={() => (onClear ? onClear() : onChange(''))}
-          className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-[#D8DADF] hover:text-foreground"
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
         >
           <X className="size-4" />
         </button>
       ) : null}
     </div>
+  )
+}
+
+function ThemeToggle() {
+  const { resolvedTheme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true)
+  }, [])
+
+  const isDark = mounted && resolvedTheme === 'dark'
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      aria-label="Toggle dark mode"
+      title="Toggle dark mode"
+      onClick={() => setTheme(isDark ? 'light' : 'dark')}
+      className="size-10 shrink-0 rounded-full hover:bg-accent"
+    >
+      {isDark ? <Sun className="size-5" /> : <Moon className="size-5" />}
+    </Button>
   )
 }
 
@@ -83,7 +109,7 @@ export function Header() {
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b bg-white shadow-sm">
+    <header className="sticky top-0 z-50 border-b bg-card shadow-sm">
       <div className="mx-auto flex h-14 max-w-[1400px] items-center gap-2 px-3 md:gap-3 md:px-4">
         {/* Wordmark */}
         <button
@@ -97,8 +123,17 @@ export function Header() {
         </button>
 
         {/* Desktop search */}
-        <div className="hidden w-full max-w-[260px] md:block">
+        <div className="hidden w-full max-w-[300px] items-center gap-1 md:flex">
           <SearchField value={q} onChange={setQ} onSubmit={submitSearch} />
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Search"
+            onClick={submitSearch}
+            className="size-10 shrink-0 rounded-full hover:bg-accent"
+          >
+            <Search className="size-5" />
+          </Button>
         </div>
 
         <div className="flex-1" />
@@ -108,12 +143,14 @@ export function Header() {
           <Button
             variant="ghost"
             onClick={() => go('wallet')}
-            className="h-10 rounded-full bg-[#F0F2F5] px-3 hover:bg-[#E4E6EB]"
+            className="h-10 rounded-full bg-muted px-3 hover:bg-secondary"
             aria-label={`Coins: ${me.coins}`}
           >
             <Coins className="size-5 text-amber-500" />
             <span className="text-sm font-semibold">{me.coins}</span>
           </Button>
+
+          <ThemeToggle />
 
           <NotificationsPopover />
 
@@ -122,8 +159,8 @@ export function Header() {
             aria-label="Search"
             onClick={() => setMobileSearchOpen((o) => !o)}
             className={cn(
-              'grid h-10 w-10 place-items-center rounded-full bg-[#F0F2F5] text-foreground transition-colors hover:bg-[#E4E6EB] md:hidden',
-              mobileSearchOpen && 'bg-[#E4E6EB]'
+              'grid h-10 w-10 place-items-center rounded-full bg-muted text-foreground transition-colors hover:bg-secondary md:hidden',
+              mobileSearchOpen && 'bg-secondary'
             )}
           >
             {mobileSearchOpen ? <X className="size-5" /> : <Search className="size-5" />}
@@ -164,7 +201,7 @@ export function Header() {
 
       {/* Mobile expanded search row */}
       {mobileSearchOpen ? (
-        <div className="border-t bg-white p-2 md:hidden">
+        <div className="border-t bg-card p-2 md:hidden">
           <SearchField value={q} onChange={setQ} onSubmit={submitSearch} autoFocus />
         </div>
       ) : null}

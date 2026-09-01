@@ -118,6 +118,7 @@ export interface ProfilePatch {
   feeMin?: number | null
   feeMax?: number | null
   gender?: string
+  availabilities?: { day: string; slots: string }[]
 }
 
 export type LikeTargetType = 'TUITION' | 'COURSE' | 'GOOD' | 'TEACHER'
@@ -132,7 +133,10 @@ export const api = {
   getUsers: () => request<{ users: UserDTO[] }>('/api/users'),
   getUser: (id: string) => request<ProfileResponse>(`/api/users/${id}`),
   updateProfile: (id: string, patch: ProfilePatch) =>
-    request<{ user: UserDTO }>(`/api/users/${id}`, { method: 'PATCH', body: patch }),
+    request<{ user: UserDTO; availabilities?: AvailabilityDTO[] }>(`/api/users/${id}`, {
+      method: 'PATCH',
+      body: patch,
+    }),
 
   // feed
   getFeed: (type: string, q?: string) =>

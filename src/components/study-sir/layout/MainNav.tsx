@@ -19,7 +19,7 @@ export function MainNav() {
   const go = useAppStore((s) => s.go)
 
   return (
-    <nav className="sticky top-[57px] z-40 border-b bg-white">
+    <nav className="sticky top-[57px] z-40 border-b bg-card">
       <div className="mx-auto flex max-w-[1400px] items-stretch justify-start gap-1 overflow-x-auto px-1 hide-scrollbar lg:justify-center">
         {TABS.map(({ view: tabView, label, icon: Icon }) => {
           const active = view === tabView

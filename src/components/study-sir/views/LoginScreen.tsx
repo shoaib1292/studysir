@@ -51,7 +51,7 @@ export function LoginScreen() {
   }
 
   return (
-    <div className="grid min-h-screen place-items-center bg-[#F0F2F5] p-4">
+    <div className="grid min-h-screen place-items-center bg-background p-4">
       <div className="card-shadow w-full max-w-md rounded-xl bg-card p-6 sm:p-8">
         <div className="text-center">
           <p className="text-4xl font-extrabold tracking-tight text-[#1877F2]">
@@ -76,7 +76,7 @@ export function LoginScreen() {
                   disabled={loggingIn !== null}
                   onClick={() => pick(user)}
                   className={cn(
-                    'flex items-center gap-3 rounded-xl border p-2.5 text-left transition-colors hover:bg-[#F0F2F5] disabled:opacity-60'
+                    'flex items-center gap-3 rounded-xl border p-2.5 text-left transition-colors hover:bg-muted disabled:opacity-60'
                   )}
                 >
                   <UserAvatar src={user.avatar} name={user.name} className="size-12" />

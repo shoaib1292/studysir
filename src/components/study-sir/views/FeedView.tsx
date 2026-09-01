@@ -37,7 +37,7 @@ function ComposerCard({ onOpen }: { onOpen: (d: Exclude<ComposerDialog, null>) =
         <button
           type="button"
           onClick={() => onOpen('tuition')}
-          className="flex-1 rounded-full bg-[#F0F2F5] px-4 py-2.5 text-left text-muted-foreground transition-colors hover:bg-[#E4E6EB]"
+          className="flex-1 rounded-full bg-muted px-4 py-2.5 text-left text-muted-foreground transition-colors hover:bg-secondary"
         >
           Hi {firstName(me.name)}! Post Your tution here
         </button>

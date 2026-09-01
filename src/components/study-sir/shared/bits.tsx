@@ -106,9 +106,9 @@ export function CardAction({
         disabled
           ? 'cursor-default text-muted-foreground/70'
           : active
-            ? 'text-[#1877F2] hover:bg-muted'
+            ? 'text-[#1877F2] hover:bg-muted dark:text-blue-400'
             : danger
-              ? 'text-red-600 hover:bg-red-50'
+              ? 'text-red-600 hover:bg-red-500/10 dark:text-red-400'
               : 'text-muted-foreground hover:bg-muted'
       )}
     >
@@ -133,7 +133,7 @@ export function ConnectionStatusChip({ connection }: { connection: ConnectionDTO
     <span className="inline-flex items-center gap-1">
       <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-semibold', chip.className)}>{chip.label}</span>
       {connection.refunded && (connection.status === 'EXPIRED' || connection.status === 'REJECTED') ? (
-        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+        <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400">
           {connection.status === 'EXPIRED' ? 'coins returned' : `${connection.coinsSpent} coins refunded`}
         </span>
       ) : null}

@@ -100,3 +100,40 @@ Work Log:
 
 Stage Summary:
 - MVP COMPLETE per user spec: tuition posting, coin-weighted contact, chat, hire/reject/block/report, refund rules (pre-chat refund / post-chat no-refund / 10-day auto-refund), courses, digital goods store, wallet+buy coins, monetize pages, reviews, notifications, profiles w/ availability, demo login.
+
+---
+Task ID: 5-a
+Agent: frontend-styling-expert
+Task: Dark mode + styling polish
+Work Log:
+- Part 1: layout.tsx now wraps children + Toaster in next-themes ThemeProvider (attribute="class", defaultTheme="light", enableSystem={false}, disableTransitionOnChange); suppressHydrationWarning kept; ui/sonner.tsx already consumed useTheme so no change needed there.
+- Part 2: Header.tsx — added ThemeToggle (ghost size-icon Sun/Moon, rounded-full, mounted-guard + eslint-disable for react-hooks/set-state-in-effect, aria-label "Toggle dark mode") placed between coins button and NotificationsPopover; since desktop/mobile share the same header row, one toggle covers both. Wrapped desktop SearchField in a md:flex row (max-w 260→300px) with an adjacent ghost icon submit Button calling the same submitSearch(). Swept Header hex grays (#F0F2F5/#E4E6EB/#D8DADF/#E8EBEF → bg-muted/bg-secondary) and bg-white → bg-card.
+- Part 3 token sweep (surgical): ChatsView (active row blue-500/10, day chips/bubbles/skeletons/empty panes → bg-card/bg-muted/bg-background, system chip bg-foreground/10, blocked banner bg-muted, hire/reject/expire banners → colored-500/10 + dark:text-*-400, inputs bg-muted, send hover bg-blue-500/10, dot ring border-card, outer card bg-card); constants.ts ROLE_CHIP/CONNECTION_CHIP/TUITION_STATUS → alpha bg-*-500/15 + dark:text-*-400 (PENDING/CLOSED → bg-muted text-muted-foreground); Stars.tsx empty star → fill-muted-foreground/20 text-muted-foreground/30; NotificationsPopover NOTIF_STYLE → alpha chips, trigger bg-muted hover:bg-secondary, unread bg-blue-500/10; bits.tsx danger hover:bg-red-500/10 + amber refund chip alpha; SideNav hovers/icon circle → bg-secondary; FeedView composer → bg-muted hover:bg-secondary; MonetizeView INFO_CARDS → alpha chips (hero bg-white/20 kept); UserAvatar status-dot ring border-white → border-card.
+- Extended sweep (files in "also check" scope): LoginScreen bg-background + hover:bg-muted; ProfileView fee chip alpha; dialogs NotEnoughCoinsDialog/ConnectConfirmDialog/BuyGoodDialog colored banners → alpha; cards TuitionCard/GoodCard/CourseCard "Hire/Purchased" chips → alpha, TuitionCard close-post hover:bg-red-500/10.
+- Adjacent shell files (not forbidden, required for dark coherence): StudySirApp bg-[#F0F2F5] → bg-background (×2), MainNav/Footer bg-white → bg-card.
+- Part 4: globals.css — .dark block re-tuned to slate-tinted Facebook-dark palette (bg oklch .21 < card .26 < secondary .30 < muted .32 < accent .36, hue 256); dark --primary/--ring set to brand #1877f2 so default-variant buttons/switches stay blue; added html{color-scheme:light}/html.dark{color-scheme:dark}; scrollbar thumb now dark-aware (#4a4d52 + hover) via html.dark overrides.
+- Verification: bun run lint → 0 errors; dev.log shows only "✓ Compiled" lines after edits, no runtime/compile errors.
+- Intentionally NOT converted: text-white on blue/red buttons & blue gradient chat header, bg-white/15 chips on blue header, bg-white/20 on gradient hero/cards, ProfileView ring-white/border-white avatar rings over cover photo, SafeImage blue-alpha placeholder, WalletView + SettingsView (owned by parallel agent).
+
+Stage Summary:
+- Dark mode fully wired (ThemeProvider + header Sun/Moon toggle) and every owned view/layout/card/dialog swept to semantic/alpha tokens; dark palette is slate-tinted FB-style with blue primary; desktop search gained a click submit button; scrollbars/native widgets adapt via color-scheme. Light-mode appearance preserved (muted=#F0F2F5, secondary=#E4E6EB, card=white identical to previous hexes). Lint green, dev compiles clean.
+
+---
+Task ID: 5-b (lead) — QA round + features: availability editor, wallet filters, bug fixes
+Agent: Z.ai Code (lead)
+Task: Assess status, agent-browser QA, fix bugs, add features (dark-mode QA, availability editor, wallet history filters)
+
+Work Log:
+- Reviewed worklog + dev.log + images: all 12 assets present, lint passes, old "Parsing ecmascript" entries were stale mid-dev artifacts.
+- agent-browser QA found REAL BUG #1: `ReferenceError: toast is not defined at decide` in ChatsView — success toast after Hire/Reject crashed (dialog never closed). Fixed by adding missing `import { toast } from 'sonner'`. Verified in browser: Reject on Fatima's PENDING connection fired "Request rejected — 16 coins refunded to the teacher." + system message + lock banner; Mukesh balance went 171 → 187 (refund verified end-to-end in UI).
+- FEATURE: Time Availability editor (was a gap — Figma has the tab, users couldn't edit):
+  * Backend: PATCH /api/users/[id] now accepts `availabilities: [{day, slots}]` (replace-all, validated, max 7, $transaction delete+createMany), returns sorted availabilities (Mon→Sun, legacy/custom labels last); GET sorts the same way.
+  * Frontend: new shared/AvailabilityEditor.tsx (day Select incl. legacy values like "Mon, Wed, Fri", slots Input, add/remove rows, dirty-tracking Save, toasts); mounted in SettingsView for teachers; ProfileView "Time Availability" tab reflects changes (verified in browser).
+- FEATURE: Dark mode settings card (Appearance: Light/Dark radio cards) in SettingsView + wallet Coin History filter chips (All/Spent/Refunds/Earned, client-side, empty-state aware) — verified in browser.
+- WalletView + AvailabilityEditor + SettingsView swept to alpha/semantic tokens for dark coherence (parallel agent 5-a owned the rest).
+- Dark mode QA: header toggle + eval className checks, dark screenshots of feed/chats/wallet/settings/mobile-390 all correct; light mode pixel-preserved; theme persists via localStorage; fresh browser session = 0 page errors.
+- API e2e via curl: PATCH availabilities create/clear/restore + sort order all verified (custom labels sort last).
+- bun run lint: 0 errors. dev.log: clean compiles only.
+
+Stage Summary:
+- Fixed decide-flow toast crash; platform now has dark mode (toggle + settings + full token coverage), teacher availability editing (backend+UI), wallet transaction filters, header search submit button. All core flows re-verified in browser: login, feed, search, tuition tabs, chat action row, pre-chat reject refund (coins 171→187), wallet history, notifications. Remaining ideas for next round: report moderation queue, teacher "Students" tab, course join-request flow, websocket live chat updates, PWA manifest.

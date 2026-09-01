@@ -70,7 +70,7 @@ export function GoodCard({ good, onChanged }: { good: GoodDTO; onChanged?: () =>
         <div className="flex items-start justify-between gap-2">
           <h3 className="text-[17px] font-bold leading-snug">{good.title}</h3>
           {purchased ? (
-            <span className="shrink-0 rounded bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+            <span className="shrink-0 rounded bg-green-500/15 px-2 py-0.5 text-xs font-semibold text-green-700 dark:text-green-400">
               Purchased
             </span>
           ) : null}

@@ -28,7 +28,7 @@ export function NotEnoughCoinsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader className="items-center">
-          <div className="mx-auto mb-1 grid size-14 place-items-center rounded-full bg-amber-100">
+          <div className="mx-auto mb-1 grid size-14 place-items-center rounded-full bg-amber-500/15">
             <Coins className="size-7 text-amber-500" />
           </div>
           <DialogTitle className="text-center">Not enough coins</DialogTitle>

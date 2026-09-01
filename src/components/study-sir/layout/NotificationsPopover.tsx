@@ -21,14 +21,15 @@ import { useAppStore } from '@/store/useAppStore'
 import { EmptyState } from '../shared/EmptyState'
 import { timeAgo } from '../shared/format'
 
+/* Alpha-based icon chips so they stay readable on light AND dark surfaces. */
 const NOTIF_STYLE: Record<string, { icon: LucideIcon; className: string }> = {
-  CONNECT_REQUEST: { icon: MessageSquare, className: 'bg-blue-100 text-[#1877F2]' },
-  MESSAGE: { icon: Mail, className: 'bg-blue-100 text-[#1877F2]' },
-  HIRED: { icon: PartyPopper, className: 'bg-green-100 text-green-600' },
-  REJECTED: { icon: XCircle, className: 'bg-red-100 text-red-600' },
-  REFUND: { icon: Undo2, className: 'bg-amber-100 text-amber-600' },
-  BLOCK: { icon: Ban, className: 'bg-red-100 text-red-600' },
-  SYSTEM: { icon: Info, className: 'bg-gray-200 text-gray-600' },
+  CONNECT_REQUEST: { icon: MessageSquare, className: 'bg-blue-500/15 text-[#1877F2] dark:text-blue-400' },
+  MESSAGE: { icon: Mail, className: 'bg-blue-500/15 text-[#1877F2] dark:text-blue-400' },
+  HIRED: { icon: PartyPopper, className: 'bg-green-500/15 text-green-600 dark:text-green-400' },
+  REJECTED: { icon: XCircle, className: 'bg-red-500/15 text-red-600 dark:text-red-400' },
+  REFUND: { icon: Undo2, className: 'bg-amber-500/15 text-amber-600 dark:text-amber-400' },
+  BLOCK: { icon: Ban, className: 'bg-red-500/15 text-red-600 dark:text-red-400' },
+  SYSTEM: { icon: Info, className: 'bg-muted text-muted-foreground' },
 }
 
 export function NotificationsPopover() {
@@ -79,7 +80,7 @@ export function NotificationsPopover() {
         <button
           type="button"
           aria-label={`Notifications${notifCount ? ` (${notifCount} unread)` : ''}`}
-          className="relative grid h-10 w-10 place-items-center rounded-full bg-[#F0F2F5] text-foreground transition-colors hover:bg-[#E4E6EB]"
+          className="relative grid h-10 w-10 place-items-center rounded-full bg-muted text-foreground transition-colors hover:bg-secondary"
         >
           <Bell className="size-5" />
           {notifCount > 0 ? (
@@ -129,7 +130,7 @@ export function NotificationsPopover() {
                     onClick={() => openNotification(n)}
                     className={cn(
                       'flex w-full gap-3 p-3 text-left transition-colors hover:bg-muted',
-                      !n.read && 'bg-blue-50'
+                      !n.read && 'bg-blue-500/10'
                     )}
                   >
                     <span className={cn('grid size-9 shrink-0 place-items-center rounded-full', style.className)}>

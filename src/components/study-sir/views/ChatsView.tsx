@@ -21,6 +21,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { api, errorMessage } from '@/lib/api'
 import type { ConnectionDTO, MessageDTO } from '@/lib/types'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store/useAppStore'
 import { ConfirmDialog } from '../dialogs/ConfirmDialog'
@@ -66,14 +67,14 @@ function ConnectionRow({
       onClick={onSelect}
       className={cn(
         'flex w-full gap-3 p-3 text-left transition-colors hover:bg-muted',
-        active && 'bg-[#E7F3FF] hover:bg-[#E7F3FF]'
+        active && 'bg-blue-500/10 hover:bg-blue-500/10'
       )}
     >
       <div className="relative shrink-0">
         <UserAvatar src={other.avatar} name={other.name} className="size-12" />
         <span
           className={cn(
-            'absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white',
+            'absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-card',
             CONNECTION_DOT[connection.status]
           )}
         />
@@ -105,7 +106,7 @@ function ConnectionRow({
 
 function SystemMessage({ content }: { content: string }) {
   return (
-    <div className="mx-auto w-fit max-w-[85%] rounded-full bg-black/10 px-3 py-1 text-center text-[11px] text-foreground/80">
+    <div className="mx-auto w-fit max-w-[85%] rounded-full bg-foreground/10 px-3 py-1 text-center text-[11px] text-foreground/80">
       {content}
     </div>
   )
@@ -113,7 +114,7 @@ function SystemMessage({ content }: { content: string }) {
 
 function DayChip({ label }: { label: string }) {
   return (
-    <div className="my-2 flex w-fit mx-auto rounded-full bg-white px-3 py-1 text-[10px] font-medium text-muted-foreground shadow-sm">
+    <div className="my-2 flex w-fit mx-auto rounded-full bg-card px-3 py-1 text-[10px] font-medium text-muted-foreground shadow-sm">
       {label}
     </div>
   )
@@ -126,7 +127,7 @@ function MessageBubble({ message, mine }: { message: MessageDTO; mine: boolean }
       <div
         className={cn(
           'max-w-[78%] rounded-2xl px-3.5 py-2',
-          mine ? 'rounded-br-md bg-[#1877F2] text-white' : 'rounded-bl-md bg-white shadow-sm'
+          mine ? 'rounded-br-md bg-[#1877F2] text-white' : 'rounded-bl-md bg-card shadow-sm'
         )}
       >
         <p className="whitespace-pre-line break-words text-[15px]">{message.content}</p>
@@ -286,7 +287,7 @@ function ChatThread({
 
   if (failed) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 bg-[#F0F2F5] p-6 text-center">
+      <div className="flex h-full flex-col items-center justify-center gap-2 bg-muted p-6 text-center">
         <EmptyState icon={MessageCircle} title="Chat not found" hint="It may have been removed." />
       </div>
     )
@@ -332,17 +333,17 @@ function ChatThread({
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 space-y-1.5 overflow-y-auto bg-[#F0F2F5] p-4">
+      <div ref={scrollRef} className="flex-1 space-y-1.5 overflow-y-auto bg-background p-4">
         {data === null ? (
           <div className="space-y-3">
-            <Skeleton className="mx-auto h-5 w-24 rounded-full bg-white" />
-            <Skeleton className="h-12 w-2/3 rounded-2xl bg-white" />
-            <Skeleton className="ml-auto h-12 w-1/2 rounded-2xl bg-white/60" />
-            <Skeleton className="h-12 w-2/3 rounded-2xl bg-white" />
+            <Skeleton className="mx-auto h-5 w-24 rounded-full bg-card" />
+            <Skeleton className="h-12 w-2/3 rounded-2xl bg-card" />
+            <Skeleton className="ml-auto h-12 w-1/2 rounded-2xl bg-card/60" />
+            <Skeleton className="h-12 w-2/3 rounded-2xl bg-card" />
           </div>
         ) : data.messages.length === 0 ? (
           <div className="flex h-full items-center justify-center">
-            <p className="rounded-full bg-white px-4 py-2 text-sm text-muted-foreground shadow-sm">
+            <p className="rounded-full bg-card px-4 py-2 text-sm text-muted-foreground shadow-sm">
               Say hi 👋 — messages appear here
             </p>
           </div>
@@ -352,10 +353,10 @@ function ChatThread({
       </div>
 
       {/* Bottom: banner / input / decision actions */}
-      <div className="border-t bg-white">
+      <div className="border-t bg-card">
         {blocked ? (
           <div className="p-3">
-            <div className="flex items-center justify-between gap-2 rounded-lg bg-gray-100 p-3 text-sm text-gray-700">
+            <div className="flex items-center justify-between gap-2 rounded-lg bg-muted p-3 text-sm text-muted-foreground">
               <span>{iBlocked ? '🚫 You blocked this user. Unblock to chat again.' : '🚫 You are blocked by this user.'}</span>
               {iBlocked ? (
                 <Button size="sm" variant="outline" onClick={unblock} disabled={busy}>
@@ -366,14 +367,14 @@ function ChatThread({
           </div>
         ) : connection?.status === 'HIRED' ? (
           <div className="p-3">
-            <div className="rounded-lg bg-green-50 p-3 text-sm text-green-800">
+            <div className="rounded-lg bg-green-500/10 p-3 text-sm text-green-700 dark:text-green-400">
               🎉 Hire confirmed. Conversation is locked.
               {connection.coinsSpent > 0 ? ` ${connection.coinsSpent} coins keep the platform running.` : ''}
             </div>
           </div>
         ) : connection?.status === 'REJECTED' ? (
           <div className="p-3">
-            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-800">
+            <div className="rounded-lg bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">
               Request rejected. Conversation closed.{' '}
               {connection.refunded
                 ? `${connection.coinsSpent} coins refunded to teacher.`
@@ -382,7 +383,7 @@ function ChatThread({
           </div>
         ) : connection?.status === 'EXPIRED' ? (
           <div className="p-3">
-            <div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+            <div className="rounded-lg bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
               No reply within 10 days — coins auto-returned to teacher.
             </div>
           </div>
@@ -392,7 +393,7 @@ function ChatThread({
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder="Write your message"
-              className="rounded-full bg-[#F0F2F5]"
+              className="rounded-full bg-muted"
               aria-label="Write your message"
             />
             <Button
@@ -401,7 +402,7 @@ function ChatThread({
               variant="ghost"
               disabled={!draft.trim() || sending}
               aria-label="Send message"
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-[#1877F2] hover:bg-blue-50"
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-[#1877F2] hover:bg-blue-500/10 dark:text-blue-400"
             >
               <SendHorizonal className="size-5" />
             </Button>
@@ -558,7 +559,7 @@ export function ChatsView() {
   const activeId = params.connectionId
 
   return (
-    <div className="mx-auto card-shadow flex h-[calc(100vh-260px)] min-h-[440px] w-full max-w-[1100px] overflow-hidden rounded-xl border bg-white">
+    <div className="mx-auto card-shadow flex h-[calc(100vh-260px)] min-h-[440px] w-full max-w-[1100px] overflow-hidden rounded-xl border bg-card">
       {/* List pane */}
       <div className={cn('w-full flex-col lg:flex lg:w-[340px] lg:shrink-0 lg:border-r', activeId ? 'hidden' : 'flex')}>
         <div className="border-b px-4 py-3">
@@ -569,7 +570,7 @@ export function ChatsView() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search chats"
-              className="h-9 rounded-full bg-[#F0F2F5] pl-9"
+              className="h-9 rounded-full bg-muted pl-9"
             />
           </div>
         </div>
@@ -614,8 +615,8 @@ export function ChatsView() {
         {activeId ? (
           <ChatThread connectionId={activeId} onListChanged={loadList} />
         ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-2 bg-[#F0F2F5] p-6 text-center">
-            <div className="card-shadow grid size-16 place-items-center rounded-full bg-white">
+          <div className="flex h-full flex-col items-center justify-center gap-2 bg-muted p-6 text-center">
+            <div className="card-shadow grid size-16 place-items-center rounded-full bg-card">
               <MessageCircle className="size-8 text-[#1877F2]" />
             </div>
             <p className="font-semibold">Your messages</p>

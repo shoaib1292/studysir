@@ -31,7 +31,7 @@ export function UserAvatar({
         </AvatarFallback>
       </Avatar>
       {dot ? (
-        <span className={cn('absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-white', dot)} />
+        <span className={cn('absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-card', dot)} />
       ) : null}
     </div>
   )

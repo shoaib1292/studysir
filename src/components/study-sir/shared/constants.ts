@@ -39,10 +39,11 @@ export function clientCoinCost(feeMin: number, feeMax: number, mode: string): nu
 export const REFUND_RULE_TEXT =
   'Coins return only if the student/parent rejects before any chat starts, or never replies within 10 days.'
 
+/* Alpha-based chip backgrounds so they stay readable on light AND dark surfaces. */
 export const ROLE_CHIP: Record<string, string> = {
-  STUDENT: 'bg-blue-100 text-blue-700',
-  PARENT: 'bg-purple-100 text-purple-700',
-  TEACHER: 'bg-green-100 text-green-700',
+  STUDENT: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
+  PARENT: 'bg-purple-500/15 text-purple-700 dark:text-purple-400',
+  TEACHER: 'bg-green-500/15 text-green-700 dark:text-green-400',
 }
 
 export const ROLE_LABEL: Record<string, string> = {
@@ -52,11 +53,11 @@ export const ROLE_LABEL: Record<string, string> = {
 }
 
 export const CONNECTION_CHIP: Record<ConnectionStatus, { label: string; className: string }> = {
-  PENDING: { label: 'New request', className: 'bg-gray-200 text-gray-700' },
-  ACTIVE: { label: 'Chatting', className: 'bg-blue-100 text-[#1877F2]' },
-  HIRED: { label: 'Hired', className: 'bg-green-100 text-green-700' },
-  REJECTED: { label: 'Rejected', className: 'bg-red-100 text-red-600' },
-  EXPIRED: { label: 'Expired', className: 'bg-amber-100 text-amber-700' },
+  PENDING: { label: 'New request', className: 'bg-muted text-muted-foreground' },
+  ACTIVE: { label: 'Chatting', className: 'bg-blue-500/15 text-[#1877F2] dark:text-blue-400' },
+  HIRED: { label: 'Hired', className: 'bg-green-500/15 text-green-700 dark:text-green-400' },
+  REJECTED: { label: 'Rejected', className: 'bg-red-500/15 text-red-600 dark:text-red-400' },
+  EXPIRED: { label: 'Expired', className: 'bg-amber-500/15 text-amber-700 dark:text-amber-400' },
 }
 
 export const CONNECTION_DOT: Record<ConnectionStatus, string> = {
@@ -68,7 +69,7 @@ export const CONNECTION_DOT: Record<ConnectionStatus, string> = {
 }
 
 export const TUITION_STATUS: Record<string, { label: string; className: string }> = {
-  OPEN: { label: 'Open', className: 'bg-green-100 text-green-700' },
-  HIRED: { label: 'Hired', className: 'bg-blue-100 text-[#1877F2]' },
-  CLOSED: { label: 'Closed', className: 'bg-gray-200 text-gray-600' },
+  OPEN: { label: 'Open', className: 'bg-green-500/15 text-green-700 dark:text-green-400' },
+  HIRED: { label: 'Hired', className: 'bg-blue-500/15 text-[#1877F2] dark:text-blue-400' },
+  CLOSED: { label: 'Closed', className: 'bg-muted text-muted-foreground' },
 }

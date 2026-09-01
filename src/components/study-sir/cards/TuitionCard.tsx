@@ -134,7 +134,7 @@ export function TuitionCard({
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {isMine ? (
-            <span className="rounded bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">Hire</span>
+            <span className="rounded bg-green-500/15 px-2 py-0.5 text-xs font-semibold text-green-700 dark:text-green-400">Hire</span>
           ) : null}
           {isMine ? (
             <DropdownMenu>
@@ -207,7 +207,7 @@ export function TuitionCard({
               <Button
                 size="sm"
                 variant="outline"
-                className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                className="text-red-600 hover:bg-red-500/10 hover:text-red-700 dark:text-red-400 dark:hover:text-red-400"
                 onClick={closePost}
               >
                 Close Post

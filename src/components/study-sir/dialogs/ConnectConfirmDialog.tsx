@@ -81,7 +81,7 @@ export function ConnectConfirmDialog({
         </p>
 
         {!enough ? (
-          <div className="flex items-center justify-between gap-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+          <div className="flex items-center justify-between gap-3 rounded-lg bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
             <span className="font-medium">Not enough coins in your wallet.</span>
             <Button
               size="sm"

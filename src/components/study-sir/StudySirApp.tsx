@@ -102,7 +102,7 @@ export default function StudySirApp() {
 
   if (loading) {
     return (
-      <div className="grid min-h-screen place-items-center bg-[#F0F2F5]">
+      <div className="grid min-h-screen place-items-center bg-background">
         <p className="animate-pulse text-4xl font-extrabold tracking-tight text-[#1877F2]">
           Study<span className="font-black">Sir</span>
         </p>
@@ -115,7 +115,7 @@ export default function StudySirApp() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#F0F2F5]">
+    <div className="flex min-h-screen flex-col bg-background">
       <Header />
       <MainNav />
 

@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Ban, Loader2, LogOut, Save } from 'lucide-react'
+import { Ban, Loader2, LogOut, MonitorCog, Moon, Save, Sun } from 'lucide-react'
+import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,10 +11,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { api, errorMessage, type ProfilePatch } from '@/lib/api'
+import type { AvailabilityDTO } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store/useAppStore'
 import { AVATAR_OPTIONS, COVER_OPTIONS, ROLE_LABEL } from '../shared/constants'
 import { FbCard } from '../shared/bits'
+import { AvailabilityEditor } from '../shared/AvailabilityEditor'
 import { SafeImage } from '../shared/SafeImage'
 import { UserAvatar } from '../shared/UserAvatar'
 
@@ -218,6 +221,15 @@ export function SettingsView() {
         </FbCard>
       </section>
 
+      {/* Time availability (teachers) */}
+      {isTeacher ? <AvailabilitySection /> : null}
+
+      {/* Appearance */}
+      <section className="space-y-3">
+        <SectionTitle>Appearance</SectionTitle>
+        <AppearanceCard />
+      </section>
+
       {/* Blocked users */}
       <section className="space-y-3">
         <SectionTitle>Blocked Users</SectionTitle>
@@ -238,6 +250,92 @@ export function SettingsView() {
         </FbCard>
       </section>
     </div>
+  )
+}
+
+function AvailabilitySection() {
+  const me = useAppStore((s) => s.me)!
+  const [initial, setInitial] = useState<AvailabilityDTO[] | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    api
+      .getUser(me.id)
+      .then((d) => {
+        if (alive) setInitial(d.availabilities)
+      })
+      .catch(() => {
+        if (alive) setInitial([])
+      })
+    return () => {
+      alive = false
+    }
+  }, [me.id])
+
+  return (
+    <section className="space-y-3">
+      <SectionTitle>Time Availability</SectionTitle>
+      <FbCard className="p-4">
+        {initial === null ? (
+          <div className="space-y-2">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-3/4" />
+          </div>
+        ) : (
+          <AvailabilityEditor initial={initial} />
+        )}
+      </FbCard>
+    </section>
+  )
+}
+
+function AppearanceCard() {
+  const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => setMounted(true), 0)
+    return () => clearTimeout(t)
+  }, [])
+
+  const options = [
+    { value: 'light', label: 'Light', icon: Sun },
+    { value: 'dark', label: 'Dark', icon: Moon },
+  ] as const
+
+  return (
+    <FbCard className="p-4">
+      <div className="flex items-center gap-2">
+        <MonitorCog className="size-4 text-muted-foreground" aria-hidden />
+        <p className="text-sm font-medium">Theme</p>
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Choose how StudySir looks on this device.
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Color theme">
+        {options.map((opt) => {
+          const Icon = opt.icon
+          const active = mounted && theme === opt.value
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => setTheme(opt.value)}
+              className={cn(
+                'flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium transition-all',
+                active
+                  ? 'border-[#1877F2] bg-blue-500/10 text-foreground ring-1 ring-[#1877F2]'
+                  : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted'
+              )}
+            >
+              <Icon className="size-4" aria-hidden />
+              {opt.label}
+            </button>
+          )
+        })}
+      </div>
+    </FbCard>
   )
 }
 

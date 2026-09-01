@@ -65,6 +65,13 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   }
   items.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 
+  const DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+  const dayIdx = (d: string) => {
+    const i = DAY_ORDER.indexOf(d)
+    return i === -1 ? 99 : i
+  }
+  const sortedAvailabilities = [...user.availabilities].sort((a, b) => dayIdx(a.day) - dayIdx(b.day))
+
   return NextResponse.json({
     user: toUserDTO(user),
     stats: {
@@ -75,7 +82,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
       connectionCount,
     },
     reviews: reviewDTOs,
-    availabilities: user.availabilities.map((a) => ({ id: a.id, day: a.day, slots: a.slots })),
+    availabilities: sortedAvailabilities.map((a) => ({ id: a.id, day: a.day, slots: a.slots })),
     posts: items,
     teacherCard: user.role === 'TEACHER' ? await toTeacherCardDTO(user, viewerId) : null,
   })
@@ -99,6 +106,37 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   if (body.feeMin !== undefined) data.feeMin = body.feeMin === null ? null : Number(body.feeMin)
   if (body.feeMax !== undefined) data.feeMax = body.feeMax === null ? null : Number(body.feeMax)
 
-  const user = await db.user.update({ where: { id }, data })
-  return NextResponse.json({ user: toUserDTO(user) })
+  // Availability: replace-all strategy. Accepts [{ day, slots }]
+  let availabilityRows: { day: string; slots: string }[] | null = null
+  if (Array.isArray(body.availabilities)) {
+    availabilityRows = (body.availabilities as { day?: unknown; slots?: unknown }[])
+      .map((a) => ({ day: String(a?.day ?? '').trim(), slots: String(a?.slots ?? '').trim() }))
+      .filter((a) => a.day.length > 0 && a.slots.length > 0)
+      .slice(0, 7)
+  }
+
+  const [, user] = await db.$transaction(async (tx) => {
+    if (availabilityRows) {
+      await tx.availability.deleteMany({ where: { userId: id } })
+      if (availabilityRows.length) {
+        await tx.availability.createMany({
+          data: availabilityRows.map((r) => ({ userId: id, day: r.day, slots: r.slots })),
+        })
+      }
+    }
+    return [null, await tx.user.update({ where: { id }, data })]
+  })
+
+  const DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+  const dayIdx = (d: string) => {
+    const i = DAY_ORDER.indexOf(d)
+    return i === -1 ? 99 : i
+  }
+  const availabilities = await db.availability.findMany({ where: { userId: id } })
+  availabilities.sort((a, b) => dayIdx(a.day) - dayIdx(b.day))
+
+  return NextResponse.json({
+    user: toUserDTO(user),
+    availabilities: availabilities.map((a) => ({ id: a.id, day: a.day, slots: a.slots })),
+  })
 }

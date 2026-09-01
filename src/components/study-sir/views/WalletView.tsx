@@ -44,19 +44,19 @@ const COIN_PACKAGES = [
 const QUICK_AMOUNTS = [5, 10, 25, 50]
 
 const TX_STYLE: Record<string, { icon: LucideIcon; className: string }> = {
-  SPEND_CONTACT: { icon: MessageSquare, className: 'bg-red-100 text-red-600' },
-  REFUND_AUTO: { icon: Undo2, className: 'bg-green-100 text-green-600' },
-  REFUND_REJECT: { icon: Undo2, className: 'bg-green-100 text-green-600' },
-  PURCHASE: { icon: ShoppingBag, className: 'bg-green-100 text-green-600' },
-  GOOD_PURCHASE: { icon: ShoppingBag, className: 'bg-green-100 text-green-600' },
-  WELCOME: { icon: Gift, className: 'bg-purple-100 text-purple-600' },
-  HIRE_BONUS: { icon: Handshake, className: 'bg-blue-100 text-[#1877F2]' },
-  MONETIZE: { icon: BadgeDollarSign, className: 'bg-purple-100 text-purple-600' },
-  ADD_MONEY: { icon: Banknote, className: 'bg-green-100 text-green-600' },
+  SPEND_CONTACT: { icon: MessageSquare, className: 'bg-red-500/15 text-red-600 dark:text-red-400' },
+  REFUND_AUTO: { icon: Undo2, className: 'bg-green-500/15 text-green-600 dark:text-green-400' },
+  REFUND_REJECT: { icon: Undo2, className: 'bg-green-500/15 text-green-600 dark:text-green-400' },
+  PURCHASE: { icon: ShoppingBag, className: 'bg-green-500/15 text-green-600 dark:text-green-400' },
+  GOOD_PURCHASE: { icon: ShoppingBag, className: 'bg-green-500/15 text-green-600 dark:text-green-400' },
+  WELCOME: { icon: Gift, className: 'bg-purple-500/15 text-purple-600 dark:text-purple-400' },
+  HIRE_BONUS: { icon: Handshake, className: 'bg-blue-500/15 text-[#1877F2] dark:text-blue-400' },
+  MONETIZE: { icon: BadgeDollarSign, className: 'bg-purple-500/15 text-purple-600 dark:text-purple-400' },
+  ADD_MONEY: { icon: Banknote, className: 'bg-green-500/15 text-green-600 dark:text-green-400' },
 }
 
 function TransactionRow({ tx }: { tx: CoinTransactionDTO }) {
-  const style = TX_STYLE[tx.type] ?? { icon: Coins, className: 'bg-amber-100 text-amber-600' }
+  const style = TX_STYLE[tx.type] ?? { icon: Coins, className: 'bg-amber-500/15 text-amber-600 dark:text-amber-400' }
   const Icon = style.icon
   const positive = tx.amount >= 0
   return (
@@ -100,6 +100,7 @@ export function WalletView() {
   const [addOpen, setAddOpen] = useState(false)
   const [amount, setAmount] = useState('')
   const [adding, setAdding] = useState(false)
+  const [txFilter, setTxFilter] = useState<'all' | 'spent' | 'refunds' | 'earned'>('all')
 
   const load = useCallback(async () => {
     try {
@@ -121,6 +122,15 @@ export function WalletView() {
   // 'coins' | 'buy' -> packages grid; 'history'; 'money'
   const rawTab = params.tab ?? 'coins'
   const tab = rawTab === 'history' ? 'history' : rawTab === 'money' ? 'money' : 'coins'
+
+  const REFUND_TYPES = new Set(['REFUND_AUTO', 'REFUND_REJECT'])
+  const SPEND_TYPES = new Set(['SPEND_CONTACT', 'GOOD_PURCHASE'])
+  const filteredTransactions = transactions.filter((tx) => {
+    if (txFilter === 'all') return true
+    if (txFilter === 'refunds') return REFUND_TYPES.has(tx.type)
+    if (txFilter === 'spent') return SPEND_TYPES.has(tx.type) || tx.amount < 0
+    return !SPEND_TYPES.has(tx.type) && tx.amount > 0 && !REFUND_TYPES.has(tx.type)
+  })
 
   async function buyPackage(packageId: string, packageCoins: number) {
     setBuying(packageId)
@@ -220,18 +230,45 @@ export function WalletView() {
 
         <TabsContent value="history">
           <FbCard className="p-4">
-            <p className="pb-2 font-bold">All Transactions</p>
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
+              <p className="font-bold">All Transactions</p>
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter transactions">
+                {(
+                  [
+                    { key: 'all', label: 'All' },
+                    { key: 'spent', label: 'Spent' },
+                    { key: 'refunds', label: 'Refunds' },
+                    { key: 'earned', label: 'Earned' },
+                  ] as const
+                ).map((f) => (
+                  <button
+                    key={f.key}
+                    type="button"
+                    aria-pressed={txFilter === f.key}
+                    onClick={() => setTxFilter(f.key)}
+                    className={cn(
+                      'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                      txFilter === f.key
+                        ? 'border-[#1877F2] bg-blue-500/10 text-[#1877F2] dark:text-blue-400'
+                        : 'border-border text-muted-foreground hover:bg-muted'
+                    )}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="max-h-96 divide-y overflow-y-auto">
-              {transactions.length === 0 ? (
+              {filteredTransactions.length === 0 ? (
                 <div className="py-6">
                   <EmptyState
                     icon={WalletIcon}
-                    title="No transactions yet"
+                    title={transactions.length === 0 ? 'No transactions yet' : 'Nothing in this filter'}
                     hint="Coin purchases, spends and refunds will show up here."
                   />
                 </div>
               ) : (
-                transactions.map((tx) => <TransactionRow key={tx.id} tx={tx} />)
+                filteredTransactions.map((tx) => <TransactionRow key={tx.id} tx={tx} />)
               )}
             </div>
           </FbCard>
@@ -240,8 +277,8 @@ export function WalletView() {
         <TabsContent value="money">
           <FbCard className="p-5">
             <div className="flex items-center gap-3">
-              <span className="grid size-11 place-items-center rounded-full bg-green-100">
-                <Banknote className="size-5 text-green-600" />
+              <span className="grid size-11 place-items-center rounded-full bg-green-500/15">
+                <Banknote className="size-5 text-green-600 dark:text-green-400" />
               </span>
               <div>
                 <p className="font-bold">Money Wallet</p>

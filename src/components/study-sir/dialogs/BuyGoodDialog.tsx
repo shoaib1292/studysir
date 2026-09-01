@@ -95,7 +95,7 @@ export function BuyGoodDialog({
         </div>
 
         {insufficient ? (
-          <div className="flex items-center justify-between gap-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+          <div className="flex items-center justify-between gap-3 rounded-lg bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">
             <span className="font-medium">
               Insufficient money — you need Rs {Math.max(0, good.price - balance)} more.
             </span>

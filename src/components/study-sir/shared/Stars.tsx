@@ -20,7 +20,7 @@ export function Stars({
       {[1, 2, 3, 4, 5].map((i) => (
         <Star
           key={i}
-          className={cn(size, i <= rounded ? 'fill-amber-400 text-amber-400' : 'fill-gray-200 text-gray-300')}
+          className={cn(size, i <= rounded ? 'fill-amber-400 text-amber-400' : 'fill-muted-foreground/20 text-muted-foreground/30')}
         />
       ))}
       {showValue ? (
@@ -41,7 +41,7 @@ export function StarPicker({ value, onChange }: { value: number; onChange: (v: n
           onClick={() => onChange(i)}
           className="transition-transform hover:scale-110 focus-visible:outline-none"
         >
-          <Star className={cn('size-7', i <= value ? 'fill-amber-400 text-amber-400' : 'text-gray-300')} />
+          <Star className={cn('size-7', i <= value ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30')} />
         </button>
       ))}
     </div>

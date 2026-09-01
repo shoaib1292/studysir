@@ -120,7 +120,7 @@ export function CourseCard({ course, onChanged }: { course: CourseDTO; onChanged
               ★ {teacherRating.toFixed(1)}
             </span>
           ) : null}
-          <span className="rounded bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+          <span className="rounded bg-green-500/15 px-2 py-0.5 text-xs font-semibold text-green-700 dark:text-green-400">
             Hire Teacher
           </span>
         </div>

@@ -41,13 +41,13 @@ function NavRow({
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-medium transition-colors hover:bg-[#E4E6EB]',
+        'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-medium transition-colors hover:bg-secondary',
         active && 'text-[#1877F2]'
       )}
     >
       <span
         className={cn(
-          'grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#E4E6EB]',
+          'grid h-9 w-9 shrink-0 place-items-center rounded-full bg-secondary',
           active && 'bg-[#1877F2] text-white'
         )}
       >
@@ -71,7 +71,7 @@ export function SideNav() {
       <button
         type="button"
         onClick={() => go('profile', { userId: me.id })}
-        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-[#E4E6EB]"
+        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-secondary"
       >
         <UserAvatar src={me.avatar} name={me.name} className="size-10" />
         <span className="min-w-0">
