@@ -1,0 +1,119 @@
+'use client'
+
+import { useState } from 'react'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { api, errorMessage } from '@/lib/api'
+import { cn } from '@/lib/utils'
+import { GOOD_IMAGE_OPTIONS } from '../shared/constants'
+import { SafeImage } from '../shared/SafeImage'
+
+export function PostGoodDialog({
+  open,
+  onOpenChange,
+  onPosted,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onPosted: () => void
+}) {
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [image, setImage] = useState<string>(GOOD_IMAGE_OPTIONS[0])
+  const [price, setPrice] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const valid = title.trim().length > 2 && description.trim().length > 2 && (Number(price) || 0) > 0
+
+  async function submit() {
+    if (!valid || loading) return
+    setLoading(true)
+    try {
+      await api.createGood({
+        title: title.trim(),
+        description: description.trim(),
+        image: image || undefined,
+        price: Number(price) || 0,
+      })
+      toast.success('Item listed!', { description: 'Your digital item is now in the store.' })
+      onOpenChange(false)
+      onPosted()
+      reset()
+    } catch (e) {
+      toast.error('Could not list item', { description: errorMessage(e) })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function reset() {
+    setTitle('')
+    setDescription('')
+    setImage(GOOD_IMAGE_OPTIONS[0])
+    setPrice('')
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !loading && onOpenChange(o)}>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Sell an Item</DialogTitle>
+          <DialogDescription>List a digital study material in the store.</DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-3">
+          <div className="grid gap-1.5">
+            <Label htmlFor="good-title">Title *</Label>
+            <Input id="good-title" placeholder="e.g. Class 10 Math Formula Sheet (PDF)" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="good-desc">Description *</Label>
+            <Textarea id="good-desc" placeholder="What's inside? Format? How is it delivered?" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Image</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {GOOD_IMAGE_OPTIONS.map((img) => (
+                <button
+                  key={img}
+                  type="button"
+                  onClick={() => setImage(img)}
+                  className={cn(
+                    'overflow-hidden rounded-lg border-2 transition-all',
+                    image === img ? 'border-[#1877F2] ring-2 ring-[#1877F2]/30' : 'border-transparent hover:border-muted-foreground/30'
+                  )}
+                >
+                  <SafeImage src={img} alt="item" className="aspect-video w-full object-cover" />
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="good-price">Price (Rs) *</Label>
+            <Input id="good-price" type="number" min={0} placeholder="300" value={price} onChange={(e) => setPrice(e.target.value)} />
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+            Cancel
+          </Button>
+          <Button onClick={submit} disabled={!valid || loading}>
+            {loading ? 'Listing…' : 'List Item'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
