@@ -528,6 +528,7 @@ export function ChatsView() {
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadList()
   }, [loadList])
 
@@ -557,7 +558,7 @@ export function ChatsView() {
   const activeId = params.connectionId
 
   return (
-    <div className="mx-auto card-shadow flex h-[calc(100vh-105px)] w-full max-w-[1100px] overflow-hidden rounded-xl border bg-white">
+    <div className="mx-auto card-shadow flex h-[calc(100vh-260px)] min-h-[440px] w-full max-w-[1100px] overflow-hidden rounded-xl border bg-white">
       {/* List pane */}
       <div className={cn('w-full flex-col lg:flex lg:w-[340px] lg:shrink-0 lg:border-r', activeId ? 'hidden' : 'flex')}>
         <div className="border-b px-4 py-3">

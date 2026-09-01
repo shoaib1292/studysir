@@ -56,6 +56,11 @@ export default function StudySirApp() {
 
   const [loading, setLoading] = useState(true)
 
+  // Reset window scroll on view change so sticky header never hides view headers
+  useEffect(() => {
+    window.scrollTo({ top: 0 })
+  }, [view, nonce])
+
   // Session bootstrap
   useEffect(() => {
     let cancelled = false

@@ -37,21 +37,23 @@ export async function notify(userId: string, type: string, title: string, body?:
 
 /**
  * Refund coins for a connection (only allowed when no chat happened).
+ * Refund goes to the payer (teacher in tuition flow, student in direct-contact flow).
  * Idempotent via refunded flag.
  */
 export async function refundPendingConnection(connectionId: string, reason: 'REJECTED' | 'EXPIRED') {
   const conn = await db.connection.findUnique({ where: { id: connectionId } })
   if (!conn || conn.refunded) return null
   if (conn.chatStartedAt) return null // chat started => no refund
+  const payerId = conn.payerId || conn.teacherId
 
   return db.$transaction(async (tx) => {
     await tx.user.update({
-      where: { id: conn.teacherId },
+      where: { id: payerId },
       data: { coins: { increment: conn.coinsSpent } },
     })
     await tx.coinTransaction.create({
       data: {
-        userId: conn.teacherId,
+        userId: payerId,
         amount: conn.coinsSpent,
         type: reason === 'EXPIRED' ? 'REFUND_AUTO' : 'REFUND_REJECT',
         description:
@@ -65,7 +67,7 @@ export async function refundPendingConnection(connectionId: string, reason: 'REJ
       where: { id: conn.id },
       data: { refunded: true, status: reason === 'EXPIRED' ? 'EXPIRED' : 'REJECTED', decidedAt: new Date() },
     })
-    return conn
+    return { ...conn, payerId }
   })
 }
 
@@ -85,7 +87,7 @@ export async function processExpiredConnections(): Promise<number> {
     if (res) {
       count++
       await notify(
-        res.teacherId,
+        res.payerId,
         'REFUND',
         'Coins refunded automatically',
         `No reply was received for 10 days — your ${res.coinsSpent} coins were returned to your wallet.`

@@ -37,6 +37,7 @@ model User {
   transactions    CoinTransaction[]
   teacherLinks    Connection[] @relation("teacherLink")
   studentLinks    Connection[] @relation("studentLink")
+  payerLinks      Connection[] @relation("payerLink")
   messagesSent    Message[]
   reviewsReceived Review[]     @relation("reviewReceived")
   reviewsGiven    Review[]     @relation("reviewGiven")
@@ -77,6 +78,8 @@ model Connection {
   teacher       User         @relation("teacherLink", fields: [teacherId], references: [id])
   studentId     String
   student       User         @relation("studentLink", fields: [studentId], references: [id])
+  payerId       String
+  payer         User         @relation("payerLink", fields: [payerId], references: [id])
   tuitionPostId String?
   tuitionPost   TuitionPost? @relation(fields: [tuitionPostId], references: [id])
   coinsSpent    Int          @default(0)

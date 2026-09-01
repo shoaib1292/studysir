@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'import { GraduationCap, Presentation, SearchX, ShoppingBag, X } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { GraduationCap, Presentation, SearchX, ShoppingBag, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import type { FeedItem } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -173,7 +174,7 @@ export function FeedView() {
             hint={q ? `No results match “${q}”. Try a different search or filter.` : 'Be the first to post in this category!'}
           />
         ) : (
-          items.map((item) => <FeedItemCard key={`${item.kind}-${item.createdAt}`} item={item} onChanged={refresh} />)
+          items.map((item) => <FeedItemCard key={`${item.kind}-${item.kind === "tuition" ? item.tuition.id : item.kind === "course" ? item.course.id : item.kind === "good" ? item.good.id : item.teacher.id}`} item={item} onChanged={refresh} />)
         )}
       </div>
 

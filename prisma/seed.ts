@@ -77,7 +77,7 @@ async function main() {
     languages: 'English, Hindi',
     feeMin: 15,
     feeMax: 100,
-    coins: 200,
+    coins: 184,
     money: 120,
     isVerified: true,
   })
@@ -97,7 +97,7 @@ async function main() {
     languages: 'English, Hindi, Gujarati',
     feeMin: 20,
     feeMax: 120,
-    coins: 200,
+    coins: 182,
     money: 90,
     isVerified: true,
   })
@@ -117,7 +117,7 @@ async function main() {
     languages: 'English',
     feeMin: 25,
     feeMax: 150,
-    coins: 150,
+    coins: 140,
     money: 200,
     isVerified: true,
   })
@@ -137,7 +137,7 @@ async function main() {
     languages: 'English, Hindi',
     feeMin: 10,
     feeMax: 60,
-    coins: 100,
+    coins: 82,
     money: 75,
     isVerified: true,
   })
@@ -324,6 +324,7 @@ async function main() {
   const connActive = await db.connection.create({
     data: {
       teacherId: elon.id,
+      payerId: elon.id,
       studentId: ahmed.id,
       tuitionPostId: t1.id,
       coinsSpent: 10,
@@ -344,6 +345,7 @@ async function main() {
   const connHired = await db.connection.create({
     data: {
       teacherId: alina.id,
+      payerId: alina.id,
       studentId: warren.id,
       tuitionPostId: t3.id,
       coinsSpent: 18,
@@ -364,6 +366,7 @@ async function main() {
   await db.connection.create({
     data: {
       teacherId: mukesh.id,
+      payerId: mukesh.id,
       studentId: fatima.id,
       tuitionPostId: t2.id,
       coinsSpent: 16,
@@ -376,6 +379,7 @@ async function main() {
   const connStale = await db.connection.create({
     data: {
       teacherId: adani.id,
+      payerId: adani.id,
       studentId: warren.id,
       tuitionPostId: t3.id,
       coinsSpent: 18,

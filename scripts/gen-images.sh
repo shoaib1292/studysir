@@ -8,7 +8,7 @@ gen() {
   local size="${3:-1024x1024}"
   for i in 1 2 3 4 5; do
     echo ">>> [$out] attempt $i"
-    z-ai image -p "$prompt" -o "./$out" -s "$size" && return 0
+    timeout 120 z-ai image -p "$prompt" -o "./$out" -s "$size" && return 0
     sleep 15
   done
   echo "!!! FAILED: $out"

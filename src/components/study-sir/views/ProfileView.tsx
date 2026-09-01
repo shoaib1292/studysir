@@ -242,7 +242,7 @@ export function ProfileView() {
             />
           ) : (
             data.posts.map((item) => (
-              <FeedItemCard key={`${item.kind}-${item.createdAt}`} item={item} onChanged={load} />
+              <FeedItemCard key={`${item.kind}-${item.kind === "tuition" ? item.tuition.id : item.kind === "course" ? item.course.id : item.kind === "good" ? item.good.id : item.teacher.id}`} item={item} onChanged={load} />
             ))
           )}
         </TabsContent>
