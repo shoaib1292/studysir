@@ -223,6 +223,7 @@ export function toMessageDTO(m: AnyRecord): MessageDTO {
     content: m.content as string,
     system: m.system as boolean,
     createdAt: (m.createdAt as Date).toISOString(),
+    readAt: m.readAt ? (m.readAt as Date).toISOString() : null,
   }
 }
 

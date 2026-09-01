@@ -36,6 +36,10 @@ interface AppState {
   back: () => void
   notifCount: number
   setNotifCount: (n: number) => void
+  /** ids of users currently online (realtime presence) */
+  onlineIds: string[]
+  setOnlineIds: (ids: string[]) => void
+  applyPresence: (userId: string, online: boolean) => void
   resetNav: () => void
 }
 
@@ -70,6 +74,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   notifCount: 0,
   setNotifCount: (notifCount) => set({ notifCount }),
+  onlineIds: [],
+  setOnlineIds: (onlineIds) => set({ onlineIds }),
+  applyPresence: (userId, online) =>
+    set((s) => {
+      const has = s.onlineIds.includes(userId)
+      if (online && !has) return { onlineIds: [...s.onlineIds, userId] }
+      if (!online && has) return { onlineIds: s.onlineIds.filter((id) => id !== userId) }
+      return s
+    }),
   resetNav: () => {
     backStack.length = 0
     set({ view: 'feed', params: {}, nonce: get().nonce + 1 })

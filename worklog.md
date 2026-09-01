@@ -137,3 +137,40 @@ Work Log:
 
 Stage Summary:
 - Fixed decide-flow toast crash; platform now has dark mode (toggle + settings + full token coverage), teacher availability editing (backend+UI), wallet transaction filters, header search submit button. All core flows re-verified in browser: login, feed, search, tuition tabs, chat action row, pre-chat reject refund (coins 171→187), wallet history, notifications. Remaining ideas for next round: report moderation queue, teacher "Students" tab, course join-request flow, websocket live chat updates, PWA manifest.
+
+---
+Task ID: 6
+Agent: Z.ai Code (lead)
+Task: Status assessment + agent-browser QA + new features: realtime chat (websocket), Students tab, read receipts, styling polish
+
+Work Log:
+- Assessed status via worklog/dev.log: MVP stable; POST /api/session 404 anomaly confirmed benign (expected 404 for stale/invalid userId on login — route returns proper JSON).
+- Built realtime mini-service `mini-services/realtime/` (bun + socket.io, port 3003 websocket via Caddy `/?XTransformPort=3003`, path '/'):
+  * presence map userId→socketIds, `hello` join `user:{id}` rooms, `presence:snapshot` on connect, broadcast `presence:update` on first-join/last-leave
+  * `typing {toUserId, connectionId, isTyping}` relay (excludes sender)
+  * internal REST bridge on 127.0.0.1:3013 `POST /emit {event, payload, userIds[]}` + `GET /health` (online ids) — separate port because socket.io path '/' would swallow same-port HTTP
+- `src/lib/realtime.ts` (Next server): fire-and-forget rtEmit/rtWalletChanged with RT_EVENTS constants; wired into:
+  * messages POST → `chat:message` to both parties
+  * connections/[id] GET → `chat:read` to counterpart when updateMany marked >0 read
+  * decide POST (both return paths incl. REJECT early-return) → `chat:updated` to both + wallet events on HIRE bonus/pre-chat refund
+  * connections POST → `chat:updated NEW` to recipient + wallet to payer
+  * coins.ts notify() → `notif:new`; refundPendingConnection → wallet; buy-coins/add-money/goods buy → wallet emits
+- `src/lib/socket.ts` (client singleton): io('/?XTransformPort=3003'), re-hello on reconnect, onEvent/offEvent/emitTyping helpers; store gained onlineIds/setOnlineIds/applyPresence; StudySirApp subscribes notif:+1, debounced wallet→refreshMe, presence into store
+- MessageDTO gained readAt (types + dto) → read receipts: single Check (sent) / blue CheckCheck (read) on own non-system bubbles; thread GET marks read so receipts are accurate
+- ChatsView: realtime replaces 3s/5s polling (kept 15s fallback): live incoming messages, chat:updated reload, chat:read optimistic receipt fill, typing indicator (throttled 1.5s emit, 3s auto-clear) shown as header "typing…" + bouncing-dots TypingBubble; header "Active now" w/ pulsing green dot via presence; ConnectionRow green online dot (top-right, opposite status dot), unread rows bold + blue tint; Messenger-style scroll-to-bottom FAB (distance>240px, animate-in); bubbles animate-in slide-up; messages area wrapped relative + absolute inset-0 for FAB positioning
+- Students tab (teacher profiles): GET /api/users/[id] returns `students: StudentDTO[]` (distinct students from HIRED connections, newest hire first, hiredAt caption); ProfileView 4th tab for teachers w/ clickable student cards
+- Profile avatar green dot now reflects REAL presence (was static)
+- Verified socket.io-client added to main package.json
+- agent-browser dual-session QA (sir-a Ahmed / sir-b Elon via gateway :81 — direct :3000 CANNOT reach sockets):
+  * presence: bridge /health shows online ids; rows + thread header show Online now/Active now ✓
+  * new-chat live: Elon contacted Ahmed's OPEN post → new chat appeared in Ahmed's list without reload ✓
+  * typing: B typed → A showed "typing…" + dots, auto-cleared on send ✓
+  * live messages both directions (enter → other session renders <1.5s) ✓
+  * read receipts: A opened thread → B's bubble switched to blue CheckCheck ✓
+  * live notif badge 4→5 while A on Feed ✓; wallet coins 145→132 synced ✓
+  * Students tab on Alina shows Warren Buffett "Hired 5d" ✓; dark mode + mobile 390 coherent ✓; zero console errors; lint clean
+- INCIDENT: Next dev server died mid-QA (port 3000 unresponsive, :81 served sandbox placeholder); restarted with `nohup bun run dev >> dev.log 2>&1 &` — if pages hang later, check `ps` for next dev and restart the same way
+- Screenshots: download/qa-thread-realtime.png, qa-thread-dark.png, qa-mobile-chats.png
+
+Stage Summary:
+- StudySir is now REALTIME: live chat delivery, typing indicators, online presence (rows/headers/profile), read receipts, live notification + wallet badges — with REST polling kept only as 15s safety net. Teacher profiles gained a Students tab. All coin rules untouched and re-verified through the new pipeline. Next ideas: report moderation queue (needs admin role), PWA manifest, unread separator, course enrollment state on cards (join-request flow already exists via courseId connections).

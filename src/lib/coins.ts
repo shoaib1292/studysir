@@ -1,4 +1,5 @@
 import { db } from '@/lib/db'
+import { RT_EVENTS, rtEmit, rtWalletChanged } from '@/lib/realtime'
 
 export const REFUND_WINDOW_DAYS = 10
 
@@ -30,6 +31,8 @@ export async function notify(userId: string, type: string, title: string, body?:
     await db.notification.create({
       data: { userId, type, title, body, link },
     })
+    // push a live badge update to the recipient (if they're online)
+    rtEmit(RT_EVENTS.notifNew, { at: new Date().toISOString() }, { userIds: [userId] })
   } catch {
     // non-blocking
   }
@@ -46,7 +49,7 @@ export async function refundPendingConnection(connectionId: string, reason: 'REJ
   if (conn.chatStartedAt) return null // chat started => no refund
   const payerId = conn.payerId || conn.teacherId
 
-  return db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     await tx.user.update({
       where: { id: payerId },
       data: { coins: { increment: conn.coinsSpent } },
@@ -69,6 +72,9 @@ export async function refundPendingConnection(connectionId: string, reason: 'REJ
     })
     return { ...conn, payerId }
   })
+
+  if (result) rtWalletChanged([result.payerId])
+  return result
 }
 
 /**

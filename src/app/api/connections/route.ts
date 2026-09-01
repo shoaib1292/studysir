@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { requireSessionUser, HttpError } from '@/lib/session'
 import { notify, processExpiredConnections } from '@/lib/coins'
 import { toConnectionDTO } from '@/lib/dto'
+import { rtEmit, RT_EVENTS, rtWalletChanged } from '@/lib/realtime'
 
 export async function GET() {
   try {
@@ -136,6 +137,12 @@ export async function POST(req: NextRequest) {
       `${me.name} spent ${coins} coins to contact you${tuitionPostId ? '' : ' directly'}.`,
       'chats'
     )
+
+    // Realtime: new chat appears instantly in the recipient's list; payer's wallet badge updates
+    rtEmit(RT_EVENTS.chatUpdated, { connectionId: connection.id, action: 'NEW' }, {
+      userIds: [recipient],
+    })
+    rtWalletChanged([payerId])
 
     return NextResponse.json({ connection: await connectionDTOById(connection.id, me.id) }, { status: 201 })
   } catch (e) {

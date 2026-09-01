@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireSessionUser, HttpError } from '@/lib/session'
 import { toConnectionDTO, toMessageDTO } from '@/lib/dto'
+import { rtEmit, RT_EVENTS } from '@/lib/realtime'
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
@@ -18,10 +19,15 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     if (!isMember) return NextResponse.json({ error: 'Not allowed' }, { status: 403 })
 
     // Mark incoming messages as read
-    await db.message.updateMany({
+    const marked = await db.message.updateMany({
       where: { connectionId: id, senderId: { not: me.id }, readAt: null },
       data: { readAt: new Date() },
     })
+    // Realtime: let the other party know their messages were read (read receipts)
+    if (marked.count > 0) {
+      const otherId = [connection.teacherId, connection.studentId].find((uid) => uid !== me.id)
+      rtEmit(RT_EVENTS.chatRead, { connectionId: id, readerId: me.id }, { userIds: otherId ? [otherId] : [] })
+    }
 
     const messages = await db.message.findMany({
       where: { connectionId: id },

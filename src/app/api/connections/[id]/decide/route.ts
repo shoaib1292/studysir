@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { requireSessionUser, HttpError } from '@/lib/session'
 import { notify, refundPendingConnection } from '@/lib/coins'
 import { toConnectionDTO } from '@/lib/dto'
+import { rtEmit, RT_EVENTS, rtWalletChanged } from '@/lib/realtime'
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
@@ -91,6 +92,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       }
 
       const updated = await db.connection.findUnique({ where: { id }, include: { teacher: true, student: true, tuitionPost: { select: { id: true, title: true, coinCost: true } } } })
+      // Realtime: both parties refresh their thread + chat list
+      rtEmit(RT_EVENTS.chatUpdated, { connectionId: id, action }, {
+        userIds: [connection.teacherId, connection.studentId],
+      })
+      if (refundedNow) rtWalletChanged([connection.payerId || connection.teacherId])
       return NextResponse.json({ connection: toConnectionDTO(updated as never, me.id), refunded: refundedNow })
     } else if (action === 'BLOCK') {
       if (connection.blockedBy) return NextResponse.json({ error: 'Already blocked' }, { status: 409 })
@@ -135,6 +141,15 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       where: { id },
       include: { teacher: true, student: true, tuitionPost: { select: { id: true, title: true, coinCost: true } } },
     })
+
+    // Realtime: both parties refresh their thread + chat list
+    rtEmit(RT_EVENTS.chatUpdated, { connectionId: id, action }, {
+      userIds: [connection.teacherId, connection.studentId],
+    })
+    // Realtime: wallet badges after hire bonus / refunds
+    if (action === 'HIRE') rtWalletChanged([connection.teacherId, connection.studentId])
+    if (action === 'REJECT' && refundedNow) rtWalletChanged([connection.payerId || connection.teacherId])
+
     return NextResponse.json({ connection: toConnectionDTO(updated as never, me.id), refunded: false })
   } catch (e) {
     if (e instanceof HttpError) return NextResponse.json({ error: e.message }, { status: e.status })

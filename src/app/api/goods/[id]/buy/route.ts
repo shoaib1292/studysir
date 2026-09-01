@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireSessionUser, HttpError } from '@/lib/session'
 import { notify } from '@/lib/coins'
+import { rtWalletChanged } from '@/lib/realtime'
 
 export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
@@ -29,6 +30,7 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: strin
     ])
 
     await notify(good.sellerId, 'SYSTEM', 'Item sold!', `${me.name} purchased "${good.title}" for Rs ${good.price}.`)
+    rtWalletChanged([me.id, good.sellerId])
 
     const meUpdated = await db.user.findUnique({ where: { id: me.id } })
     return NextResponse.json({ ok: true, money: meUpdated?.money ?? 0 })

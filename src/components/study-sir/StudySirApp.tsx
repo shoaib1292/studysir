@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
+import { getSocket, onConnect, onEvent, RT } from '@/lib/socket'
 import { useAppStore } from '@/store/useAppStore'
 import type { ViewName } from '@/store/useAppStore'
 import { Header } from './layout/Header'
@@ -80,7 +81,7 @@ export default function StudySirApp() {
     }
   }, [setMe])
 
-  // Notification unread count: fetch on login + poll every 30s
+  // Notification unread count: fetch on login + poll every 30s (realtime pushes keep it exact)
   useEffect(() => {
     if (!me) return
     let cancelled = false
@@ -99,6 +100,45 @@ export default function StudySirApp() {
       clearInterval(timer)
     }
   }, [me, setNotifCount])
+
+  // Realtime: socket identity + live badge/wallet/presence updates
+  const meId = me?.id
+  useEffect(() => {
+    if (!meId) return
+    const state = useAppStore.getState()
+    const socket = getSocket(meId, state.me?.name ?? '')
+
+    // debounced wallet refresh (many wallet events can burst)
+    let walletTimer: ReturnType<typeof setTimeout> | null = null
+
+    onConnect(() => {
+      // fresh state after reconnect
+      void api.getNotifications().then((d) => useAppStore.getState().setNotifCount(d.unread)).catch(() => null)
+    })
+    onEvent(RT.notifNew, () => {
+      const s = useAppStore.getState()
+      s.setNotifCount(s.notifCount + 1)
+    })
+    onEvent(RT.walletChanged, () => {
+      if (walletTimer) clearTimeout(walletTimer)
+      walletTimer = setTimeout(() => void useAppStore.getState().refreshMe(), 400)
+    })
+    onEvent<{ online: string[] }>(RT.presenceSnapshot, (p) => {
+      useAppStore.getState().setOnlineIds(p?.online ?? [])
+    })
+    onEvent<{ userId: string; online: boolean }>(RT.presenceUpdate, (p) => {
+      if (p?.userId) useAppStore.getState().applyPresence(p.userId, p.online)
+    })
+
+    return () => {
+      if (walletTimer) clearTimeout(walletTimer)
+      socket.off('connect')
+      socket.off(RT.notifNew)
+      socket.off(RT.walletChanged)
+      socket.off(RT.presenceSnapshot)
+      socket.off(RT.presenceUpdate)
+    }
+  }, [meId])
 
   if (loading) {
     return (

@@ -118,6 +118,8 @@ export interface MessageDTO {
   content: string
   system: boolean
   createdAt: string
+  /** Set once the other party has opened the chat (drives read receipts). */
+  readAt: string | null
 }
 
 export interface ConnectionDTO {
@@ -175,6 +177,17 @@ export interface ProfileStats {
   avgRating: number
   hireCount: number
   connectionCount: number
+}
+
+export interface StudentDTO {
+  id: string
+  name: string
+  avatar: string | null
+  headline: string | null
+  city: string | null
+  role: Role
+  /** when the latest hire happened (for "hired X ago" caption) */
+  hiredAt: string | null
 }
 
 // ===== API endpoints =====

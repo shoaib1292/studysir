@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getSessionUserId } from '@/lib/session'
 import { toUserDTO, toTeacherCardDTO, likeInfo, toTuitionDTO, toCourseDTO, toGoodDTO } from '@/lib/dto'
-import type { ReviewDTO, FeedItem } from '@/lib/types'
+import type { ReviewDTO, FeedItem, StudentDTO } from '@/lib/types'
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params
@@ -72,6 +72,30 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   }
   const sortedAvailabilities = [...user.availabilities].sort((a, b) => dayIdx(a.day) - dayIdx(b.day))
 
+  // Students taught by this teacher (from hired connections), newest hire first
+  const students: StudentDTO[] = []
+  if (user.role === 'TEACHER') {
+    const hired = await db.connection.findMany({
+      where: { teacherId: id, status: 'HIRED' },
+      orderBy: { decidedAt: 'desc' },
+      include: { student: true },
+    })
+    const seen = new Set<string>()
+    for (const c of hired) {
+      if (seen.has(c.studentId)) continue
+      seen.add(c.studentId)
+      students.push({
+        id: c.student.id,
+        name: c.student.name,
+        avatar: c.student.avatar,
+        headline: c.student.headline,
+        city: c.student.city,
+        role: c.student.role,
+        hiredAt: (c.decidedAt ?? c.updatedAt).toISOString(),
+      })
+    }
+  }
+
   return NextResponse.json({
     user: toUserDTO(user),
     stats: {
@@ -84,6 +108,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     reviews: reviewDTOs,
     availabilities: sortedAvailabilities.map((a) => ({ id: a.id, day: a.day, slots: a.slots })),
     posts: items,
+    students,
     teacherCard: user.role === 'TEACHER' ? await toTeacherCardDTO(user, viewerId) : null,
   })
 }

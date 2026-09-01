@@ -3,8 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import {
+  ArrowDown,
   ArrowLeft,
   Ban,
+  Check,
+  CheckCheck,
   Coins,
   Flag,
   GraduationCap,
@@ -21,6 +24,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { api, errorMessage } from '@/lib/api'
 import type { ConnectionDTO, MessageDTO } from '@/lib/types'
+import { emitTyping, getSocket, onEvent, offEvent, RT } from '@/lib/socket'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store/useAppStore'
@@ -49,17 +53,20 @@ function ConnectionRow({
   connection,
   meId,
   active,
+  online,
   onSelect,
 }: {
   connection: ConnectionDTO
   meId: string
   active: boolean
+  online: boolean
   onSelect: () => void
 }) {
   const other = otherParty(connection, meId)
   const preview = previewText(connection, meId)
   const chip = CONNECTION_CHIP[connection.status]
   const when = connection.lastMessage?.createdAt ?? connection.createdAt
+  const hasUnread = connection.unreadCount > 0
 
   return (
     <button
@@ -67,7 +74,8 @@ function ConnectionRow({
       onClick={onSelect}
       className={cn(
         'flex w-full gap-3 p-3 text-left transition-colors hover:bg-muted',
-        active && 'bg-blue-500/10 hover:bg-blue-500/10'
+        active && 'bg-blue-500/10 hover:bg-blue-500/10',
+        hasUnread && !active && 'bg-blue-500/[0.04]'
       )}
     >
       <div className="relative shrink-0">
@@ -78,16 +86,31 @@ function ConnectionRow({
             CONNECTION_DOT[connection.status]
           )}
         />
+        {online ? (
+          <span
+            aria-label="Online now"
+            title="Active now"
+            className="absolute -right-0.5 -top-0.5 h-3 w-3 animate-pulse rounded-full border-2 border-card bg-green-500"
+          />
+        ) : null}
       </div>
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <p className="min-w-0 flex-1 truncate text-[15px] font-semibold">{other.name}</p>
+          <p className={cn('min-w-0 flex-1 truncate text-[15px]', hasUnread ? 'font-extrabold' : 'font-semibold')}>
+            {other.name}
+          </p>
           <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold', chip.className)}>
             {chip.label}
           </span>
         </div>
-        <p className={cn('mt-0.5 truncate text-xs text-muted-foreground', preview.italic && 'italic')}>
+        <p
+          className={cn(
+            'mt-0.5 truncate text-xs',
+            hasUnread ? 'font-medium text-foreground/90' : 'text-muted-foreground',
+            preview.italic && 'italic'
+          )}
+        >
           {preview.text}
         </p>
         <p className="mt-0.5 text-[10px] text-muted-foreground">{timeAgo(when)}</p>
@@ -122,7 +145,7 @@ function DayChip({ label }: { label: string }) {
 
 function MessageBubble({ message, mine }: { message: MessageDTO; mine: boolean }) {
   return (
-    <div className={cn('flex items-end gap-2', mine ? 'justify-end' : 'justify-start')}>
+    <div className={cn('flex items-end gap-2 animate-in fade-in slide-in-from-bottom-1 duration-200', mine ? 'justify-end' : 'justify-start')}>
       {!mine ? <UserAvatar src={message.sender.avatar} name={message.sender.name} className="mb-1 size-7" /> : null}
       <div
         className={cn(
@@ -131,7 +154,33 @@ function MessageBubble({ message, mine }: { message: MessageDTO; mine: boolean }
         )}
       >
         <p className="whitespace-pre-line break-words text-[15px]">{message.content}</p>
-        <p className="mt-0.5 text-[10px] opacity-70">{clockTime(message.createdAt)}</p>
+        <div className="mt-0.5 flex items-center justify-end gap-1">
+          <span className="text-[10px] opacity-70">{clockTime(message.createdAt)}</span>
+          {mine && !message.system ? (
+            message.readAt ? (
+              <CheckCheck className="size-3.5 text-blue-200" aria-label="Read" />
+            ) : (
+              <Check className="size-3.5 opacity-70" aria-label="Sent" />
+            )
+          ) : null}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TypingBubble({ name }: { name: string }) {
+  return (
+    <div className="flex items-end gap-2 animate-in fade-in slide-in-from-bottom-1 duration-200" aria-live="polite">
+      <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-md bg-card px-3.5 py-2.5 shadow-sm">
+        <span className="sr-only">{name} is typing</span>
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            className="size-1.5 animate-bounce rounded-full bg-muted-foreground/70"
+            style={{ animationDelay: `${i * 150}ms` }}
+          />
+        ))}
       </div>
     </div>
   )
@@ -157,7 +206,12 @@ function ChatThread({
   const [busy, setBusy] = useState(false)
   const [dialog, setDialog] = useState<ThreadDialog>(null)
   const [reportReason, setReportReason] = useState('')
+  const [typingName, setTypingName] = useState<string | null>(null)
+  const [showJump, setShowJump] = useState(false)
+  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastTypingSent = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const onlineIds = useAppStore((s) => s.onlineIds)
 
   const load = useCallback(async () => {
     try {
@@ -173,28 +227,102 @@ function ChatThread({
     void load()
   }, [load])
 
+  // Realtime: live messages, status changes, read receipts + typing indicator.
+  // A slow interval poll stays as a safety net for missed events.
   useEffect(() => {
-    const timer = setInterval(() => {
-      void load()
-    }, 3000)
-    return () => clearInterval(timer)
-  }, [load])
+    // ensure socket identity, then subscribe
+    getSocket(me.id, me.name)
 
-  // Auto-scroll to the newest message
+    const onMessage = (p: { connectionId?: string; message?: MessageDTO }) => {
+      if (!p || p.connectionId !== connectionId) return
+      if (p.message && p.message.senderId === me.id) return // own messages handled by send flow
+      void load()
+    }
+    const onUpdated = (p: { connectionId?: string }) => {
+      if (!p || p.connectionId !== connectionId) return
+      void load()
+      onListChanged()
+    }
+    const onRead = (p: { connectionId?: string }) => {
+      if (!p || p.connectionId !== connectionId) return
+      setData((d) =>
+        d
+          ? {
+              ...d,
+              messages: d.messages.map((m) =>
+                m.senderId === me.id && !m.readAt ? { ...m, readAt: new Date().toISOString() } : m
+              ),
+            }
+          : d
+      )
+    }
+    const onTyping = (p: { connectionId?: string; userId?: string; name?: string; isTyping?: boolean }) => {
+      if (!p || p.connectionId !== connectionId || p.userId === me.id) return
+      if (typingTimer.current) clearTimeout(typingTimer.current)
+      if (p.isTyping) {
+        setTypingName(p.name || 'Someone')
+        typingTimer.current = setTimeout(() => setTypingName(null), 3000)
+      } else {
+        setTypingName(null)
+      }
+    }
+
+    onEvent(RT.chatMessage, onMessage)
+    onEvent(RT.chatUpdated, onUpdated)
+    onEvent(RT.chatRead, onRead)
+    onEvent('typing', onTyping)
+
+    const timer = setInterval(() => void load(), 15000)
+    return () => {
+      clearInterval(timer)
+      offEvent(RT.chatMessage, onMessage)
+      offEvent(RT.chatUpdated, onUpdated)
+      offEvent(RT.chatRead, onRead)
+      offEvent('typing', onTyping)
+      if (typingTimer.current) clearTimeout(typingTimer.current)
+    }
+  }, [connectionId, load, onListChanged, me.id, me.name])
+
+  // Auto-scroll to the newest message (also when typing indicator appears)
   const messageCount = data?.messages.length ?? 0
   useEffect(() => {
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
-  }, [messageCount, connectionId])
+  }, [messageCount, connectionId, typingName])
+
+  function handleScroll() {
+    const el = scrollRef.current
+    if (!el) return
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight
+    setShowJump(distance > 240)
+  }
+
+  function jumpToLatest() {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+  }
 
   const connection = data?.connection
   const other = connection ? otherParty(connection, me.id) : null
+  const otherOnline = !!other && onlineIds.includes(other.id)
 
   const blocked = !!connection?.blockedBy
   const iBlocked = connection?.blockedBy === me.id
   const decided = !!connection && ['HIRED', 'REJECTED', 'EXPIRED'].includes(connection.status)
   const isPostOwner = connection?.student.id === me.id ?? false
   const showActions = !!connection && !blocked && !decided
+
+  function handleDraftChange(value: string) {
+    setDraft(value)
+    if (!connection || !other) return
+    const now = Date.now()
+    if (value.trim() && now - lastTypingSent.current > 1500) {
+      lastTypingSent.current = now
+      emitTyping(other.id, connectionId, true)
+    } else if (!value.trim() && lastTypingSent.current) {
+      lastTypingSent.current = 0
+      emitTyping(other.id, connectionId, false)
+    }
+  }
 
   async function send(e: FormEvent) {
     e.preventDefault()
@@ -212,6 +340,7 @@ function ChatThread({
       createdAt: new Date().toISOString(),
     }
     setData((d) => (d ? { ...d, messages: [...d.messages, optimistic] } : d))
+    if (connection && other) emitTyping(other.id, connection.id, false)
     try {
       await api.sendMessage(connection.id, content)
       await load()
@@ -311,7 +440,16 @@ function ChatThread({
             <div className="min-w-0 flex-1">
               <p className="truncate font-bold leading-tight">{other.name}</p>
               <p className="truncate text-[11px] opacity-90">
-                {lastSeenLabel(connection?.lastMessage?.createdAt ?? connection?.createdAt ?? null)}
+                {typingName ? (
+                  <span className="italic">typing…</span>
+                ) : otherOnline ? (
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block size-1.5 animate-pulse rounded-full bg-green-400" />
+                    Active now
+                  </span>
+                ) : (
+                  lastSeenLabel(connection?.lastMessage?.createdAt ?? connection?.createdAt ?? null)
+                )}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
@@ -333,7 +471,8 @@ function ChatThread({
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 space-y-1.5 overflow-y-auto bg-background p-4">
+      <div className="relative min-h-0 flex-1">
+        <div ref={scrollRef} onScroll={handleScroll} className="absolute inset-0 space-y-1.5 overflow-y-auto bg-background p-4">
         {data === null ? (
           <div className="space-y-3">
             <Skeleton className="mx-auto h-5 w-24 rounded-full bg-card" />
@@ -341,15 +480,33 @@ function ChatThread({
             <Skeleton className="ml-auto h-12 w-1/2 rounded-2xl bg-card/60" />
             <Skeleton className="h-12 w-2/3 rounded-2xl bg-card" />
           </div>
-        ) : data.messages.length === 0 ? (
+        ) : data.messages.length === 0 && !typingName ? (
           <div className="flex h-full items-center justify-center">
             <p className="rounded-full bg-card px-4 py-2 text-sm text-muted-foreground shadow-sm">
               Say hi 👋 — messages appear here
             </p>
           </div>
         ) : (
-          messageNodes
+          <>
+            {messageNodes}
+            {typingName ? (
+              <div className="pt-1">
+                <TypingBubble name={typingName} />
+              </div>
+            ) : null}
+          </>
         )}
+        </div>
+        {showJump ? (
+          <button
+            type="button"
+            onClick={jumpToLatest}
+            aria-label="Scroll to latest messages"
+            className="absolute bottom-3 right-3 grid size-9 animate-in fade-in zoom-in-50 place-items-center rounded-full border bg-card text-muted-foreground shadow-md transition-colors hover:bg-muted hover:text-foreground duration-150"
+          >
+            <ArrowDown className="size-4" />
+          </button>
+        ) : null}
       </div>
 
       {/* Bottom: banner / input / decision actions */}
@@ -391,7 +548,7 @@ function ChatThread({
           <form onSubmit={send} className="flex gap-2 p-3">
             <Input
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => handleDraftChange(e.target.value)}
               placeholder="Write your message"
               className="rounded-full bg-muted"
               aria-label="Write your message"
@@ -515,6 +672,7 @@ export function ChatsView() {
   const me = useAppStore((s) => s.me)!
   const params = useAppStore((s) => s.params)
   const go = useAppStore((s) => s.go)
+  const onlineIds = useAppStore((s) => s.onlineIds)
 
   const [connections, setConnections] = useState<ConnectionDTO[] | null>(null)
   const [search, setSearch] = useState('')
@@ -533,12 +691,32 @@ export function ChatsView() {
     void loadList()
   }, [loadList])
 
+  // Realtime: refresh the list when chats change (new message/status) + slow fallback poll
   useEffect(() => {
-    const timer = setInterval(() => {
-      void loadList()
-    }, 5000)
-    return () => clearInterval(timer)
-  }, [loadList])
+    getSocket(me.id, me.name)
+
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const scheduleRefresh = () => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => void loadList(), 250)
+    }
+    const onMessage = (p: { connectionId?: string }) => {
+      if (p?.connectionId) scheduleRefresh()
+    }
+    const onUpdated = (p: { connectionId?: string }) => {
+      if (p?.connectionId) scheduleRefresh()
+    }
+
+    onEvent(RT.chatMessage, onMessage)
+    onEvent(RT.chatUpdated, onUpdated)
+    const poll = setInterval(() => void loadList(), 15000)
+    return () => {
+      if (timer) clearTimeout(timer)
+      offEvent(RT.chatMessage, onMessage)
+      offEvent(RT.chatUpdated, onUpdated)
+      clearInterval(poll)
+    }
+  }, [loadList, me.id, me.name])
 
   const sorted = useMemo(() => {
     if (!connections) return null
@@ -597,15 +775,19 @@ export function ChatsView() {
               />
             </div>
           ) : (
-            filtered.map((c) => (
-              <ConnectionRow
-                key={c.id}
-                connection={c}
-                meId={me.id}
-                active={c.id === activeId}
-                onSelect={() => go('chats', { connectionId: c.id })}
-              />
-            ))
+            filtered.map((c) => {
+              const other = otherParty(c, me.id)
+              return (
+                <ConnectionRow
+                  key={c.id}
+                  connection={c}
+                  meId={me.id}
+                  active={c.id === activeId}
+                  online={onlineIds.includes(other.id)}
+                  onSelect={() => go('chats', { connectionId: c.id })}
+                />
+              )
+            })
           )}
         </div>
       </div>

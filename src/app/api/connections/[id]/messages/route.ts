@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireSessionUser, HttpError } from '@/lib/session'
 import { notify } from '@/lib/coins'
+import { rtEmit, RT_EVENTS } from '@/lib/realtime'
 import { toMessageDTO } from '@/lib/dto'
 
 const LOCKED = ['HIRED', 'REJECTED', 'EXPIRED']
@@ -57,7 +58,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     const recipient = me.id === connection.teacherId ? connection.studentId : connection.teacherId
     await notify(recipient, 'MESSAGE', `New message from ${me.name}`, content.trim().slice(0, 80), 'chats')
 
-    return NextResponse.json({ message: toMessageDTO(message as never) }, { status: 201 })
+    // Realtime: push the new message to both parties (thread + chat list)
+    const messageDTO = toMessageDTO(message as never)
+    rtEmit(RT_EVENTS.chatMessage, { connectionId: id, message: messageDTO }, {
+      userIds: [connection.teacherId, connection.studentId],
+    })
+
+    return NextResponse.json({ message: messageDTO }, { status: 201 })
   } catch (e) {
     if (e instanceof HttpError) return NextResponse.json({ error: e.message }, { status: e.status })
     console.error(e)

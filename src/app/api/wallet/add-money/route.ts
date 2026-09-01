@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireSessionUser, HttpError } from '@/lib/session'
+import { rtWalletChanged } from '@/lib/realtime'
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,6 +23,8 @@ export async function POST(req: NextRequest) {
         },
       }),
     ])
+
+    rtWalletChanged([me.id])
 
     const updated = await db.user.findUnique({ where: { id: me.id } })
     return NextResponse.json({ money: updated?.money ?? 0 })

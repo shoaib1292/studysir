@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import {
   BadgeCheck,
   Clock,
+  GraduationCap,
   Handshake,
   MapPin,
   MessagesSquare,
@@ -26,6 +27,7 @@ import { ReviewDialog } from '../dialogs/ReviewDialog'
 import { FeedItemCard } from '../cards/FeedItemCard'
 import { DIRECT_CONTACT_COST, ROLE_CHIP, ROLE_LABEL } from '../shared/constants'
 import { FbCard } from '../shared/bits'
+import { timeAgo } from '../shared/format'
 import { EmptyState } from '../shared/EmptyState'
 import { ReviewRow } from '../shared/bits'
 import { SafeImage } from '../shared/SafeImage'
@@ -83,6 +85,7 @@ export function ProfileView() {
   const params = useAppStore((s) => s.params)
   const go = useAppStore((s) => s.go)
   const refreshMe = useAppStore((s) => s.refreshMe)
+  const onlineIds = useAppStore((s) => s.onlineIds)
 
   const userId = params.userId || me.id
   const mine = userId === me.id
@@ -152,7 +155,13 @@ export function ProfileView() {
           <div className="absolute -bottom-10 left-4 md:left-6">
             <div className="relative">
               <UserAvatar src={user.avatar} name={user.name} className="size-28 ring-4 ring-white" />
-              <span className="absolute bottom-1 right-1 size-5 rounded-full border-4 border-white bg-green-500" />
+              {onlineIds.includes(user.id) ? (
+                <span
+                  aria-label="Active now"
+                  title="Active now"
+                  className="absolute bottom-1 right-1 size-5 animate-pulse rounded-full border-4 border-white bg-green-500"
+                />
+              ) : null}
             </div>
           </div>
         </div>
@@ -227,8 +236,9 @@ export function ProfileView() {
 
       {/* Tabs */}
       <Tabs defaultValue="posts" className="gap-4">
-        <TabsList className="grid w-full grid-cols-3 sm:w-96">
+        <TabsList className={cn('grid w-full sm:w-96', isTeacher ? 'grid-cols-4 sm:w-[430px]' : 'grid-cols-3')}>
           <TabsTrigger value="posts">Posts</TabsTrigger>
+          {isTeacher ? <TabsTrigger value="students">Students</TabsTrigger> : null}
           <TabsTrigger value="availability">Time Availability</TabsTrigger>
           <TabsTrigger value="reviews">Reviews</TabsTrigger>
         </TabsList>
@@ -244,6 +254,37 @@ export function ProfileView() {
             data.posts.map((item) => (
               <FeedItemCard key={`${item.kind}-${item.kind === "tuition" ? item.tuition.id : item.kind === "course" ? item.course.id : item.kind === "good" ? item.good.id : item.teacher.id}`} item={item} onChanged={load} />
             ))
+          )}
+        </TabsContent>
+
+        <TabsContent value="students">
+          {data.students.length === 0 ? (
+            <EmptyState
+              icon={GraduationCap}
+              title="No students yet"
+              hint="Students you've been hired for will appear here."
+            />
+          ) : (
+            <FbCard className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2">
+              {data.students.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => go('profile', { userId: s.id })}
+                  className="flex items-center gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-muted"
+                >
+                  <UserAvatar src={s.avatar} name={s.name} className="size-11" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold hover:underline">{s.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">{s.headline ?? ROLE_LABEL[s.role]}</p>
+                    <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                      {[s.city, s.hiredAt ? `Hired ${timeAgo(s.hiredAt)}` : null].filter(Boolean).join(' · ')}
+                    </p>
+                  </div>
+                  <GraduationCap className="size-4 shrink-0 text-[#1877F2]" />
+                </button>
+              ))}
+            </FbCard>
           )}
         </TabsContent>
 

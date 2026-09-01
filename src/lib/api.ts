@@ -11,6 +11,7 @@ import type {
   NotificationDTO,
   ProfileStats,
   ReviewDTO,
+  StudentDTO,
   TuitionPostDTO,
   UserDTO,
 } from '@/lib/types'
@@ -69,6 +70,8 @@ export interface ProfileResponse {
   reviews: ReviewDTO[]
   availabilities: AvailabilityDTO[]
   posts: FeedItem[]
+  /** For teachers: distinct students from hired connections (newest hire first). */
+  students: StudentDTO[]
 }
 
 export interface TuitionInput {
