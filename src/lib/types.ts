@@ -131,6 +131,14 @@ export interface MessageDTO {
   createdAt: string
   /** Set once the other party has opened the chat (drives read receipts). */
   readAt: string | null
+  /** Facebook-style reaction groups (client derives "mine" via userIds). */
+  reactions: MessageReactionGroup[]
+}
+
+export interface MessageReactionGroup {
+  emoji: string
+  count: number
+  userIds: string[]
 }
 
 export interface ConnectionDTO {
@@ -229,6 +237,8 @@ export interface ReportDTO {
   /** snapshot of reported content title (good/course/tuition) */
   targetLabel: string | null
   targetImage: string | null
+  /** snapshot: is the reported listing currently soft-hidden by moderation? */
+  targetHidden: boolean
 }
 
 export interface AdminUserDTO extends UserDTO {

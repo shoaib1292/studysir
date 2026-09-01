@@ -1,0 +1,1049 @@
+     1→'use client'
+     2→
+     3→import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+     4→import type { FormEvent, ReactNode } from 'react'
+     5→import {
+     6→  ArrowDown,
+     7→  ArrowLeft,
+     8→  Ban,
+     9→  Check,
+    10→  CheckCheck,
+    11→  Coins,
+    12→  Copy,
+    13→  Flag,
+    14→  GraduationCap,
+    15→  Handshake,
+    16→  ImagePlus,
+    17→  MessageCircle,
+    18→  Search,
+    19→  SendHorizonal,
+    20→  Smile,
+    21→  X,
+    22→} from 'lucide-react'
+    23→import { Badge } from '@/components/ui/badge'
+    24→import { Button } from '@/components/ui/button'
+    25→import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+    26→import { Input } from '@/components/ui/input'
+    27→import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+    28→import { Skeleton } from '@/components/ui/skeleton'
+    29→import { Textarea } from '@/components/ui/textarea'
+    30→import { api, errorMessage } from '@/lib/api'
+    31→import { fileToCompactDataUrl } from '@/lib/image'
+    32→import type { ConnectionDTO, MessageDTO } from '@/lib/types'
+    33→import { emitTyping, getSocket, onEvent, offEvent, RT } from '@/lib/socket'
+    34→import { toast } from 'sonner'
+    35→import { cn } from '@/lib/utils'
+    36→import { useAppStore } from '@/store/useAppStore'
+    37→import { ConfirmDialog } from '../dialogs/ConfirmDialog'
+    38→import { CONNECTION_CHIP, CONNECTION_DOT } from '../shared/constants'
+    39→import { clockTime, dayLabel, lastSeenLabel, timeAgo } from '../shared/format'
+    40→import { EmptyState } from '../shared/EmptyState'
+    41→import { UserAvatar } from '../shared/UserAvatar'
+    42→
+    43→// ===== Chat list =====
+    44→
+    45→function otherParty(connection: ConnectionDTO, meId: string) {
+    46→  return connection.student.id === meId ? connection.teacher : connection.student
+    47→}
+    48→
+    49→function previewText(connection: ConnectionDTO, meId: string): { text: string; italic: boolean } {
+    50→  const lm = connection.lastMessage
+    51→  if (!lm) return { text: 'New connection request — say hi!', italic: false }
+    52→  const involvesMe = lm.senderId === meId
+    53→  const isParty = lm.senderId === connection.teacher.id || lm.senderId === connection.student.id
+    54→  if (!isParty) return { text: lm.content, italic: true } // system message
+    55→  return { text: involvesMe ? `You: ${lm.content}` : lm.content, italic: false }
+    56→}
+    57→
+    58→function ConnectionRow({
+    59→  connection,
+    60→  meId,
+    61→  active,
+    62→  online,
+    63→  onSelect,
+    64→}: {
+    65→  connection: ConnectionDTO
+    66→  meId: string
+    67→  active: boolean
+    68→  online: boolean
+    69→  onSelect: () => void
+    70→}) {
+    71→  const other = otherParty(connection, meId)
+    72→  const preview = previewText(connection, meId)
+    73→  const chip = CONNECTION_CHIP[connection.status]
+    74→  const when = connection.lastMessage?.createdAt ?? connection.createdAt
+    75→  const hasUnread = connection.unreadCount > 0
+    76→
+    77→  return (
+    78→    <button
+    79→      type="button"
+    80→      onClick={onSelect}
+    81→      className={cn(
+    82→        'flex w-full gap-3 p-3 text-left transition-colors hover:bg-muted',
+    83→        active && 'bg-blue-500/10 hover:bg-blue-500/10',
+    84→        hasUnread && !active && 'bg-blue-500/[0.04]'
+    85→      )}
+    86→    >
+    87→      <div className="relative shrink-0">
+    88→        <UserAvatar src={other.avatar} name={other.name} className="size-12" />
+    89→        <span
+    90→          className={cn(
+    91→            'absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-card',
+    92→            CONNECTION_DOT[connection.status]
+    93→          )}
+    94→        />
+    95→        {online ? (
+    96→          <span
+    97→            aria-label="Online now"
+    98→            title="Active now"
+    99→            className="absolute -right-0.5 -top-0.5 h-3 w-3 animate-pulse rounded-full border-2 border-card bg-green-500"
+   100→          />
+   101→        ) : null}
+   102→      </div>
+   103→
+   104→      <div className="min-w-0 flex-1">
+   105→        <div className="flex items-center gap-2">
+   106→          <p className={cn('min-w-0 flex-1 truncate text-[15px]', hasUnread ? 'font-extrabold' : 'font-semibold')}>
+   107→            {other.name}
+   108→          </p>
+   109→          <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold', chip.className)}>
+   110→            {chip.label}
+   111→          </span>
+   112→        </div>
+   113→        <p
+   114→          className={cn(
+   115→            'mt-0.5 truncate text-xs',
+   116→            hasUnread ? 'font-medium text-foreground/90' : 'text-muted-foreground',
+   117→            preview.italic && 'italic'
+   118→          )}
+   119→        >
+   120→          {preview.text}
+   121→        </p>
+   122→        <p className="mt-0.5 text-[10px] text-muted-foreground">{timeAgo(when)}</p>
+   123→      </div>
+   124→
+   125→      {connection.unreadCount > 0 ? (
+   126→        <Badge className="mt-1 h-5 min-w-5 shrink-0 rounded-full bg-[#1877F2] px-1.5 text-[10px]">
+   127→          {connection.unreadCount > 9 ? '9+' : connection.unreadCount}
+   128→        </Badge>
+   129→      ) : null}
+   130→    </button>
+   131→  )
+   132→}
+   133→
+   134→// ===== Chat thread =====
+   135→
+   136→function SystemMessage({ content }: { content: string }) {
+   137→  return (
+   138→    <div className="mx-auto w-fit max-w-[85%] rounded-full bg-foreground/10 px-3 py-1 text-center text-[11px] text-foreground/80">
+   139→      {content}
+   140→    </div>
+   141→  )
+   142→}
+   143→
+   144→function DayChip({ label }: { label: string }) {
+   145→  return (
+   146→    <div className="my-2 flex w-fit mx-auto rounded-full bg-card px-3 py-1 text-[10px] font-medium text-muted-foreground shadow-sm">
+   147→      {label}
+   148→    </div>
+   149→  )
+   150→}
+   151→
+   152→/** Messenger-style divider marking the first unseen message. */
+   153→function UnreadDivider({ count }: { count: number }) {
+   154→  return (
+   155→    <div className="my-2 flex items-center gap-2" role="separator" aria-label={`${count} new messages`}>
+   156→      <span className="h-px flex-1 bg-blue-500/30" />
+   157→      <span className="rounded-full bg-blue-500/10 px-2.5 py-0.5 text-[10px] font-bold text-[#1877F2] dark:text-blue-400">
+   158→        {count} new {count === 1 ? 'message' : 'messages'}
+   159→      </span>
+   160→      <span className="h-px flex-1 bg-blue-500/30" />
+   161→    </div>
+   162→  )
+   163→}
+   164→
+   165→const EMOJIS = [
+   166→  '😀', '😂', '🥰', '😊', '😎', '🤔', '😴', '😭',
+   167→  '😡', '🤩', '😅', '😇', '👍', '👎', '👏', '🙏',
+   168→  '💪', '🤝', '✌️', '👋', '🔥', '⭐', '❤️', '💚',
+   169→  '💙', '🎉', '🎓', '📚', '✏️', '📅', '⏰', '💰',
+   170→]
+   171→
+   172→function EmojiPicker({ onPick }: { onPick: (emoji: string) => void }) {
+   173→  return (
+   174→    <Popover>
+   175→      <PopoverTrigger asChild>
+   176→        <button
+   177→          type="button"
+   178→          aria-label="Insert emoji"
+   179→          className="grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+   180→        >
+   181→          <Smile className="size-5" />
+   182→        </button>
+   183→      </PopoverTrigger>
+   184→      <PopoverContent align="start" side="top" className="w-[248px] p-2">
+   185→        <p className="px-1 pb-1.5 text-[11px] font-semibold text-muted-foreground">Frequently used</p>
+   186→        <div className="grid grid-cols-8 gap-0.5">
+   187→          {EMOJIS.map((e) => (
+   188→            <button
+   189→              key={e}
+   190→              type="button"
+   191→              aria-label={`Insert ${e}`}
+   192→              onClick={() => onPick(e)}
+   193→              className="grid size-7 place-items-center rounded text-lg leading-none transition-transform hover:scale-125 hover:bg-muted"
+   194→            >
+   195→              {e}
+   196→            </button>
+   197→          ))}
+   198→        </div>
+   199→      </PopoverContent>
+   200→    </Popover>
+   201→  )
+   202→}
+   203→
+   204→async function copyText(text: string): Promise<boolean> {
+   205→  try {
+   206→    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+   207→      await navigator.clipboard.writeText(text)
+   208→      return true
+   209→    }
+   210→  } catch {
+   211→    // fall through to legacy path (insecure context)
+   212→  }
+   213→  try {
+   214→    const ta = document.createElement('textarea')
+   215→    ta.value = text
+   216→    ta.style.position = 'fixed'
+   217→    ta.style.opacity = '0'
+   218→    document.body.appendChild(ta)
+   219→    ta.select()
+   220→    const ok = document.execCommand('copy')
+   221→    document.body.removeChild(ta)
+   222→    return ok
+   223→  } catch {
+   224→    return false
+   225→  }
+   226→}
+   227→
+   228→function MessageBubble({ message, mine }: { message: MessageDTO; mine: boolean }) {
+   229→  const [copied, setCopied] = useState(false)
+   230→  const [zoom, setZoom] = useState(false)
+   231→  const hasImage = Boolean(message.image)
+   232→  const hasText = Boolean(message.content) && message.content !== '📷 Photo'
+   233→
+   234→  async function onCopy() {
+   235→    const ok = await copyText(message.content)
+   236→    if (ok) {
+   237→      setCopied(true)
+   238→      setTimeout(() => setCopied(false), 1200)
+   239→    } else {
+   240→      toast.error('Could not copy message')
+   241→    }
+   242→  }
+   243→
+   244→  return (
+   245→    <div className={cn('group flex items-end gap-2 animate-in fade-in slide-in-from-bottom-1 duration-200', mine ? 'justify-end' : 'justify-start')}>
+   246→      {!mine ? <UserAvatar src={message.sender.avatar} name={message.sender.name} className="mb-1 size-7" /> : null}
+   247→      {!mine ? (
+   248→        <button
+   249→          type="button"
+   250→          aria-label="Copy message"
+   251→          title="Copy"
+   252→          onClick={onCopy}
+   253→          className="mb-1.5 grid size-6 shrink-0 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100"
+   254→        >
+   255→          {copied ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5" />}
+   256→        </button>
+   257→      ) : null}
+   258→      <div
+   259→        className={cn(
+   260→          'max-w-[78%] rounded-2xl px-3.5 py-2',
+   261→          mine ? 'rounded-br-md bg-[#1877F2] text-white' : 'rounded-bl-md bg-card shadow-sm',
+   262→          hasImage && 'p-1.5'
+   263→        )}
+   264→      >
+   265→        {hasImage ? (
+   266→          <>
+   267→            <img
+   268→              src={message.image!}
+   269→              alt={hasText ? message.content : `Photo from ${message.sender.name}`}
+   270→              onClick={() => setZoom(true)}
+   271→              className={cn(
+   272→                'max-h-72 w-full max-w-[280px] cursor-zoom-in rounded-xl object-cover',
+   273→                mine ? 'bg-[#166FE5]' : 'bg-muted'
+   274→              )}
+   275→            />
+   276→            {hasText ? <p className="whitespace-pre-line break-words px-2 pb-1 pt-1.5 text-[15px]">{message.content}</p> : null}
+   277→          </>
+   278→        ) : (
+   279→          <p className="whitespace-pre-line break-words text-[15px]">{message.content}</p>
+   280→        )}
+   281→        <div className={cn('flex items-center justify-end gap-1', hasImage && !hasText && 'px-1.5 pb-0.5')}>
+   282→          <span className="text-[10px] opacity-70">{clockTime(message.createdAt)}</span>
+   283→          {mine && !message.system ? (
+   284→            message.readAt ? (
+   285→              <CheckCheck className="size-3.5 text-blue-200" aria-label="Read" />
+   286→            ) : (
+   287→              <Check className="size-3.5 opacity-70" aria-label="Sent" />
+   288→            )
+   289→          ) : null}
+   290→        </div>
+   291→      </div>
+   292→      {mine ? (
+   293→        <button
+   294→          type="button"
+   295→          aria-label="Copy message"
+   296→          title="Copy"
+   297→          onClick={onCopy}
+   298→          className="mb-1.5 grid size-6 shrink-0 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100"
+   299→        >
+   300→          {copied ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5" />}
+   301→        </button>
+   302→      ) : null}
+   303→
+   304→      {/* Fullscreen lightbox */}
+   305→      <Dialog open={zoom} onOpenChange={setZoom}>
+   306→        <DialogContent
+   307→          className="max-h-[92dvh] border-none bg-black/90 p-2 sm:max-w-3xl [&>button]:bg-white/10 [&>button]:rounded-full"
+   308→          onClick={() => setZoom(false)}
+   309→        >
+   310→          <DialogHeader className="sr-only">
+   311→            <DialogTitle>Photo from {message.sender.name}</DialogTitle>
+   312→            <DialogDescription>Photo attachment in chat with {message.sender.name}</DialogDescription>
+   313→          </DialogHeader>
+   314→          <img
+   315→            src={message.image!}
+   316→            alt={hasText ? message.content : `Photo from ${message.sender.name}`}
+   317→            className="max-h-[85dvh] w-full rounded-lg object-contain"
+   318→            onClick={(e) => e.stopPropagation()}
+   319→          />
+   320→        </DialogContent>
+   321→      </Dialog>
+   322→    </div>
+   323→  )
+   324→}
+   325→
+   326→function TypingBubble({ name }: { name: string }) {
+   327→  return (
+   328→    <div className="flex items-end gap-2 animate-in fade-in slide-in-from-bottom-1 duration-200" aria-live="polite">
+   329→      <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-md bg-card px-3.5 py-2.5 shadow-sm">
+   330→        <span className="sr-only">{name} is typing</span>
+   331→        {[0, 1, 2].map((i) => (
+   332→          <span
+   333→            key={i}
+   334→            className="size-1.5 animate-bounce rounded-full bg-muted-foreground/70"
+   335→            style={{ animationDelay: `${i * 150}ms` }}
+   336→          />
+   337→        ))}
+   338→      </div>
+   339→    </div>
+   340→  )
+   341→}
+   342→
+   343→type ThreadDialog = 'hire' | 'reject' | 'block' | 'report' | null
+   344→
+   345→function ChatThread({
+   346→  connectionId,
+   347→  onListChanged,
+   348→}: {
+   349→  connectionId: string
+   350→  onListChanged: () => void
+   351→}) {
+   352→  const me = useAppStore((s) => s.me)!
+   353→  const back = useAppStore((s) => s.back)
+   354→  const refreshMe = useAppStore((s) => s.refreshMe)
+   355→
+   356→  const [data, setData] = useState<{ connection: ConnectionDTO; messages: MessageDTO[] } | null>(null)
+   357→  const [failed, setFailed] = useState(false)
+   358→  const [draft, setDraft] = useState('')
+   359→  const [sending, setSending] = useState(false)
+   360→  const [busy, setBusy] = useState(false)
+   361→  const [dialog, setDialog] = useState<ThreadDialog>(null)
+   362→  const [reportReason, setReportReason] = useState('')
+   363→  const [typingName, setTypingName] = useState<string | null>(null)
+   364→  const [showJump, setShowJump] = useState(false)
+   365→  /** snapshot of unseen messages when the thread was first opened (drives the "new" divider) */
+   366→  const [unreadInfo, setUnreadInfo] = useState<{ count: number; firstId: string | null } | null>(null)
+   367→  const unreadCaptured = useRef(false)
+   368→  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+   369→  const lastTypingSent = useRef(0)
+   370→  const scrollRef = useRef<HTMLDivElement>(null)
+   371→  const fileInputRef = useRef<HTMLInputElement>(null)
+   372→  const inputRef = useRef<HTMLInputElement>(null)
+   373→  const onlineIds = useAppStore((s) => s.onlineIds)
+   374→
+   375→  const load = useCallback(async () => {
+   376→    try {
+   377→      const d = await api.getConnection(connectionId)
+   378→      setData(d)
+   379→      if (!unreadCaptured.current) {
+   380→        unreadCaptured.current = true
+   381→        setUnreadInfo(d.unread)
+   382→      }
+   383→      setFailed(false)
+   384→    } catch {
+   385→      setFailed(true)
+   386→    }
+   387→  }, [connectionId])
+   388→
+   389→  // New thread → capture a fresh unread snapshot
+   390→  useEffect(() => {
+   391→    unreadCaptured.current = false
+   392→    setUnreadInfo(null)
+   393→  }, [connectionId])
+   394→
+   395→  useEffect(() => {
+   396→    void load()
+   397→  }, [load])
+   398→
+   399→  // Realtime: live messages, status changes, read receipts + typing indicator.
+   400→  // A slow interval poll stays as a safety net for missed events.
+   401→  useEffect(() => {
+   402→    // ensure socket identity, then subscribe
+   403→    getSocket(me.id, me.name)
+   404→
+   405→    const onMessage = (p: { connectionId?: string; message?: MessageDTO }) => {
+   406→      if (!p || p.connectionId !== connectionId) return
+   407→      if (p.message && p.message.senderId === me.id) return // own messages handled by send flow
+   408→      void load()
+   409→    }
+   410→    const onUpdated = (p: { connectionId?: string }) => {
+   411→      if (!p || p.connectionId !== connectionId) return
+   412→      void load()
+   413→      onListChanged()
+   414→    }
+   415→    const onRead = (p: { connectionId?: string }) => {
+   416→      if (!p || p.connectionId !== connectionId) return
+   417→      setData((d) =>
+   418→        d
+   419→          ? {
+   420→              ...d,
+   421→              messages: d.messages.map((m) =>
+   422→                m.senderId === me.id && !m.readAt ? { ...m, readAt: new Date().toISOString() } : m
+   423→              ),
+   424→            }
+   425→          : d
+   426→      )
+   427→    }
+   428→    const onTyping = (p: { connectionId?: string; userId?: string; name?: string; isTyping?: boolean }) => {
+   429→      if (!p || p.connectionId !== connectionId || p.userId === me.id) return
+   430→      if (typingTimer.current) clearTimeout(typingTimer.current)
+   431→      if (p.isTyping) {
+   432→        setTypingName(p.name || 'Someone')
+   433→        typingTimer.current = setTimeout(() => setTypingName(null), 3000)
+   434→      } else {
+   435→        setTypingName(null)
+   436→      }
+   437→    }
+   438→
+   439→    onEvent(RT.chatMessage, onMessage)
+   440→    onEvent(RT.chatUpdated, onUpdated)
+   441→    onEvent(RT.chatRead, onRead)
+   442→    onEvent('typing', onTyping)
+   443→
+   444→    const timer = setInterval(() => void load(), 15000)
+   445→    return () => {
+   446→      clearInterval(timer)
+   447→      offEvent(RT.chatMessage, onMessage)
+   448→      offEvent(RT.chatUpdated, onUpdated)
+   449→      offEvent(RT.chatRead, onRead)
+   450→      offEvent('typing', onTyping)
+   451→      if (typingTimer.current) clearTimeout(typingTimer.current)
+   452→    }
+   453→  }, [connectionId, load, onListChanged, me.id, me.name])
+   454→
+   455→  // Auto-scroll to the newest message (also when typing indicator appears)
+   456→  const messageCount = data?.messages.length ?? 0
+   457→  useEffect(() => {
+   458→    const el = scrollRef.current
+   459→    if (el) el.scrollTop = el.scrollHeight
+   460→  }, essageCount, connectionId, typingName])
+   461→
+   462→  function handleScroll() {
+   463→    const el = scrollRef.current
+   464→    if (!el) return
+   465→    const distance = el.scrollHeight - el.scrollTop - el.clientHeight
+   466→    setShowJump(distance > 240)
+   467→  }
+   468→
+   469→  function jumpToLatest() {
+   470→    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+   471→  }
+   472→
+   473→  const connection = data?.connection
+   474→  const other = connection ? otherParty(connection, me.id) : null
+   475→  const otherOnline = !!other && onlineIds.includes(other.id)
+   476→
+   477→  const blocked = !!connection?.blockedBy
+   478→  const iBlocked = connection?.blockedBy === me.id
+   479→  const decided = !!connection && ['HIRED', 'REJECTED', 'EXPIRED'].includes(connection.status)
+   480→  const isPostOwner = connection?.student.id === me.id
+   481→  const showActions = !!connection && !blocked && !decided
+   482→
+   483→  function handleDraftChange(value: string) {
+   484→    setDraft(value)
+   485→    if (!connection || !other) return
+   486→    const now = Date.now()
+   487→    if (value.trim() && now - lastTypingSent.current > 1500) {
+   488→      lastTypingSent.current = now
+   489→      emitTyping(other.id, connectionId, true)
+   490→    } else if (!value.trim() && lastTypingSent.current) {
+   491→      lastTypingSent.current = 0
+   492→      emitTyping(other.id, connectionId, false)
+   493→    }
+   494→  }
+   495→
+   496→  async function send(e: FormEvent) {
+   497→    e.preventDefault()
+   498→    const content = draft.trim()
+   499→    if (!content || !connection || sending) return
+   500→    setSending(true)
+   501→    setDraft('')
+   502→    const optimistic: MessageDTO = {
+   503→      id: `tmp-${Date.now()}`,
+   504→      connectionId: connection.id,
+   505→      senderId: me.id,
+   506→      sender: { id: me.id, name: me.name, avatar: me.avatar },
+   507→      content,
+   508→      image: null,
+   509→      system: false,
+   510→      createdAt: new Date().toISOString(),
+   511→      readAt: null,
+   512→    }
+   513→    setData((d) => (d ? { ...d, messages: [...d.messages, optimistic] } : d))
+   514→    if (connection && other) emitTyping(other.id, connection.id, false)
+   515→    try {
+   516→      await api.sendMessage(connection.id, { content })
+   517→      await load()
+   518→    } catch (err) {
+   519→      setData((d) => (d ? { ...d, messages: d.messages.filter((m) => m.id !== optimistic.id) } : d))
+   520→      setDraft(content)
+   521→      toast.error('Message not sent', { description: errorMessage(err) })
+   522→    } finally {
+   523→      setSending(false)
+   524→    }
+   525→  }
+   526→
+   527→  async function sendImage(file: File) {
+   528→    if (!connection || sending) return
+   529→    setSending(true)
+   530→    const optimisticId = `tmp-${Date.now()}`
+   531→    try {
+   532→      const image = await fileToCompactDataUrl(file)
+   533→      // optimistic bubble with the local preview
+   534→      const optimistic: MessageDTO = {
+   535→        id: optimisticId,
+   536→        connectionId: connection.id,
+   537→        senderId: me.id,
+   538→        sender: { id: me.id, name: me.name, avatar: me.avatar },
+   539→        content: '',
+   540→        image,
+   541→        system: false,
+   542→        createdAt: new Date().toISOString(),
+   543→        readAt: null,
+   544→      }
+   545→      setData((d) => (d ? { ...d, messages: [...d.messages, optimistic] } : d))
+   546→      if (other) emitTyping(other.id, connection.id, false)
+   547→      await api.sendMessage(connection.id, { image })
+   548→      await load()
+   549→    } catch (err) {
+   550→      setData((d) => (d ? { ...d, messages: d.messages.filter((m) => m.id !== optimisticId) } : d))
+   551→      toast.error('Photo not sent', { description: errorMessage(err) })
+   552→    } finally {
+   553→      setSending(false)
+   554→    }
+   555→  }
+   556→
+   557→  async function decide(action: 'HIRE' | 'REJECT' | 'BLOCK' | 'REPORT', reason?: string) {
+   558→    if (!connection || busy) return
+   559→    setBusy(true)
+   560→    try {
+   561→      const res = await api.decide(connection.id, action, reason)
+   562→      setData((d) => (d ? { ...d, connection: res.connection } : d))
+   563→      await refreshMe()
+   564→      if (action === 'HIRE') {
+   565→        toast.success('Teacher hired! 🎉', { description: 'Conversation is now locked.' })
+   566→      } else if (action === 'REJECT') {
+   567→        toast.success(
+   568→          'Request rejected',
+   569→          res.connection.refunded
+   570→            ? { description: `${res.connection.coinsSpent} coins refunded to the teacher.` }
+   571→            : { description: 'No coins were refunded — chat had already started.' }
+   572→        )
+   573→      } else if (action === 'BLOCK') {
+   574→        toast.success('User blocked')
+   575→      } else if (action === 'REPORT') {
+   576→        toast.success('Report submitted', { description: 'Our team will review it. Thank you.' })
+   577→      }
+   578→      setDialog(null)
+   579→      setReportReason('')
+   580→      onListChanged()
+   581→    } catch (err) {
+   582→      toast.error('Action failed', { description: errorMessage(err) })
+   583→    } finally {
+   584→      setBusy(false)
+   585→    }
+   586→  }
+   587→
+   588→  async function unblock() {
+   589→    if (!connection || busy) return
+   590→    setBusy(true)
+   591→    try {
+   592→      await api.decide(connection.id, 'UNBLOCK')
+   593→      toast.success('User unblocked', { description: 'You can chat again.' })
+   594→      await load()
+   595→      onListChanged()
+   596→    } catch (err) {
+   597→      toast.error('Could not unblock', { description: errorMessage(err) })
+   598→    } finally {
+   599→      setBusy(false)
+   600→    }
+   601→  }
+   602→
+   603→  // Build message nodes with system rows + day chips + unread divider
+   604→  const messageNodes: ReactNode[] = []
+   605→  if (data) {
+   606→    let prevDay = ''
+   607→    let dividerPlaced = false
+   608→    for (const m of data.messages) {
+   609→      const day = dayLabel(m.createdAt)
+   610→      if (day !== prevDay) {
+   611→        messageNodes.push(<DayChip key={`day-${m.id}`} label={day} />)
+   612→        prevDay = day
+   613→      }
+   614→      if (!dividerPlaced && unreadInfo?.firstId && m.id === unreadInfo.firstId) {
+   615→        messageNodes.push(<UnreadDivider key={`unread-${m.id}`} count={unreadInfo.count} />)
+   616→        dividerPlaced = true
+   617→      }
+   618→      if (m.system) messageNodes.push(<SystemMessage key={m.id} content={m.content} />)
+   619→      else messageNodes.push(<MessageBubble key={m.id} message={m} mine={m.senderId === me.id} />)
+   620→    }
+   621→  }
+   622→
+   623→  if (failed) {
+   624→    return (
+   625→      <div className="flex h-full flex-col items-center justify-center gap-2 bg-muted p-6 text-center">
+   626→        <EmptyState icon={MessageCircle} title="Chat not found" hint="It may have been removed." />
+   627→      </div>
+   628→    )
+   629→  }
+   630→
+   631→  return (
+   632→    <div className="flex h-full min-w-0 flex-col">
+   633→      {/* Blue header */}
+   634→      <div className="flex items-center gap-3 bg-gradient-to-r from-[#1877F2] to-[#0C63D8] p-3 text-white">
+   635→        <button
+   636→          type="button"
+   637→          onClick={back}
+   638→          aria-label="Back to chats"
+   639→          className="rounded-full p-1.5 transition-colors hover:bg-white/15 lg:hidden"
+   640→        >
+   641→          <ArrowLeft className="size-5" />
+   642→        </button>
+   643→        {other ? (
+   644→          <>
+   645→            <UserAvatar src={other.avatar} name={other.name} className="size-10 ring-2 ring-white/40" />
+   646→            <div className="min-w-0 flex-1">
+   647→              <p className="truncate font-bold leading-tight">{other.name}</p>
+   648→              <p className="truncate text-[11px] opacity-90">
+   649→                {typingName ? (
+   650→                  <span className="italic">typing…</span>
+   651→                ) : otherOnline ? (
+   652→                  <span className="flex items-center gap-1">
+   653→                    <span className="inline-block size-1.5 animate-pulse rounded-full bg-green-400" />
+   654→                    Active now
+   655→                  </span>
+   656→                ) : (
+   657→                  lastSeenLabel(connection?.lastMessage?.createdAt ?? connection?.createdAt ?? null)
+   658→                )}
+   659→              </p>
+   660→            </div>
+   661→            <div className="flex shrink-0 items-center gap-1.5">
+   662→              {connection?.tuitionPost ? (
+   663→                <span className="hidden max-w-[180px] items-center gap-1 truncate rounded-full bg-white/15 px-2 py-0.5 text-[11px] sm:flex">
+   664→                  <GraduationCap className="size-3 shrink-0" />
+   665→                  <span className="truncate">{connection.tuitionPost.title}</span>
+   666→                </span>
+   667→              ) : null}
+   668→              <span className="flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold">
+   669→                <Coins className="size-3" />
+   670→                {connection?.coinsSpent ?? 0} spent
+   671→              </span>
+   672→            </div>
+   673→          </>
+   674→        ) : (
+   675→          <div className="flex-1" />
+   676→        )}
+   677→      </div>
+   678→
+   679→      {/* Messages */}
+   680→      <div className="relative min-h-0 flex-1">
+   681→        <div ref={scrollRef} onScroll={handleScroll} className="absolute inset-0 space-y-1.5 overflow-y-auto bg-background p-4">
+   682→        {data === null ? (
+   683→          <div className="space-y-3">
+   684→            <Skeleton className="mx-auto h-5 w-24 rounded-full bg-card" />
+   685→            <Skeleton className="h-12 w-2/3 rounded-2xl bg-card" />
+   686→            <Skeleton className="ml-auto h-12 w-1/2 rounded-2xl bg-card/60" />
+   687→            <Skeleton className="h-12 w-2/3 rounded-2xl bg-card" />
+   688→          </div>
+   689→        ) : data.messages.length === 0 && !typingName ? (
+   690→          <div className="flex h-full items-center justify-center">
+   691→            <p className="rounded-full bg-card px-4 py-2 text-sm text-muted-foreground shadow-sm">
+   692→              Say hi 👋 — messages appear here
+   693→            </p>
+   694→          </div>
+   695→        ) : (
+   696→          <>
+   697→            {messageNodes}
+   698→            {typingName ? (
+   699→              <div className="pt-1">
+   700→                <TypingBubble name={typingName} />
+   701→              </div>
+   702→            ) : null}
+   703→          </>
+   704→        )}
+   705→        </div>
+   706→        {showJump ? (
+   707→          <button
+   708→            type="button"
+   709→            onClick={jumpToLatest}
+   710→            aria-label="Scroll to latest messages"
+   711→            className="absolute bottom-3 right-3 grid size-9 animate-in fade-in zoom-in-50 place-items-center rounded-full border bg-card text-muted-foreground shadow-md transition-colors hover:bg-muted hover:text-foreground duration-150"
+   712→          >
+   713→            <ArrowDown className="size-4" />
+   714→          </button>
+   715→        ) : null}
+   716→      </div>
+   717→
+   718→      {/* Bottom: banner / input / decision actions */}
+   719→      <div className="border-t bg-card">
+   720→        {blocked ? (
+   721→          <div className="p-3">
+   722→            <div className="flex items-center justify-between gap-2 rounded-lg bg-muted p-3 text-sm text-muted-foreground">
+   723→              <span>{iBlocked ? '🚫 You blocked this user. Unblock to chat again.' : '🚫 You are blocked by this user.'}</span>
+   724→              {iBlocked ? (
+   725→                <Button size="sm" variant="outline" onClick={unblock} disabled={busy}>
+   726→                  Unblock
+   727→                </Button>
+   728→              ) : null}
+   729→            </div>
+   730→          </div>
+   731→        ) : connection?.status === 'HIRED' ? (
+   732→          <div className="p-3">
+   733→            <div className="rounded-lg bg-green-500/10 p-3 text-sm text-green-700 dark:text-green-400">
+   734→              🎉 Hire confirmed. Conversation is locked.
+   735→              {connection.coinsSpent > 0 ? ` ${connection.coinsSpent} coins keep the platform running.` : ''}
+   736→            </div>
+   737→          </div>
+   738→        ) : connection?.status === 'REJECTED' ? (
+   739→          <div className="p-3">
+   740→            <div className="rounded-lg bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">
+   741→              Request rejected. Conversation closed.{' '}
+   742→              {connection.refunded
+   743→                ? `${connection.coinsSpent} coins refunded to teacher.`
+   744→                : 'Coins are not refunded after chat.'}
+   745→            </div>
+   746→          </div>
+   747→        ) : connection?.status === 'EXPIRED' ? (
+   748→          <div className="p-3">
+   749→            <div className="rounded-lg bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
+   750→              No reply within 10 days — coins auto-returned to teacher.
+   751→            </div>
+   752→          </div>
+   753→        ) : (
+   754→          <form onSubmit={send} className="flex items-center gap-2 p-3">
+   755→            <EmojiPicker
+   756→              onPick={(emoji) => {
+   757→                setDraft((d) => d + emoji)
+   758→                inputRef.current?.focus()
+   759→              }}
+   760→            />
+   761→            <input
+   762→              ref={fileInputRef}
+   763→              type="file"
+   764→              accept="image/*"
+   765→              className="hidden"
+   766→              aria-label="Attach a photo"
+   767→              onChange={(e) => {
+   768→                const file = e.target.files?.[0]
+   769→                e.target.value = ''
+   770→                if (file) void sendImage(file)
+   771→              }}
+   772→            />
+   773→            <button
+   774→              type="button"
+   775→              aria-label="Attach a photo"
+   776→              title="Send a photo"
+   777→              disabled={sending}
+   778→              onClick={() => fileInputRef.current?.click()}
+   779→              className="grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+   780→            >
+   781→              <ImagePlus className="size-5" />
+   782→            </button>
+   783→            <Input
+   784→              ref={inputRef}
+   785→              value={draft}
+   786→              onChange={(e) => handleDraftChange(e.target.value)}
+   787→              placeholder="Write your message"
+   788→              className="rounded-full bg-muted"
+   789→              aria-label="Write your message"
+   790→            />
+   791→            <Button
+   792→              type="submit"
+   793→              size="icon"
+   794→              variant="ghost"
+   795→              disabled={!draft.trim() || sending}
+   796→              aria-label="Send message"
+   797→              className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-[#1877F2] hover:bg-blue-500/10 dark:text-blue-400"
+   798→            >
+   799→              <SendHorizonal className="size-5" />
+   800→            </Button>
+   801→          </form>
+   802→        )}
+   803→
+   804→        {showActions ? (
+   805→          <div className={cn('grid gap-2 px-3 pb-3', isPostOwner ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2')}>
+   806→            {isPostOwner ? (
+   807→              <>
+   808→                <Button
+   809→                  className="h-9 w-full rounded-lg bg-[#1877F2] text-sm font-bold text-white hover:bg-[#166FE5]"
+   810→                  onClick={() => setDialog('hire')}
+   811→                >
+   812→                  <Handshake className="size-4" />
+   813→                  Hire Teacher
+   814→                </Button>
+   815→                <Button
+   816→                  className="h-9 w-full rounded-lg bg-red-600 text-sm font-bold text-white hover:bg-red-700"
+   817→                  onClick={() => setDialog('reject')}
+   818→                >
+   819→                  <X className="size-4" />
+   820→                  Reject
+   821→                </Button>
+   822→              </>
+   823→            ) : null}
+   824→            <Button
+   825→              className="h-9 w-full rounded-lg bg-red-600 text-sm font-bold text-white hover:bg-red-700"
+   826→              onClick={() => setDialog('block')}
+   827→            >
+   828→              <Ban className="size-4" />
+   829→              Block
+   830→            </Button>
+   831→            <Button
+   832→              className="h-9 w-full rounded-lg bg-red-600 text-sm font-bold text-white hover:bg-red-700"
+   833→              onClick={() => setDialog('report')}
+   834→            >
+   835→              <Flag className="size-4" />
+   836→              Report
+   837→            </Button>
+   838→          </div>
+   839→        ) : null}
+   840→      </div>
+   841→
+   842→      {/* Decision dialogs */}
+   843→      <ConfirmDialog
+   844→        open={dialog === 'hire'}
+   845→        onOpenChange={(o) => !o && setDialog(null)}
+   846→        title="Hire this teacher?"
+   847→        message="Chat will be locked after hire."
+   848→        confirmLabel="Confirm Hire"
+   849→        loading={busy}
+   850→        onConfirm={() => decide('HIRE')}
+   851→      />
+   852→      <ConfirmDialog
+   853→        open={dialog === 'reject'}
+   854→        onOpenChange={(o) => !o && setDialog(null)}
+   855→        title="Reject this request?"
+   856→        message={
+   857→          connection && !connection.chatStartedAt && !connection.refunded
+   858→            ? `No chat started yet — the teacher's ${connection.coinsSpent} coins will be REFUNDED.`
+   859→            : 'Chat already started — NO coins will be refunded.'
+   860→        }
+   861→        confirmLabel="Reject"
+   862→        danger
+   863→        loading={busy}
+   864→        onConfirm={() => decide('REJECT')}
+   865→      />
+   866→      <ConfirmDialog
+   867→        open={dialog === 'block'}
+   868→        onOpenChange={(o) => !o && setDialog(null)}
+   869→        title="Block this user?"
+   870→        message="They will no longer be able to contact you. You can unblock later from Settings."
+   871→        confirmLabel="Block"
+   872→        danger
+   873→        loading={busy}
+   874→        onConfirm={() => decide('BLOCK')}
+   875→      />
+   876→      <ConfirmDialog
+   877→        open={dialog === 'report'}
+   878→        onOpenChange={(o) => {
+   879→          if (!o) {
+   880→            setReportReason('')
+   881→            setDialog(null)
+   882→          }
+   883→        }}
+   884→        title="Report this user?"
+   885→        message="Tell us what went wrong — our team will review the conversation."
+   886→        confirmLabel="Submit Report"
+   887→        danger
+   888→        loading={busy}
+   889→        onConfirm={() => decide('REPORT', reportReason.trim() || undefined)}
+   890→      >
+   891→        <Textarea
+   892→          value={reportReason}
+   893→          onChange={(e) => setReportReason(e.target.value)}
+   894→          placeholder="Reason for reporting (optional)"
+   895→          rows={3}
+   896→          maxLength={500}
+   897→          className="mb-2"
+   898→        />
+   899→      </ConfirmDialog>
+   900→    </div>
+   901→  )
+   902→}
+   903→
+   904→// ===== View =====
+   905→
+   906→export function ChatsView() {
+   907→  const me = useAppStore((s) => s.me)!
+   908→  const params = useAppStore((s) => s.params)
+   909→  const go = useAppStore((s) => s.go)
+   910→  const onlineIds = useAppStore((s) => s.onlineIds)
+   911→
+   912→  const [connections, setConnections] = useState<ConnectionDTO[] | null>(null)
+   913→  const [search, setSearch] = useState('')
+   914→
+   915→  const loadList = useCallback(async () => {
+   916→    try {
+   917→      const d = await api.getConnections()
+   918→      setConnections(d.connections)
+   919→    } catch {
+   920→      // keep previous list on failure
+   921→    }
+   922→  }, [])
+   923→
+   924→  useEffect(() => {
+   925→    // eslint-disable-next-line react-hooks/set-state-in-effect
+   926→    void loadList()
+   927→  }, [loadList])
+   928→
+   929→  // Realtime: refresh the list when chats change (new message/status) + slow fallback poll
+   930→  useEffect(() => {
+   931→    getSocket(me.id, me.name)
+   932→
+   933→    let timer: ReturnType<typeof setTimeout> | null = null
+   934→    const scheduleRefresh = () => {
+   935→      if (timer) clearTimeout(timer)
+   936→      timer = setTimeout(() => void loadList(), 250)
+   937→    }
+   938→    const onMessage = (p: { connectionId?: string }) => {
+   939→      if (p?.connectionId) scheduleRefresh()
+   940→    }
+   941→    const onUpdated = (p: { connectionId?: string }) => {
+   942→      if (p?.connectionId) scheduleRefresh()
+   943→    }
+   944→
+   945→    onEvent(RT.chatMessage, onMessage)
+   946→    onEvent(RT.chatUpdated, onUpdated)
+   947→    const poll = setInterval(() => void loadList(), 15000)
+   948→    return () => {
+   949→      if (timer) clearTimeout(timer)
+   950→      offEvent(RT.chatMessage, onMessage)
+   951→      offEvent(RT.chatUpdated, onUpdated)
+   952→      clearInterval(poll)
+   953→    }
+   954→  }, [loadList, me.id, me.name])
+   955→
+   956→  const sorted = useMemo(() => {
+   957→    if (!connections) return null
+   958→    return [...connections].sort((a, b) => {
+   959→      const ta = new Date(a.lastMessage?.createdAt ?? a.createdAt).getTime()
+   960→      const tb = new Date(b.lastMessage?.createdAt ?? b.createdAt).getTime()
+   961→      return tb - ta
+   962→    })
+   963→  }, [connections])
+   964→
+   965→  const filtered = useMemo(() => {
+   966→    if (!sorted) return null
+   967→    const q = search.trim().toLowerCase()
+   968→    if (!q) return sorted
+   969→    return sorted.filter((c) => otherParty(c, me.id).name.toLowerCase().includes(q))
+   970→  }, [sorted, search, me.id])
+   971→
+   972→  const activeId = params.connectionId
+   973→
+   974→  return (
+   975→    <div className="mx-auto card-shadow flex h-[calc(100vh-260px)] min-h-[440px] w-full max-w-[1100px] overflow-hidden rounded-xl border bg-card">
+   976→      {/* List pane */}
+   977→      <div className={cn('w-full flex-col lg:flex lg:w-[340px] lg:shrink-0 lg:border-r', activeId ? 'hidden' : 'flex')}>
+   978→        <div className="border-b px-4 py-3">
+   979→          <h1 className="text-lg font-bold">Chats</h1>
+   980→          <div className="relative mt-2">
+   981→            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+   982→            <Input
+   983→              value={search}
+   984→              onChange={(e) => setSearch(e.target.value)}
+   985→              placeholder="Search chats"
+   986→              className="h-9 rounded-full bg-muted pl-9"
+   987→            />
+   988→          </div>
+   989→        </div>
+   990→
+   991→        <div className="flex-1 divide-y overflow-y-auto">
+   992→          {filtered === null ? (
+   993→            <div className="space-y-3 p-3">
+   994→              {[0, 1, 2, 3].map((i) => (
+   995→                <div key={i} className="flex gap-3">
+   996→                  <Skeleton className="size-12 rounded-full" />
+   997→                  <div className="flex-1 space-y-1.5 py-1">
+   998→                    <Skeleton className="h-3.5 w-2/3" />
+   999→                    <Skeleton className="h-3 w-full" />
+  1000→                  </div>
+  1001→                </div>
+  1002→              ))}
+  1003→            </div>
+  1004→          ) : filtered.length === 0 ? (
+  1005→            <div className="p-4">
+  1006→              <EmptyState
+  1007→                icon={MessageCircle}
+  1008→                title="No chats yet"
+  1009→                hint="Contact a teacher from the feed (costs coins)"
+  1010→              />
+  1011→            </div>
+  1012→          ) : (
+  1013→            filtered.map((c) => {
+  1014→              const other = otherParty(c, me.id)
+  1015→              return (
+  1016→                <ConnectionRow
+  1017→                  key={c.id}
+  1018→                  connection={c}
+  1019→                  meId={me.id}
+  1020→                  active={c.id === activeId}
+  1021→                  online={onlineIds.includes(other.id)}
+  1022→                  onSelect={() => go('chats', { connectionId: c.id })}
+  1023→                />
+  1024→              )
+  1025→            })
+  1026→          )}
+  1027→        </div>
+  1028→      </div>
+  1029→
+  1030→      {/* Thread pane */}
+  1031→      <div className={cn('min-w-0 flex-1', activeId ? 'flex' : 'hidden lg:flex')}>
+  1032→        {activeId ? (
+  1033→          <ChatThread connectionId={activeId} onListChanged={loadList} />
+  1034→        ) : (
+  1035→          <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-muted p-6 text-center">
+  1036→            <div className="card-shadow grid size-16 place-items-center rounded-full bg-card">
+  1037→              <MessageCircle className="size-8 text-[#1877F2]" />
+  1038→            </div>
+  1039→            <p className="font-semibold">Your messages</p>
+  1040→            <p className="max-w-xs text-sm text-muted-foreground">
+  1041→              Pick a chat from the list — or contact a teacher from the feed to start one.
+  1042→            </p>
+  1043→          </div>
+  1044→        )}
+  1045→      </div>
+  1046→    </div>
+  1047→  )
+  1048→}
+  1049→

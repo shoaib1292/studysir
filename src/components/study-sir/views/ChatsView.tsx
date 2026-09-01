@@ -18,6 +18,7 @@ import {
   Search,
   SendHorizonal,
   Smile,
+  SmilePlus,
   X,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -29,7 +30,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { api, errorMessage } from '@/lib/api'
 import { fileToCompactDataUrl } from '@/lib/image'
-import type { ConnectionDTO, MessageDTO } from '@/lib/types'
+import type { ConnectionDTO, MessageDTO, MessageReactionGroup } from '@/lib/types'
 import { emitTyping, getSocket, onEvent, offEvent, RT } from '@/lib/socket'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -79,11 +80,15 @@ function ConnectionRow({
       type="button"
       onClick={onSelect}
       className={cn(
-        'flex w-full gap-3 p-3 text-left transition-colors hover:bg-muted',
+        'relative flex w-full gap-3 p-3 text-left transition-colors hover:bg-muted',
         active && 'bg-blue-500/10 hover:bg-blue-500/10',
         hasUnread && !active && 'bg-blue-500/[0.04]'
       )}
     >
+      {/* Messenger-style active indicator */}
+      {active ? (
+        <span aria-hidden className="absolute left-0 top-1/2 h-8 w-1 -translate-y-1/2 rounded-r-full bg-[#1877F2]" />
+      ) : null}
       <div className="relative shrink-0">
         <UserAvatar src={other.avatar} name={other.name} className="size-12" />
         <span
@@ -169,6 +174,9 @@ const EMOJIS = [
   '💙', '🎉', '🎓', '📚', '✏️', '📅', '⏰', '💰',
 ]
 
+/** Facebook-style quick reactions (must match the API whitelist). */
+const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '👎'] as const
+
 function EmojiPicker({ onPick }: { onPick: (emoji: string) => void }) {
   return (
     <Popover>
@@ -225,11 +233,36 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-function MessageBubble({ message, mine }: { message: MessageDTO; mine: boolean }) {
+function MessageBubble({
+  message,
+  mine,
+  meId,
+  canReact,
+  onReact,
+}: {
+  message: MessageDTO
+  mine: boolean
+  meId: string
+  canReact: boolean
+  onReact: (messageId: string, emoji: string) => void
+}) {
   const [copied, setCopied] = useState(false)
   const [zoom, setZoom] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const pickerRef = useRef<HTMLDivElement>(null)
   const hasImage = Boolean(message.image)
   const hasText = Boolean(message.content) && message.content !== '📷 Photo'
+  const hasReactions = message.reactions.length > 0
+
+  // Close the reaction picker on outside interaction (mouse, touch or pen)
+  useEffect(() => {
+    if (!pickerOpen) return
+    const onDown = (e: PointerEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPickerOpen(false)
+    }
+    document.addEventListener('pointerdown', onDown)
+    return () => document.removeEventListener('pointerdown', onDown)
+  }, [pickerOpen])
 
   async function onCopy() {
     const ok = await copyText(message.content)
@@ -242,63 +275,136 @@ function MessageBubble({ message, mine }: { message: MessageDTO; mine: boolean }
   }
 
   return (
-    <div className={cn('group flex items-end gap-2 animate-in fade-in slide-in-from-bottom-1 duration-200', mine ? 'justify-end' : 'justify-start')}>
-      {!mine ? <UserAvatar src={message.sender.avatar} name={message.sender.name} className="mb-1 size-7" /> : null}
-      {!mine ? (
-        <button
-          type="button"
-          aria-label="Copy message"
-          title="Copy"
-          onClick={onCopy}
-          className="mb-1.5 grid size-6 shrink-0 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100"
+    <div className={cn('flex animate-in flex-col fade-in slide-in-from-bottom-1 duration-200', mine ? 'items-end' : 'items-start')}>
+      <div className={cn('group relative flex items-end gap-2', mine ? 'justify-end' : 'justify-start')}>
+        {/* Facebook-style quick-reaction bar (above the bubble) */}
+        {canReact && pickerOpen ? (
+          <div
+            ref={pickerRef}
+            role="menu"
+            aria-label="Pick a reaction"
+            className={cn(
+              'absolute -top-3 z-20 flex -translate-y-full items-center gap-0.5 rounded-full border bg-card p-1 shadow-lg animate-in fade-in zoom-in-95 duration-150',
+              mine ? 'right-7' : 'left-7'
+            )}
+          >
+            {QUICK_REACTIONS.map((e) => (
+              <button
+                key={e}
+                type="button"
+                aria-label={`React with ${e}`}
+                onClick={() => {
+                  onReact(message.id, e)
+                  setPickerOpen(false)
+                }}
+                className={cn(
+                  'grid size-9 place-items-center rounded-full text-xl leading-none transition-transform duration-150 hover:z-10 hover:scale-[1.35] hover:bg-muted',
+                  message.reactions.some((g) => g.emoji === e && g.userIds.includes(meId)) && 'bg-blue-500/10'
+                )}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {!mine ? <UserAvatar src={message.sender.avatar} name={message.sender.name} className="mb-1 size-7" /> : null}
+        {!mine ? (
+          <button
+            type="button"
+            aria-label="Copy message"
+            title="Copy"
+            onClick={onCopy}
+            className="mb-1.5 grid size-6 shrink-0 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100"
+          >
+            {copied ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5" />}
+          </button>
+        ) : null}
+        <div
+          className={cn(
+            'max-w-[78%] rounded-2xl px-3.5 py-2',
+            mine ? 'rounded-br-md bg-[#1877F2] text-white' : 'rounded-bl-md bg-card shadow-sm',
+            hasImage && 'p-1.5'
+          )}
         >
-          {copied ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5" />}
-        </button>
-      ) : null}
-      <div
-        className={cn(
-          'max-w-[78%] rounded-2xl px-3.5 py-2',
-          mine ? 'rounded-br-md bg-[#1877F2] text-white' : 'rounded-bl-md bg-card shadow-sm',
-          hasImage && 'p-1.5'
-        )}
-      >
-        {hasImage ? (
-          <>
-            <img
-              src={message.image!}
-              alt={hasText ? message.content : `Photo from ${message.sender.name}`}
-              onClick={() => setZoom(true)}
-              className={cn(
-                'max-h-72 w-full max-w-[280px] cursor-zoom-in rounded-xl object-cover',
-                mine ? 'bg-[#166FE5]' : 'bg-muted'
-              )}
-            />
-            {hasText ? <p className="whitespace-pre-line break-words px-2 pb-1 pt-1.5 text-[15px]">{message.content}</p> : null}
-          </>
-        ) : (
-          <p className="whitespace-pre-line break-words text-[15px]">{message.content}</p>
-        )}
-        <div className={cn('flex items-center justify-end gap-1', hasImage && !hasText && 'px-1.5 pb-0.5')}>
-          <span className="text-[10px] opacity-70">{clockTime(message.createdAt)}</span>
-          {mine && !message.system ? (
-            message.readAt ? (
-              <CheckCheck className="size-3.5 text-blue-200" aria-label="Read" />
-            ) : (
-              <Check className="size-3.5 opacity-70" aria-label="Sent" />
-            )
-          ) : null}
+          {hasImage ? (
+            <>
+              <img
+                src={message.image!}
+                alt={hasText ? message.content : `Photo from ${message.sender.name}`}
+                onClick={() => setZoom(true)}
+                className={cn(
+                  'max-h-72 w-full max-w-[280px] cursor-zoom-in rounded-xl object-cover',
+                  mine ? 'bg-[#166FE5]' : 'bg-muted'
+                )}
+              />
+              {hasText ? <p className="whitespace-pre-line break-words px-2 pb-1 pt-1.5 text-[15px]">{message.content}</p> : null}
+            </>
+          ) : (
+            <p className="whitespace-pre-line break-words text-[15px]">{message.content}</p>
+          )}
+          <div className={cn('flex items-center justify-end gap-1', hasImage && !hasText && 'px-1.5 pb-0.5')}>
+            <span className="text-[10px] opacity-70">{clockTime(message.createdAt)}</span>
+            {mine && !message.system ? (
+              message.readAt ? (
+                <CheckCheck className="size-3.5 text-blue-200" aria-label="Read" />
+              ) : (
+                <Check className="size-3.5 opacity-70" aria-label="Sent" />
+              )
+            ) : null}
+          </div>
         </div>
+        {mine ? (
+          <button
+            type="button"
+            aria-label="Copy message"
+            title="Copy"
+            onClick={onCopy}
+            className="mb-1.5 grid size-6 shrink-0 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100"
+          >
+            {copied ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5" />}
+          </button>
+        ) : null}
+        {canReact ? (
+          <button
+            type="button"
+            aria-label="React to message"
+            aria-expanded={pickerOpen}
+            title="React"
+            onClick={() => setPickerOpen((o) => !o)}
+            className={cn(
+              'mb-1.5 grid size-6 shrink-0 place-items-center rounded-full text-muted-foreground transition-all hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100',
+              pickerOpen ? 'opacity-100' : 'opacity-0'
+            )}
+          >
+            <SmilePlus className="size-3.5" />
+          </button>
+        ) : null}
       </div>
-      {mine ? (
-        <button
-          type="button"
-          aria-label="Copy message"
-          title="Copy"
-          onClick={onCopy}
-          className="mb-1.5 grid size-6 shrink-0 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100"
-        >
-          {copied ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5" />}
-        </button>
+
+      {/* Reaction chips (Messenger-style, under the bubble) */}
+      {hasReactions ? (
+        <div className={cn('flex flex-wrap gap-1', mine ? 'pr-9' : 'pl-9', '-mt-1.5')}>
+          {message.reactions.map((g) => {
+            const isMine = g.userIds.includes(meId)
+            return (
+              <button
+                key={g.emoji}
+                type="button"
+                aria-label={isMine ? `Remove ${g.emoji} reaction` : `React with ${g.emoji}`}
+                title={isMine ? 'Tap to remove' : 'React too'}
+                onClick={() => canReact && onReact(message.id, g.emoji)}
+                className={cn(
+                  'flex items-center gap-0.5 rounded-full border bg-card px-1.5 py-0.5 shadow-sm transition-all duration-150 hover:scale-110',
+                  isMine ? 'border-[#1877F2] ring-1 ring-[#1877F2]/30' : 'border-border'
+                )}
+              >
+                <span className="text-xs leading-none">{g.emoji}</span>
+                {g.count > 1 ? <span className="text-[10px] font-semibold text-muted-foreground">{g.count}</span> : null}
+              </button>
+            )
+          })}
+        </div>
       ) : null}
 
       {/* Fullscreen lightbox */}
@@ -425,6 +531,19 @@ function ChatThread({
           : d
       )
     }
+    const onReaction = (p: { connectionId?: string; messageId?: string; reactions?: MessageReactionGroup[] }) => {
+      if (!p || p.connectionId !== connectionId || !p.messageId) return
+      setData((d) =>
+        d
+          ? {
+              ...d,
+              messages: d.messages.map((m) =>
+                m.id === p.messageId ? { ...m, reactions: p.reactions ?? [] } : m
+              ),
+            }
+          : d
+      )
+    }
     const onTyping = (p: { connectionId?: string; userId?: string; name?: string; isTyping?: boolean }) => {
       if (!p || p.connectionId !== connectionId || p.userId === me.id) return
       if (typingTimer.current) clearTimeout(typingTimer.current)
@@ -439,6 +558,7 @@ function ChatThread({
     onEvent(RT.chatMessage, onMessage)
     onEvent(RT.chatUpdated, onUpdated)
     onEvent(RT.chatRead, onRead)
+    onEvent(RT.chatReaction, onReaction)
     onEvent('typing', onTyping)
 
     const timer = setInterval(() => void load(), 15000)
@@ -447,6 +567,7 @@ function ChatThread({
       offEvent(RT.chatMessage, onMessage)
       offEvent(RT.chatUpdated, onUpdated)
       offEvent(RT.chatRead, onRead)
+      offEvent(RT.chatReaction, onReaction)
       offEvent('typing', onTyping)
       if (typingTimer.current) clearTimeout(typingTimer.current)
     }
@@ -509,6 +630,7 @@ function ChatThread({
       system: false,
       createdAt: new Date().toISOString(),
       readAt: null,
+      reactions: [],
     }
     setData((d) => (d ? { ...d, messages: [...d.messages, optimistic] } : d))
     if (connection && other) emitTyping(other.id, connection.id, false)
@@ -541,6 +663,7 @@ function ChatThread({
         system: false,
         createdAt: new Date().toISOString(),
         readAt: null,
+        reactions: [],
       }
       setData((d) => (d ? { ...d, messages: [...d.messages, optimistic] } : d))
       if (other) emitTyping(other.id, connection.id, false)
@@ -551,6 +674,24 @@ function ChatThread({
       toast.error('Photo not sent', { description: errorMessage(err) })
     } finally {
       setSending(false)
+    }
+  }
+
+  /** Toggle a Facebook-style reaction on a message (server returns the fresh snapshot). */
+  async function react(messageId: string, emoji: string) {
+    if (messageId.startsWith('tmp-')) return // optimistic bubbles: wait for the real send
+    try {
+      const res = await api.reactMessage(messageId, emoji)
+      setData((d) =>
+        d
+          ? {
+              ...d,
+              messages: d.messages.map((m) => (m.id === messageId ? { ...m, reactions: res.reactions } : m)),
+            }
+          : d
+      )
+    } catch (err) {
+      toast.error('Reaction failed', { description: errorMessage(err) })
     }
   }
 
@@ -616,7 +757,17 @@ function ChatThread({
         dividerPlaced = true
       }
       if (m.system) messageNodes.push(<SystemMessage key={m.id} content={m.content} />)
-      else messageNodes.push(<MessageBubble key={m.id} message={m} mine={m.senderId === me.id} />)
+      else
+        messageNodes.push(
+          <MessageBubble
+            key={m.id}
+            message={m}
+            mine={m.senderId === me.id}
+            meId={me.id}
+            canReact={!blocked}
+            onReact={(id, emoji) => void react(id, emoji)}
+          />
+        )
     }
   }
 
@@ -784,6 +935,18 @@ function ChatThread({
               ref={inputRef}
               value={draft}
               onChange={(e) => handleDraftChange(e.target.value)}
+              onPaste={(e) => {
+                // Paste-to-send: images on the clipboard go straight out as a photo message
+                const items = Array.from(e.clipboardData?.items ?? [])
+                const imgItem = items.find((it) => it.type.startsWith('image/'))
+                if (imgItem) {
+                  const file = imgItem.getAsFile()
+                  if (file) {
+                    e.preventDefault()
+                    void sendImage(file)
+                  }
+                }
+              }}
               placeholder="Write your message"
               className="rounded-full bg-muted"
               aria-label="Write your message"

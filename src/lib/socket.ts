@@ -12,6 +12,7 @@ export const RT = {
   chatMessage: 'chat:message',
   chatUpdated: 'chat:updated',
   chatRead: 'chat:read',
+  chatReaction: 'chat:reaction',
   notifNew: 'notif:new',
   walletChanged: 'wallet:changed',
 } as const
@@ -35,6 +36,8 @@ export function getSocket(userId: string, name: string): Socket {
   currentUserId = userId
   currentUserName = name
   if (socket.connected) socket.emit('hello', { userId, name })
+  // debug handle for QA (harmless in prod, used by browser eval checks)
+  if (typeof window !== 'undefined') (window as unknown as Record<string, unknown>).__ssSocket = socket
   return socket
 }
 

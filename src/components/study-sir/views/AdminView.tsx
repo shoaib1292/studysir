@@ -5,6 +5,8 @@ import {
   Ban,
   BookOpen,
   CheckCircle2,
+  EyeOff,
+  Eye,
   MessageSquare,
   Package,
   ShieldAlert,
@@ -16,8 +18,12 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Textarea } from '@/components/ui/textarea'
 import { api, errorMessage } from '@/lib/api'
 import type { AdminStats, AdminUserDTO, ReportDTO, ReportStatus } from '@/lib/types'
 import { useAppStore } from '@/store/useAppStore'
@@ -53,19 +59,51 @@ function ReportCard({ report, onChanged }: { report: ReportDTO; onChanged: () =>
   const me = useAppStore((s) => s.me)!
   const go = useAppStore((s) => s.go)
   const [busy, setBusy] = useState(false)
+  /** which confirm popover is open (RESOLVE / DISMISS) */
+  const [confirming, setConfirming] = useState<'RESOLVE' | 'DISMISS' | null>(null)
+  const [note, setNote] = useState('')
+  const [alsoHide, setAlsoHide] = useState(false)
   const meta = TARGET_META[report.targetType] ?? TARGET_META.USER
   const TargetIcon = meta.icon
   const open = report.status === 'OPEN'
   const accused = report.targetUser
+  const isContentTarget = ['GOOD', 'COURSE', 'TUITION'].includes(report.targetType) && !!report.targetId
+
+  function closePopover() {
+    setConfirming(null)
+    setNote('')
+    setAlsoHide(false)
+  }
 
   async function act(action: 'RESOLVE' | 'DISMISS') {
     setBusy(true)
     try {
-      await api.adminReportAction(report.id, action)
-      toast.success(action === 'RESOLVE' ? 'Report resolved — reporter notified' : 'Report dismissed — reporter notified')
+      await api.adminReportAction(report.id, action, note.trim() || undefined, action === 'RESOLVE' && alsoHide)
+      toast.success(
+        action === 'RESOLVE' ? 'Report resolved — reporter notified' : 'Report dismissed — reporter notified',
+        alsoHide && action === 'RESOLVE' ? { description: 'The reported listing was removed from StudySir.' } : undefined
+      )
+      closePopover()
       onChanged()
     } catch (e) {
       toast.error('Action failed', { description: errorMessage(e) })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function toggleHide() {
+    if (!report.targetId) return
+    setBusy(true)
+    try {
+      const next = !report.targetHidden
+      await api.adminModerateContent(report.targetType as 'GOOD' | 'COURSE' | 'TUITION', report.targetId, next)
+      toast.success(next ? 'Listing removed from StudySir' : 'Listing restored', {
+        description: next ? `“${report.targetLabel ?? 'The listing'}” is now hidden from feeds, stores and profiles.` : 'It is visible again everywhere.',
+      })
+      onChanged()
+    } catch (e) {
+      toast.error('Could not update listing', { description: errorMessage(e) })
     } finally {
       setBusy(false)
     }
@@ -138,8 +176,18 @@ function ReportCard({ report, onChanged }: { report: ReportDTO; onChanged: () =>
             <img src={report.targetImage} alt="" className="h-9 w-9 rounded object-cover" />
           ) : null}
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{report.targetLabel}</p>
-            <p className="text-[11px] text-muted-foreground">Reported {meta.label.toLowerCase()}</p>
+            <p className={cn('truncate text-sm font-medium', report.targetHidden && 'line-through decoration-red-500/60')}>
+              {report.targetLabel}
+            </p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-[11px] text-muted-foreground">Reported {meta.label.toLowerCase()}</p>
+              {report.targetHidden ? (
+                <span className="inline-flex items-center gap-0.5 rounded bg-red-500/15 px-1 py-px text-[10px] font-bold text-red-600 dark:text-red-400">
+                  <EyeOff className="size-2.5" />
+                  HIDDEN
+                </span>
+              ) : null}
+            </div>
           </div>
           {report.targetType === 'CHAT' && report.connectionId ? (
             <Button size="sm" variant="outline" className="ml-auto shrink-0" onClick={() => go('chats', { connectionId: report.connectionId! })}>
@@ -157,19 +205,119 @@ function ReportCard({ report, onChanged }: { report: ReportDTO; onChanged: () =>
 
       {open ? (
         <div className="mt-3 flex flex-wrap gap-2 border-t pt-3">
-          <Button
-            size="sm"
-            disabled={busy}
-            onClick={() => act('RESOLVE')}
-            className="bg-green-600 text-white hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-700"
+          {/* Resolve with optional moderator note + optional content removal */}
+          <Popover
+            open={confirming === 'RESOLVE'}
+            onOpenChange={(o) => {
+              if (o) {
+                setConfirming('RESOLVE')
+                setNote('')
+                setAlsoHide(false)
+              } else if (confirming === 'RESOLVE') closePopover()
+            }}
           >
-            <CheckCircle2 className="mr-1.5 size-4" />
-            Resolve
-          </Button>
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => act('DISMISS')}>
-            <XCircle className="mr-1.5 size-4" />
-            Dismiss
-          </Button>
+            <PopoverTrigger asChild>
+              <Button
+                size="sm"
+                disabled={busy}
+                className="bg-green-600 text-white hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-700"
+              >
+                <CheckCircle2 className="mr-1.5 size-4" />
+                Resolve
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-72 space-y-3">
+              <p className="text-sm font-semibold">Resolve report</p>
+              {isContentTarget ? (
+                <div className="flex items-start gap-2 rounded-lg bg-muted/60 p-2.5">
+                  <Checkbox id={`hide-${report.id}`} checked={alsoHide} onCheckedChange={(v) => setAlsoHide(v === true)} className="mt-0.5" />
+                  <div className="grid gap-0.5">
+                    <Label htmlFor={`hide-${report.id}`} className="cursor-pointer text-xs font-medium leading-snug">
+                      Also remove the {meta.label.toLowerCase()} from StudySir
+                    </Label>
+                    <p className="text-[11px] text-muted-foreground">Hides it from feeds, stores and profiles. The owner is notified.</p>
+                  </div>
+                </div>
+              ) : null}
+              <Textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Moderator note (optional) — saved with the report"
+                rows={2}
+                maxLength={500}
+              />
+              <div className="flex justify-end gap-2">
+                <Button size="sm" variant="ghost" onClick={closePopover}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => void act('RESOLVE')}
+                  className="bg-green-600 text-white hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-700"
+                >
+                  Confirm
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          {/* Dismiss with optional note */}
+          <Popover
+            open={confirming === 'DISMISS'}
+            onOpenChange={(o) => {
+              if (o) {
+                setConfirming('DISMISS')
+                setNote('')
+                setAlsoHide(false)
+              } else if (confirming === 'DISMISS') closePopover()
+            }}
+          >
+            <PopoverTrigger asChild>
+              <Button size="sm" variant="outline" disabled={busy}>
+                <XCircle className="mr-1.5 size-4" />
+                Dismiss
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-72 space-y-3">
+              <p className="text-sm font-semibold">Dismiss report</p>
+              <p className="text-xs text-muted-foreground">No action is taken against the reported content.</p>
+              <Textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Moderator note (optional) — saved with the report"
+                rows={2}
+                maxLength={500}
+              />
+              <div className="flex justify-end gap-2">
+                <Button size="sm" variant="ghost" onClick={closePopover}>
+                  Cancel
+                </Button>
+                <Button size="sm" variant="outline" disabled={busy} onClick={() => void act('DISMISS')}>
+                  Confirm
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          {/* Hide / restore the reported listing (GOOD / COURSE / TUITION) */}
+          {isContentTarget ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={toggleHide}
+              className={cn(
+                report.targetHidden
+                  ? 'text-green-700 hover:bg-green-500/10 dark:text-green-400'
+                  : 'text-amber-700 hover:bg-amber-500/10 dark:text-amber-400'
+              )}
+            >
+              {report.targetHidden ? <Eye className="mr-1.5 size-4" /> : <EyeOff className="mr-1.5 size-4" />}
+              {report.targetHidden ? 'Restore Listing' : 'Remove Listing'}
+            </Button>
+          ) : null}
+
           {accused && accused.id !== me.id ? (
             <Button
               size="sm"

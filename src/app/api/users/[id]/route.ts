@@ -46,11 +46,11 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     },
   }))
 
-  // Posts by this user (tuitions, courses, goods)
+  // Posts by this user (tuitions, courses, goods) — moderation-hidden listings stay hidden on profiles too
   const [tuitions, courses, goods] = await Promise.all([
-    db.tuitionPost.findMany({ where: { authorId: id }, orderBy: { createdAt: 'desc' }, include: { author: true } }),
-    db.course.findMany({ where: { teacherId: id }, orderBy: { createdAt: 'desc' }, include: { teacher: true } }),
-    db.digitalGood.findMany({ where: { sellerId: id }, orderBy: { createdAt: 'desc' }, include: { seller: true } }),
+    db.tuitionPost.findMany({ where: { authorId: id, hidden: false }, orderBy: { createdAt: 'desc' }, include: { author: true } }),
+    db.course.findMany({ where: { teacherId: id, hidden: false }, orderBy: { createdAt: 'desc' }, include: { teacher: true } }),
+    db.digitalGood.findMany({ where: { sellerId: id, hidden: false }, orderBy: { createdAt: 'desc' }, include: { seller: true } }),
   ])
 
   const items: FeedItem[] = []

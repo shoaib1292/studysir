@@ -39,7 +39,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     const messages = await db.message.findMany({
       where: { connectionId: id },
       orderBy: { createdAt: 'asc' },
-      include: { sender: true },
+      include: { sender: true, reactions: { select: { emoji: true, userId: true } } },
     })
 
     return NextResponse.json({

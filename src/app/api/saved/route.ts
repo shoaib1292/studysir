@@ -9,7 +9,7 @@ export async function GET() {
   try {
     const me = await requireSessionUser()
     const saves = await db.save.findMany({
-      where: { userId: me.id },
+      where: { userId: me.id, tuitionPost: { hidden: false } },
       orderBy: { createdAt: 'desc' },
       include: { tuitionPost: { include: { author: true } } },
     })

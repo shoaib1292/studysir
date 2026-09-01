@@ -17,8 +17,20 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     const body = await req.json().catch(() => null)
     const action = body?.action as string
     const note = typeof body?.note === 'string' ? body.note.trim().slice(0, 500) : undefined
+    const hideContent = Boolean(body?.hideContent)
     if (!['RESOLVE', 'DISMISS'].includes(action)) {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
+    }
+
+    // Optional moderation action: soft-hide the reported listing (GOOD/COURSE/TUITION)
+    if (hideContent && report.targetId && ['GOOD', 'COURSE', 'TUITION'].includes(report.targetType)) {
+      if (report.targetType === 'GOOD') {
+        await db.digitalGood.updateMany({ where: { id: report.targetId }, data: { hidden: true } })
+      } else if (report.targetType === 'COURSE') {
+        await db.course.updateMany({ where: { id: report.targetId }, data: { hidden: true } })
+      } else {
+        await db.tuitionPost.updateMany({ where: { id: report.targetId }, data: { hidden: true } })
+      }
     }
 
     const updated = await db.report.update({

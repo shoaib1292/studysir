@@ -10,6 +10,7 @@ import type {
   FeedItem,
   GoodDTO,
   MessageDTO,
+  MessageReactionGroup,
   NotificationDTO,
   ProfileStats,
   ReportDTO,
@@ -172,6 +173,12 @@ export const api = {
     request<{ connection: ConnectionDTO }>('/api/connections', { method: 'POST', body }),
   sendMessage: (id: string, body: { content?: string; image?: string }) =>
     request<{ message: MessageDTO }>(`/api/connections/${id}/messages`, { method: 'POST', body }),
+  /** Toggle a Facebook-style reaction on a chat message. */
+  reactMessage: (messageId: string, emoji: string) =>
+    request<{ reactions: MessageReactionGroup[]; action: string }>(`/api/messages/${messageId}/react`, {
+      method: 'POST',
+      body: { emoji },
+    }),
   decide: (id: string, action: 'HIRE' | 'REJECT' | 'BLOCK' | 'UNBLOCK' | 'REPORT', reason?: string) =>
     request<{ connection: ConnectionDTO }>(`/api/connections/${id}/decide`, {
       method: 'POST',
@@ -225,10 +232,16 @@ export const api = {
     request<{ reports: ReportDTO[]; stats: AdminStats }>(
       `/api/admin/reports${status ? `?status=${encodeURIComponent(status)}` : ''}`
     ),
-  adminReportAction: (id: string, action: 'RESOLVE' | 'DISMISS', note?: string) =>
+  adminReportAction: (id: string, action: 'RESOLVE' | 'DISMISS', note?: string, hideContent?: boolean) =>
     request<{ report: ReportDTO }>(`/api/admin/reports/${id}`, {
       method: 'POST',
-      body: { action, ...(note ? { note } : {}) },
+      body: { action, ...(note ? { note } : {}), ...(hideContent ? { hideContent: true } : {}) },
+    }),
+  /** Soft-hide / restore a reported listing (GOOD/COURSE/TUITION). */
+  adminModerateContent: (type: 'GOOD' | 'COURSE' | 'TUITION', id: string, hidden: boolean) =>
+    request<{ ok: true; hidden: boolean }>('/api/admin/moderate-content', {
+      method: 'POST',
+      body: { type, id, hidden },
     }),
   getAdminUsers: () => request<{ users: AdminUserDTO[] }>('/api/admin/users'),
   adminSetUserStatus: (id: string, status: 'BANNED' | 'ACTIVE') =>

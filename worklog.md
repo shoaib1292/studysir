@@ -223,3 +223,32 @@ Work Log:
 
 Stage Summary:
 - StudySir now has a complete trust & safety loop: report (chat row, goods, courses, tuition posts) → admin queue with content snapshots → resolve/dismiss/ban with reporter notifications → banned users blocked at login + session (suspension screen). Teachers/students can edit their tuition posts (coin cost auto-recomputes). Chat supports photo attachments with lightbox. Card footers now adapt icon-only/labels via container queries. src/ is fully type-clean (0 tsc errors) for the first time. Ideas for next round: admin ability to delete/soft-hide reported goods/courses, per-report note UI (API supports it, UI prompt not yet), PWA service worker, chat unread separator persistence, image paste-to-send.
+
+---
+Task ID: 9
+Agent: Z.ai Code (lead)
+Task: Status assessment + agent-browser QA + features: message reactions, paste-to-send, admin content moderation, styling polish
+
+Work Log:
+- ASSESSMENT: worklog review + lint clean + dev.log clean + browser sweep (feed/chats/admin, 0 console errors). Chose feature round; fixed all bugs found during QA (see below).
+- FEATURE 1 — FACEBOOK-STYLE MESSAGE REACTIONS (the big one):
+  * Schema: Reaction model (messageId+userId @@unique, emoji, cascade delete); Message.relations; db:push OK.
+  * API: POST /api/messages/[id]/react {emoji} — toggle semantics (add / switch / remove), emoji whitelist 👍❤️😂😮😢👎, member-only, 423 on blocked chats, 400 on system messages; returns aggregated snapshot {emoji,count,userIds[]}[].
+  * DTO: MessageDTO.reactions: MessageReactionGroup[] (client derives "mine" via userIds — works for realtime broadcast without per-viewer DTO); thread GET includes reactions.
+  * Realtime: RT_EVENTS.chatReaction → both parties; client applies snapshot to message in state.
+  * UI (ChatsView MessageBubble restructured to column: row + chips + lightbox): SmilePlus react button on bubble hover (both sides, like copy button), FB-style quick-picker pill (6 emojis, zoom-in animation, scale-1.35 hover, my-emoji highlight) opening above bubble via tap/click, close on outside pointerdown / pick; Messenger-style reaction chips under bubble (emoji + count, mine = blue border + ring, hover scale-110, click toggles).
+- BUG FOUND & FIXED: realtime events dead since restart — `RT.chatReaction` key was MISSING from src/lib/socket.ts RT map → onEvent(undefined) registered wrong handler key. Debugged via raw socket client (direct :3003 ✓) → gateway client (✓) → in-app debug handle (window.__ssSocket, kept as permanent QA aid) → proved transport fine, handler key wrong. Added RT.chatReaction; verified bidirectional live delivery <1.5s. LESSON: `bun run lint` does NOT type-check — run `bunx tsc --noEmit` (src/ clean; examples/skills folders have pre-existing errors, not part of app).
+- FEATURE 2 — PASTE-TO-SEND: composer Input onPaste → clipboard image items → fileToCompactDataUrl → existing sendImage flow (e.preventDefault only when image present, text paste unaffected). Verified with synthetic ClipboardEvent+DataTransfer PNG → optimistic bubble → persisted server-side (📷 Photo, 160KB data URL).
+- FEATURE 3 — ADMIN CONTENT MODERATION (completes trust & safety loop):
+  * Schema: hidden Boolean @default(false) on DigitalGood + Course + TuitionPost; db:push OK (dev server restart needed for fresh PrismaClient).
+  * API: POST /api/admin/moderate-content {type GOOD|COURSE|TUITION, id, hidden} (admin-only, owner notified on hide); POST /api/admin/reports/[id] gained hideContent flag (resolve+hide in one step); GET /api/admin/reports snapshot gained targetHidden.
+  * Filtering: feed (all 3 kinds), /api/saved, /api/users/[id] posts now exclude hidden listings — hidden content vanishes from feed, stores, saved lists and profiles.
+  * UI (AdminView ReportCard): "Remove Listing"/"Restore Listing" button (amber/green) on GOOD/COURSE/TUITION reports, HIDDEN chip + strikethrough title in snapshot; Resolve/Dismiss now open Popovers with optional moderator-note Textarea (saved + shown on card) + "Also remove the listing" checkbox on Resolve; toasts report both actions.
+  * e2e verified: Remove Listing → DB hidden=true, gone from Store + feed API, admin card HIDDEN chip; Restore → visible again; Resolve w/ checkbox+note → report RESOLVED, note saved, good hidden, seller (Alina) got "Your listing was removed from the store" notification; stats accurate (open 1 / resolved 2).
+- STYLING POLISH: FbCard (all feed cards) now has definition ring (ring-black/[0.04] dark:ring-white/[0.06]) + hover lift (-translate-y-px) + shadow deepen (card-shadow-md) transition; Messenger-style 4px rounded active-indicator bar on the active chat row; reaction picker/chips animations (zoom-in-95, scale on hover, highlight states).
+- agent-browser QA: reactions toggle on/off, live sync both directions (session A Warren ↔ session B Alina), dark mode chips/picker coherent, mobile 390 picker + chips fit viewport, paste-to-send e2e, admin hide/restore/resolve flows, light mode preserved. Lint 0 errors, tsc src/ clean, dev.log 0 runtime errors.
+- QA artifacts: download/qa10-*.png (login/feed/chats/thread/reaction/reactions-dark/mobile-chats/mobile-picker/picker-light).
+- Demo state notes: Warren↔Alina chat has ❤️ both ways; Mukesh (session c QA) spent 13 coins → new PENDING chat with Ahmed; grammar workbook report RESOLVED w/ note, good restored & visible; 1 OPEN report (Fatima→Adani) remains for demo.
+
+Stage Summary:
+- Chat is now fully Facebook-grade: reactions (live-synced), photo paste-to-send, emoji picker, copy, read receipts, typing, presence. Admin moderation can now take listings down (hide/restore + resolve-with-remove + notes + owner notifications) — completing the report→review→action loop. Realtime regression caught and fixed (missing RT key); QA hardened with __ssSocket debug handle. Next ideas: PWA service worker (offline shell), chat message deletion, per-message reaction long-press UX, admin analytics.

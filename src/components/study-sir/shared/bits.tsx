@@ -13,7 +13,18 @@ import { fullDate } from './format'
 
 /** Facebook-style white card container. */
 export function FbCard({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cn('card-shadow rounded-xl bg-card', className)}>{children}</div>
+  return (
+    <div
+      className={cn(
+        // subtle FB-like card: definition ring in both themes, shadow deepens + lifts 1px on hover
+        'card-shadow rounded-xl bg-card ring-1 ring-black/[0.04] transition-[box-shadow,transform] duration-200',
+        'hover:-translate-y-px hover:card-shadow-md dark:ring-white/[0.06]',
+        className
+      )}
+    >
+      {children}
+    </div>
+  )
 }
 
 export function CardSkeleton() {

@@ -243,6 +243,17 @@ export function toConnectionDTO(
 }
 
 export function toMessageDTO(m: AnyRecord): MessageDTO {
+  // Aggregate reaction rows into emoji groups (client derives "mine" from userIds)
+  const raw = Array.isArray(m.reactions) ? (m.reactions as AnyRecord[]) : []
+  const groups = new Map<string, string[]>()
+  for (const r of raw) {
+    const emoji = r.emoji as string
+    const uid = ((r.userId as string) ?? ((r.user as AnyRecord | undefined)?.id as string)) || ''
+    if (!emoji) continue
+    const arr = groups.get(emoji) ?? []
+    if (uid) arr.push(uid)
+    groups.set(emoji, arr)
+  }
   return {
     id: m.id as string,
     connectionId: m.connectionId as string,
@@ -253,6 +264,7 @@ export function toMessageDTO(m: AnyRecord): MessageDTO {
     system: m.system as boolean,
     createdAt: (m.createdAt as Date).toISOString(),
     readAt: m.readAt ? (m.readAt as Date).toISOString() : null,
+    reactions: [...groups.entries()].map(([emoji, userIds]) => ({ emoji, count: userIds.length, userIds })),
   }
 }
 
@@ -277,6 +289,8 @@ export function toReportDTO(r: AnyRecord): ReportDTO {
     /** snapshot of the reported content (good/course/tuition) when applicable */
     targetLabel: (r.targetLabel as string) ?? null,
     targetImage: (r.targetImage as string) ?? null,
+    /** snapshot: is the reported listing currently soft-hidden by moderation? */
+    targetHidden: Boolean(r.targetHidden),
   }
 }
 

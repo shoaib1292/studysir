@@ -51,6 +51,7 @@ model User {
   saves           Save[]
   reportsMade     Report[]     @relation("reporter")
   reportsAgainst  Report[]     @relation("reportedUser")
+  reactions       Reaction[]
 }
 
 // mode: ONLINE | HOME | CENTER  | status: OPEN | HIRED | CLOSED
@@ -70,6 +71,7 @@ model TuitionPost {
   timing        String?
   coinCost      Int      @default(10)
   status        String   @default("OPEN")
+  hidden        Boolean  @default(false) // moderation: soft-hidden from feeds
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -113,6 +115,21 @@ model Message {
   system       Boolean    @default(false)
   readAt       DateTime?
   createdAt    DateTime   @default(now())
+
+  reactions Reaction[]
+}
+
+// Facebook-style message reactions (one per user per message, toggle to change)
+model Reaction {
+  id        String   @id @default(cuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  emoji     String
+  createdAt DateTime @default(now())
+
+  @@unique([messageId, userId])
 }
 
 model Course {
@@ -131,6 +148,7 @@ model Course {
   format         String?
   fee            Float    @default(0)
   status         String   @default("OPEN")
+  hidden         Boolean  @default(false) // moderation: soft-hidden from feeds
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }
@@ -234,6 +252,7 @@ model DigitalGood {
   image       String?
   price       Float    @default(0)
   fileUrl     String?
+  hidden      Boolean  @default(false) // moderation: soft-hidden from feeds
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
