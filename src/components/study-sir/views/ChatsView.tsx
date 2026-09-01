@@ -9,17 +9,20 @@ import {
   Check,
   CheckCheck,
   Coins,
+  Copy,
   Flag,
   GraduationCap,
   Handshake,
   MessageCircle,
   Search,
   SendHorizonal,
+  Smile,
   X,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { api, errorMessage } from '@/lib/api'
@@ -143,10 +146,109 @@ function DayChip({ label }: { label: string }) {
   )
 }
 
-function MessageBubble({ message, mine }: { message: MessageDTO; mine: boolean }) {
+/** Messenger-style divider marking the first unseen message. */
+function UnreadDivider({ count }: { count: number }) {
   return (
-    <div className={cn('flex items-end gap-2 animate-in fade-in slide-in-from-bottom-1 duration-200', mine ? 'justify-end' : 'justify-start')}>
+    <div className="my-2 flex items-center gap-2" role="separator" aria-label={`${count} new messages`}>
+      <span className="h-px flex-1 bg-blue-500/30" />
+      <span className="rounded-full bg-blue-500/10 px-2.5 py-0.5 text-[10px] font-bold text-[#1877F2] dark:text-blue-400">
+        {count} new {count === 1 ? 'message' : 'messages'}
+      </span>
+      <span className="h-px flex-1 bg-blue-500/30" />
+    </div>
+  )
+}
+
+const EMOJIS = [
+  '😀', '😂', '🥰', '😊', '😎', '🤔', '😴', '😭',
+  '😡', '🤩', '😅', '😇', '👍', '👎', '👏', '🙏',
+  '💪', '🤝', '✌️', '👋', '🔥', '⭐', '❤️', '💚',
+  '💙', '🎉', '🎓', '📚', '✏️', '📅', '⏰', '💰',
+]
+
+function EmojiPicker({ onPick }: { onPick: (emoji: string) => void }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label="Insert emoji"
+          className="grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <Smile className="size-5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" side="top" className="w-[248px] p-2">
+        <p className="px-1 pb-1.5 text-[11px] font-semibold text-muted-foreground">Frequently used</p>
+        <div className="grid grid-cols-8 gap-0.5">
+          {EMOJIS.map((e) => (
+            <button
+              key={e}
+              type="button"
+              aria-label={`Insert ${e}`}
+              onClick={() => onPick(e)}
+              className="grid size-7 place-items-center rounded text-lg leading-none transition-transform hover:scale-125 hover:bg-muted"
+            >
+              {e}
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch {
+    // fall through to legacy path (insecure context)
+  }
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(ta)
+    return ok
+  } catch {
+    return false
+  }
+}
+
+function MessageBubble({ message, mine }: { message: MessageDTO; mine: boolean }) {
+  const [copied, setCopied] = useState(false)
+
+  async function onCopy() {
+    const ok = await copyText(message.content)
+    if (ok) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1200)
+    } else {
+      toast.error('Could not copy message')
+    }
+  }
+
+  return (
+    <div className={cn('group flex items-end gap-2 animate-in fade-in slide-in-from-bottom-1 duration-200', mine ? 'justify-end' : 'justify-start')}>
       {!mine ? <UserAvatar src={message.sender.avatar} name={message.sender.name} className="mb-1 size-7" /> : null}
+      {!mine ? (
+        <button
+          type="button"
+          aria-label="Copy message"
+          title="Copy"
+          onClick={onCopy}
+          className="mb-1.5 grid size-6 shrink-0 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100"
+        >
+          {copied ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5" />}
+        </button>
+      ) : null}
       <div
         className={cn(
           'max-w-[78%] rounded-2xl px-3.5 py-2',
@@ -165,6 +267,17 @@ function MessageBubble({ message, mine }: { message: MessageDTO; mine: boolean }
           ) : null}
         </div>
       </div>
+      {mine ? (
+        <button
+          type="button"
+          aria-label="Copy message"
+          title="Copy"
+          onClick={onCopy}
+          className="mb-1.5 grid size-6 shrink-0 place-items-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100"
+        >
+          {copied ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5" />}
+        </button>
+      ) : null}
     </div>
   )
 }
@@ -208,19 +321,33 @@ function ChatThread({
   const [reportReason, setReportReason] = useState('')
   const [typingName, setTypingName] = useState<string | null>(null)
   const [showJump, setShowJump] = useState(false)
+  /** snapshot of unseen messages when the thread was first opened (drives the "new" divider) */
+  const [unreadInfo, setUnreadInfo] = useState<{ count: number; firstId: string | null } | null>(null)
+  const unreadCaptured = useRef(false)
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastTypingSent = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const onlineIds = useAppStore((s) => s.onlineIds)
 
   const load = useCallback(async () => {
     try {
       const d = await api.getConnection(connectionId)
       setData(d)
+      if (!unreadCaptured.current) {
+        unreadCaptured.current = true
+        setUnreadInfo(d.unread)
+      }
       setFailed(false)
     } catch {
       setFailed(true)
     }
+  }, [connectionId])
+
+  // New thread → capture a fresh unread snapshot
+  useEffect(() => {
+    unreadCaptured.current = false
+    setUnreadInfo(null)
   }, [connectionId])
 
   useEffect(() => {
@@ -399,15 +526,20 @@ function ChatThread({
     }
   }
 
-  // Build message nodes with system rows + day chips
+  // Build message nodes with system rows + day chips + unread divider
   const messageNodes: ReactNode[] = []
   if (data) {
     let prevDay = ''
+    let dividerPlaced = false
     for (const m of data.messages) {
       const day = dayLabel(m.createdAt)
       if (day !== prevDay) {
         messageNodes.push(<DayChip key={`day-${m.id}`} label={day} />)
         prevDay = day
+      }
+      if (!dividerPlaced && unreadInfo?.firstId && m.id === unreadInfo.firstId) {
+        messageNodes.push(<UnreadDivider key={`unread-${m.id}`} count={unreadInfo.count} />)
+        dividerPlaced = true
       }
       if (m.system) messageNodes.push(<SystemMessage key={m.id} content={m.content} />)
       else messageNodes.push(<MessageBubble key={m.id} message={m} mine={m.senderId === me.id} />)
@@ -545,8 +677,15 @@ function ChatThread({
             </div>
           </div>
         ) : (
-          <form onSubmit={send} className="flex gap-2 p-3">
+          <form onSubmit={send} className="flex items-center gap-2 p-3">
+            <EmojiPicker
+              onPick={(emoji) => {
+                setDraft((d) => d + emoji)
+                inputRef.current?.focus()
+              }}
+            />
             <Input
+              ref={inputRef}
               value={draft}
               onChange={(e) => handleDraftChange(e.target.value)}
               placeholder="Write your message"

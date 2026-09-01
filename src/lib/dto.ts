@@ -61,7 +61,7 @@ export async function likeInfo(targetType: string, targetId: string, viewerId?: 
 }
 
 export async function toTuitionDTO(t: AnyRecord, viewerId?: string | null): Promise<TuitionPostDTO> {
-  const [like, connCount, existing, authorRating] = await Promise.all([
+  const [like, connCount, existing, authorRating, saved] = await Promise.all([
     likeInfo('TUITION', t.id as string, viewerId),
     db.connection.count({ where: { tuitionPostId: t.id } }),
     viewerId
@@ -77,6 +77,12 @@ export async function toTuitionDTO(t: AnyRecord, viewerId?: string | null): Prom
       where: { targetId: (t.author as AnyRecord).id as string },
       select: { rating: true },
     }),
+    viewerId
+      ? db.save.findUnique({
+          where: { userId_tuitionPostId: { userId: viewerId, tuitionPostId: t.id as string } },
+          select: { id: true },
+        })
+      : Promise.resolve(null),
   ])
   const avg = authorRating.length ? authorRating.reduce((a, r) => a + r.rating, 0) / authorRating.length : 0
   return {
@@ -97,6 +103,7 @@ export async function toTuitionDTO(t: AnyRecord, viewerId?: string | null): Prom
     status: t.status as TuitionPostDTO['status'],
     likeCount: like.likeCount,
     myLike: like.myLike,
+    mySave: Boolean(saved),
     createdAt: (t.createdAt as Date).toISOString(),
     connectionCount: connCount,
     existingConnectionId: existing?.id ?? null,
@@ -105,7 +112,21 @@ export async function toTuitionDTO(t: AnyRecord, viewerId?: string | null): Prom
 }
 
 export async function toCourseDTO(c: AnyRecord, viewerId?: string | null): Promise<CourseDTO> {
-  const like = await likeInfo('COURSE', c.id as string, viewerId)
+  const [like, myConn] = await Promise.all([
+    likeInfo('COURSE', c.id as string, viewerId),
+    viewerId
+      ? db.connection.findFirst({
+          // mirrors the reuse-check in POST /api/connections: any live chat with
+          // this teacher (tuition-post based or direct) is reused for course joins
+          where: {
+            teacherId: c.teacherId as string,
+            studentId: viewerId,
+            status: { in: ['PENDING', 'ACTIVE'] },
+          },
+          select: { id: true, status: true },
+        })
+      : Promise.resolve(null),
+  ])
   const fee = (c.fee as number) ?? 0
   return {
     id: c.id as string,
@@ -126,6 +147,8 @@ export async function toCourseDTO(c: AnyRecord, viewerId?: string | null): Promi
     myLike: like.myLike,
     createdAt: (c.createdAt as Date).toISOString(),
     connectionCost: Math.min(50, Math.max(5, 5 + Math.round(fee / 10))),
+    myConnectionId: myConn?.id ?? null,
+    myConnectionStatus: (myConn?.status as 'PENDING' | 'ACTIVE') ?? null,
   }
 }
 

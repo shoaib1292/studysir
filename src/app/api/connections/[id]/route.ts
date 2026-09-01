@@ -18,6 +18,13 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     const isMember = [connection.teacherId, connection.studentId, connection.payerId].includes(me.id)
     if (!isMember) return NextResponse.json({ error: 'Not allowed' }, { status: 403 })
 
+    // Snapshot unseen incoming messages BEFORE marking read (drives the "new messages" divider)
+    const unseen = await db.message.findMany({
+      where: { connectionId: id, senderId: { not: me.id }, readAt: null, system: false },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    })
+
     // Mark incoming messages as read
     const marked = await db.message.updateMany({
       where: { connectionId: id, senderId: { not: me.id }, readAt: null },
@@ -36,8 +43,9 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     })
 
     return NextResponse.json({
-      connection: toConnectionDTO(connection as never, me.id, null, 0),
+      connection: toConnectionDTO(connection as never, me.id, null, unseen.length),
       messages: messages.map((m) => toMessageDTO(m as never)),
+      unread: unseen.length > 0 ? { count: unseen.length, firstId: unseen[0].id } : null,
     })
   } catch (e) {
     if (e instanceof HttpError) return NextResponse.json({ error: e.message }, { status: e.status })

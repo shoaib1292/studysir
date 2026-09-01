@@ -12,6 +12,7 @@ import type {
   ProfileStats,
   ReviewDTO,
   StudentDTO,
+  ThreadResponse,
   TuitionPostDTO,
   UserDTO,
 } from '@/lib/types'
@@ -150,6 +151,11 @@ export const api = {
     request<{ tuition: TuitionPostDTO }>('/api/tuition', { method: 'POST', body }),
   updateTuition: (id: string, body: { status: string }) =>
     request<{ tuition: TuitionPostDTO }>(`/api/tuition/${id}`, { method: 'PATCH', body }),
+  /** Toggle a tuition-post bookmark ("Saved" list). */
+  toggleSave: (id: string) =>
+    request<{ saved: boolean }>(`/api/tuition/${id}/save`, { method: 'POST' }),
+  /** Bookmarked tuition posts (newest save first). */
+  getSaved: () => request<{ items: TuitionPostDTO[] }>('/api/saved'),
 
   // courses / goods
   createCourse: (body: CourseInput) => request<{ course: CourseDTO }>('/api/courses', { method: 'POST', body }),
@@ -158,7 +164,7 @@ export const api = {
 
   // connections / chats
   getConnections: () => request<{ connections: ConnectionDTO[] }>('/api/connections'),
-  getConnection: (id: string) => request<{ connection: ConnectionDTO; messages: MessageDTO[] }>(`/api/connections/${id}`),
+  getConnection: (id: string) => request<ThreadResponse>(`/api/connections/${id}`),
   createConnection: (body: { tuitionPostId?: string; teacherId?: string; courseId?: string }) =>
     request<{ connection: ConnectionDTO }>('/api/connections', { method: 'POST', body }),
   sendMessage: (id: string, content: string) =>

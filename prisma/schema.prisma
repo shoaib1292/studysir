@@ -46,6 +46,7 @@ model User {
   notifications   Notification[]
   likes           Like[]
   availabilities  Availability[]
+  saves           Save[]
 }
 
 // mode: ONLINE | HOME | CENTER  | status: OPEN | HIRED | CLOSED
@@ -69,6 +70,7 @@ model TuitionPost {
   updatedAt     DateTime @updatedAt
 
   connections Connection[]
+  saves       Save[]
 }
 
 // status: PENDING | ACTIVE | HIRED | REJECTED | EXPIRED  (REFUNDED reflected via refunded flag)
@@ -203,6 +205,18 @@ model Purchase {
   good       DigitalGood @relation(fields: [goodId], references: [id])
   amount     Float
   createdAt  DateTime    @default(now())
+}
+
+// Bookmarked tuition posts ("Saved" list)
+model Save {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id])
+  tuitionPostId String
+  tuitionPost   TuitionPost @relation(fields: [tuitionPostId], references: [id])
+  createdAt     DateTime    @default(now())
+
+  @@unique([userId, tuitionPostId])
 }
 
 model DigitalGood {

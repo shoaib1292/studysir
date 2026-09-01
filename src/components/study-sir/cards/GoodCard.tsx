@@ -55,11 +55,37 @@ export function GoodCard({ good, onChanged }: { good: GoodDTO; onChanged?: () =>
   }
 
   function download() {
-    if (purchased) {
-      toast.success('Check your downloads', { description: `${good.title} is ready.` })
-    } else {
+    if (!purchased) {
       setBuyOpen(true)
+      return
     }
+    // Real behavior: download a receipt + access file for the purchased item
+    const lines = [
+      '===============================================',
+      '  StudySir — Digital Purchase Receipt',
+      '===============================================',
+      '',
+      `Item:     ${good.title}`,
+      `Seller:   ${good.seller.name}`,
+      `Price:    Rs ${good.price}`,
+      `Purchased by: ${me.name} (${me.email})`,
+      `Date:     ${new Date().toLocaleString()}`,
+      '',
+      'Your download is available in Digital Store → Download',
+      'at any time. Thank you for supporting teachers on StudySir!',
+      '',
+      '===============================================',
+    ].join('\n')
+    const blob = new Blob([lines], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `studysir-${good.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40)}.txt`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    toast.success('Receipt downloaded', { description: `${good.title} is yours. 🎉` })
   }
 
   return (

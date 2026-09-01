@@ -45,6 +45,8 @@ export interface TuitionPostDTO {
   status: 'OPEN' | 'HIRED' | 'CLOSED'
   likeCount: number
   myLike: boolean
+  /** viewer bookmarked this post (drives the Save/bookmark button) */
+  mySave: boolean
   createdAt: string
   connectionCount?: number
   existingConnectionId?: string | null
@@ -69,6 +71,9 @@ export interface CourseDTO {
   myLike: boolean
   createdAt: string
   connectionCost: number
+  /** viewer's live PENDING/ACTIVE chat with this course teacher (null = never joined) */
+  myConnectionId: string | null
+  myConnectionStatus: 'PENDING' | 'ACTIVE' | null
 }
 
 export interface GoodDTO {
@@ -138,6 +143,14 @@ export interface ConnectionDTO {
   unreadCount: number
 }
 
+/** GET /api/connections/:id response — unread snapshot captured BEFORE marking read. */
+export interface ThreadResponse {
+  connection: ConnectionDTO
+  messages: MessageDTO[]
+  /** messages from the other party that were unseen when the thread was opened */
+  unread: { count: number; firstId: string | null } | null
+}
+
 export interface CoinTransactionDTO {
   id: string
   amount: number
@@ -205,7 +218,9 @@ export interface StudentDTO {
 // POST /api/goods/:id/buy                -> { ok: true, money }  (money wallet purchase; 402 if insufficient)
 // GET  /api/connections                  -> { connections: ConnectionDTO[] }
 // POST /api/connections { tuitionPostId? , teacherId?, courseId? } -> { connection } | 402 { error }
-// GET  /api/connections/:id              -> { connection, messages: MessageDTO[] }
+// GET  /api/connections/:id              -> { connection, messages, unread: {count,firstId} | null }
+// GET  /api/saved                        -> { items: TuitionPostDTO[] }  (bookmarked tuition posts, newest save first)
+// POST /api/tuition/:id/save             -> { saved: boolean }  (toggle bookmark)
 // POST /api/connections/:id/messages { content } -> { message }
 // POST /api/connections/:id/decide { action: 'HIRE'|'REJECT'|'BLOCK'|'UNBLOCK'|'REPORT' } -> { connection }
 // GET  /api/wallet                       -> { coins, money, transactions: CoinTransactionDTO[] }

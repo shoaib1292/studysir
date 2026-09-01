@@ -1,0 +1,814 @@
+     1→'use client'
+     2→
+     3→import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+     4→import type { FormEvent, ReactNode } from 'react'
+     5→import {
+     6→  ArrowDown,
+     7→  ArrowLeft,
+     8→  Ban,
+     9→  Check,
+    10→  CheckCheck,
+    11→  Coins,
+    12→  Flag,
+    13→  GraduationCap,
+    14→  Handshake,
+    15→  MessageCircle,
+    16→  Search,
+    17→  SendHorizonal,
+    18→  X,
+    19→} from 'lucide-react'
+    20→import { Badge } from '@/components/ui/badge'
+    21→import { Button } from '@/components/ui/button'
+    22→import { Input } from '@/components/ui/input'
+    23→import { Skeleton } from '@/components/ui/skeleton'
+    24→import { Textarea } from '@/components/ui/textarea'
+    25→import { api, errorMessage } from '@/lib/api'
+    26→import type { ConnectionDTO, MessageDTO } from '@/lib/types'
+    27→import { emitTyping, getSocket, onEvent, offEvent, RT } from '@/lib/socket'
+    28→import { toast } from 'sonner'
+    29→import { cn } from '@/lib/utils'
+    30→import { useAppStore } from '@/store/useAppStore'
+    31→import { ConfirmDialog } from '../dialogs/ConfirmDialog'
+    32→import { CONNECTION_CHIP, CONNECTION_DOT } from '../shared/constants'
+    33→import { clockTime, dayLabel, lastSeenLabel, timeAgo } from '../shared/format'
+    34→import { EmptyState } from '../shared/EmptyState'
+    35→import { UserAvatar } from '../shared/UserAvatar'
+    36→
+    37→// ===== Chat list =====
+    38→
+    39→function otherParty(connection: ConnectionDTO, meId: string) {
+    40→  return connection.student.id === meId ? connection.teacher : connection.student
+    41→}
+    42→
+    43→function previewText(connection: ConnectionDTO, meId: string): { text: string; italic: boolean } {
+    44→  const lm = connection.lastMessage
+    45→  if (!lm) return { text: 'New connection request — say hi!', italic: false }
+    46→  const involvesMe = lm.senderId === meId
+    47→  const isParty = lm.senderId === connection.teacher.id || lm.senderId === connection.student.id
+    48→  if (!isParty) return { text: lm.content, italic: true } // system message
+    49→  return { text: involvesMe ? `You: ${lm.content}` : lm.content, italic: false }
+    50→}
+    51→
+    52→function ConnectionRow({
+    53→  connection,
+    54→  meId,
+    55→  active,
+    56→  online,
+    57→  onSelect,
+    58→}: {
+    59→  connection: ConnectionDTO
+    60→  meId: string
+    61→  active: boolean
+    62→  online: boolean
+    63→  onSelect: () => void
+    64→}) {
+    65→  const other = otherParty(connection, meId)
+    66→  const preview = previewText(connection, meId)
+    67→  const chip = CONNECTION_CHIP[connection.status]
+    68→  const when = connection.lastMessage?.createdAt ?? connection.createdAt
+    69→  const hasUnread = connection.unreadCount > 0
+    70→
+    71→  return (
+    72→    <button
+    73→      type="button"
+    74→      onClick={onSelect}
+    75→      className={cn(
+    76→        'flex w-full gap-3 p-3 text-left transition-colors hover:bg-muted',
+    77→        active && 'bg-blue-500/10 hover:bg-blue-500/10',
+    78→        hasUnread && !active && 'bg-blue-500/[0.04]'
+    79→      )}
+    80→    >
+    81→      <div className="relative shrink-0">
+    82→        <UserAvatar src={other.avatar} name={other.name} className="size-12" />
+    83→        <span
+    84→          className={cn(
+    85→            'absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-card',
+    86→            CONNECTION_DOT[connection.status]
+    87→          )}
+    88→        />
+    89→        {online ? (
+    90→          <span
+    91→            aria-label="Online now"
+    92→            title="Active now"
+    93→            className="absolute -right-0.5 -top-0.5 h-3 w-3 animate-pulse rounded-full border-2 border-card bg-green-500"
+    94→          />
+    95→        ) : null}
+    96→      </div>
+    97→
+    98→      <div className="min-w-0 flex-1">
+    99→        <div className="flex items-center gap-2">
+   100→          <p className={cn('min-w-0 flex-1 truncate text-[15px]', hasUnread ? 'font-extrabold' : 'font-semibold')}>
+   101→            {other.name}
+   102→          </p>
+   103→          <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold', chip.className)}>
+   104→            {chip.label}
+   105→          </span>
+   106→        </div>
+   107→        <p
+   108→          className={cn(
+   109→            'mt-0.5 truncate text-xs',
+   110→            hasUnread ? 'font-medium text-foreground/90' : 'text-muted-foreground',
+   111→            preview.italic && 'italic'
+   112→          )}
+   113→        >
+   114→          {preview.text}
+   115→        </p>
+   116→        <p className="mt-0.5 text-[10px] text-muted-foreground">{timeAgo(when)}</p>
+   117→      </div>
+   118→
+   119→      {connection.unreadCount > 0 ? (
+   120→        <Badge className="mt-1 h-5 min-w-5 shrink-0 rounded-full bg-[#1877F2] px-1.5 text-[10px]">
+   121→          {connection.unreadCount > 9 ? '9+' : connection.unreadCount}
+   122→        </Badge>
+   123→      ) : null}
+   124→    </button>
+   125→  )
+   126→}
+   127→
+   128→// ===== Chat thread =====
+   129→
+   130→function SystemMessage({ content }: { content: string }) {
+   131→  return (
+   132→    <div className="mx-auto w-fit max-w-[85%] rounded-full bg-foreground/10 px-3 py-1 text-center text-[11px] text-foreground/80">
+   133→      {content}
+   134→    </div>
+   135→  )
+   136→}
+   137→
+   138→function DayChip({ label }: { label: string }) {
+   139→  return (
+   140→    <div className="my-2 flex w-fit mx-auto rounded-full bg-card px-3 py-1 text-[10px] font-medium text-muted-foreground shadow-sm">
+   141→      {label}
+   142→    </div>
+   143→  )
+   144→}
+   145→
+   146→function MessageBubble({ message, mine }: { message: MessageDTO; mine: boolean }) {
+   147→  return (
+   148→    <div className={cn('flex items-end gap-2 animate-in fade-in slide-in-from-bottom-1 duration-200', mine ? 'justify-end' : 'justify-start')}>
+   149→      {!mine ? <UserAvatar src={message.sender.avatar} name={message.sender.name} className="mb-1 size-7" /> : null}
+   150→      <div
+   151→        className={cn(
+   152→          'max-w-[78%] rounded-2xl px-3.5 py-2',
+   153→          mine ? 'rounded-br-md bg-[#1877F2] text-white' : 'rounded-bl-md bg-card shadow-sm'
+   154→        )}
+   155→      >
+   156→        <p className="whitespace-pre-line break-words text-[15px]">{message.content}</p>
+   157→        <div className="mt-0.5 flex items-center justify-end gap-1">
+   158→          <span className="text-[10px] opacity-70">{clockTime(message.createdAt)}</span>
+   159→          {mine && !message.system ? (
+   160→            message.readAt ? (
+   161→              <CheckCheck className="size-3.5 text-blue-200" aria-label="Read" />
+   162→            ) : (
+   163→              <Check className="size-3.5 opacity-70" aria-label="Sent" />
+   164→            )
+   165→          ) : null}
+   166→        </div>
+   167→      </div>
+   168→    </div>
+   169→  )
+   170→}
+   171→
+   172→function TypingBubble({ name }: { name: string }) {
+   173→  return (
+   174→    <div className="flex items-end gap-2 animate-in fade-in slide-in-from-bottom-1 duration-200" aria-live="polite">
+   175→      <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-md bg-card px-3.5 py-2.5 shadow-sm">
+   176→        <span className="sr-only">{name} is typing</span>
+   177→        {[0, 1, 2].map((i) => (
+   178→          <span
+   179→            key={i}
+   180→            className="size-1.5 animate-bounce rounded-full bg-muted-foreground/70"
+   181→            style={{ animationDelay: `${i * 150}ms` }}
+   182→          />
+   183→        ))}
+   184→      </div>
+   185→    </div>
+   186→  )
+   187→}
+   188→
+   189→type ThreadDialog = 'hire' | 'reject' | 'block' | 'report' | null
+   190→
+   191→function ChatThread({
+   192→  connectionId,
+   193→  onListChanged,
+   194→}: {
+   195→  connectionId: string
+   196→  onListChanged: () => void
+   197→}) {
+   198→  const me = useAppStore((s) => s.me)!
+   199→  const back = useAppStore((s) => s.back)
+   200→  const refreshMe = useAppStore((s) => s.refreshMe)
+   201→
+   202→  const [data, setData] = useState<{ connection: ConnectionDTO; messages: MessageDTO[] } | null>(null)
+   203→  const [failed, setFailed] = useState(false)
+   204→  const [draft, setDraft] = useState('')
+   205→  const [sending, setSending] = useState(false)
+   206→  const [busy, setBusy] = useState(false)
+   207→  const [dialog, setDialog] = useState<ThreadDialog>(null)
+   208→  const [reportReason, setReportReason] = useState('')
+   209→  const [typingName, setTypingName] = useState<string | null>(null)
+   210→  const [showJump, setShowJump] = useState(false)
+   211→  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+   212→  const lastTypingSent = useRef(0)
+   213→  const scrollRef = useRef<HTMLDivElement>(null)
+   214→  const onlineIds = useAppStore((s) => s.onlineIds)
+   215→
+   216→  const load = useCallback(async () => {
+   217→    try {
+   218→      const d = await api.getConnection(connectionId)
+   219→      setData(d)
+   220→      setFailed(false)
+   221→    } catch {
+   222→      setFailed(true)
+   223→    }
+   224→  }, [connectionId])
+   225→
+   226→  useEffect(() => {
+   227→    void load()
+   228→  }, [load])
+   229→
+   230→  // Realtime: live messages, status changes, read receipts + typing indicator.
+   231→  // A slow interval poll stays as a safety net for missed events.
+   232→  useEffect(() => {
+   233→    // ensure socket identity, then subscribe
+   234→    getSocket(me.id, me.name)
+   235→
+   236→    const onMessage = (p: { connectionId?: string; message?: MessageDTO }) => {
+   237→      if (!p || p.connectionId !== connectionId) return
+   238→      if (p.message && p.message.senderId === me.id) return // own messages handled by send flow
+   239→      void load()
+   240→    }
+   241→    const onUpdated = (p: { connectionId?: string }) => {
+   242→      if (!p || p.connectionId !== connectionId) return
+   243→      void load()
+   244→      onListChanged()
+   245→    }
+   246→    const onRead = (p: { connectionId?: string }) => {
+   247→      if (!p || p.connectionId !== connectionId) return
+   248→      setData((d) =>
+   249→        d
+   250→          ? {
+   251→              ...d,
+   252→              messages: d.messages.map((m) =>
+   253→                m.senderId === me.id && !m.readAt ? { ...m, readAt: new Date().toISOString() } : m
+   254→              ),
+   255→            }
+   256→          : d
+   257→      )
+   258→    }
+   259→    const onTyping = (p: { connectionId?: string; userId?: string; name?: string; isTyping?: boolean }) => {
+   260→      if (!p || p.connectionId !== connectionId || p.userId === me.id) return
+   261→      if (typingTimer.current) clearTimeout(typingTimer.current)
+   262→      if (p.isTyping) {
+   263→        setTypingName(p.name || 'Someone')
+   264→        typingTimer.current = setTimeout(() => setTypingName(null), 3000)
+   265→      } else {
+   266→        setTypingName(null)
+   267→      }
+   268→    }
+   269→
+   270→    onEvent(RT.chatMessage, onMessage)
+   271→    onEvent(RT.chatUpdated, onUpdated)
+   272→    onEvent(RT.chatRead, onRead)
+   273→    onEvent('typing', onTyping)
+   274→
+   275→    const timer = setInterval(() => void load(), 15000)
+   276→    return () => {
+   277→      clearInterval(timer)
+   278→      offEvent(RT.chatMessage, onMessage)
+   279→      offEvent(RT.chatUpdated, onUpdated)
+   280→      offEvent(RT.chatRead, onRead)
+   281→      offEvent('typing', onTyping)
+   282→      if (typingTimer.current) clearTimeout(typingTimer.current)
+   283→    }
+   284→  }, [connectionId, load, onListChanged, me.id, me.name])
+   285→
+   286→  // Auto-scroll to the newest message (also when typing indicator appears)
+   287→  const messageCount = data?.messages.length ?? 0
+   288→  useEffect(() => {
+   289→    const el = scrollRef.current
+   290→    if (el) el.scrollTop = el.scrollHeight
+   291→  }, [messageCount, connectionId, typingName])
+   292→
+   293→  function handleScroll() {
+   294→    const el = scrollRef.current
+   295→    if (!el) return
+   296→    const distance = el.scrollHeight - el.scrollTop - el.clientHeight
+   297→    setShowJump(distance > 240)
+   298→  }
+   299→
+   300→  function jumpToLatest() {
+   301→    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+   302→  }
+   303→
+   304→  const connection = data?.connection
+   305→  const other = connection ? otherParty(connection, me.id) : null
+   306→  const otherOnline = !!other && onlineIds.includes(other.id)
+   307→
+   308→  const blocked = !!connection?.blockedBy
+   309→  const iBlocked = connection?.blockedBy === me.id
+   310→  const decided = !!connection && ['HIRED', 'REJECTED', 'EXPIRED'].includes(connection.status)
+   311→  const isPostOwner = connection?.student.id === me.id ?? false
+   312→  const showActions = !!connection && !blocked && !decided
+   313→
+   314→  function handleDraftChange(value: string) {
+   315→    setDraft(value)
+   316→    if (!connection || !other) return
+   317→    const now = Date.now()
+   318→    if (value.trim() && now - lastTypingSent.current > 1500) {
+   319→      lastTypingSent.current = now
+   320→      emitTyping(other.id, connectionId, true)
+   321→    } else if (!value.trim() && lastTypingSent.current) {
+   322→      lastTypingSent.current = 0
+   323→      emitTyping(other.id, connectionId, false)
+   324→    }
+   325→  }
+   326→
+   327→  async function send(e: FormEvent) {
+   328→    e.preventDefault()
+   329→    const content = draft.trim()
+   330→    if (!content || !connection || sending) return
+   331→    setSending(true)
+   332→    setDraft('')
+   333→    const optimistic: MessageDTO = {
+   334→      id: `tmp-${Date.now()}`,
+   335→      connectionId: connection.id,
+   336→      senderId: me.id,
+   337→      sender: { id: me.id, name: me.name, avatar: me.avatar },
+   338→      content,
+   339→      system: false,
+   340→      createdAt: new Date().toISOString(),
+   341→    }
+   342→    setData((d) => (d ? { ...d, messages: [...d.messages, optimistic] } : d))
+   343→    if (connection && other) emitTyping(other.id, connection.id, false)
+   344→    try {
+   345→      await api.sendMessage(connection.id, content)
+   346→      await load()
+   347→    } catch (err) {
+   348→      setData((d) => (d ? { ...d, messages: d.messages.filter((m) => m.id !== optimistic.id) } : d))
+   349→      setDraft(content)
+   350→      toast.error('Message not sent', { description: errorMessage(err) })
+   351→    } finally {
+   352→      setSending(false)
+   353→    }
+   354→  }
+   355→
+   356→  async function decide(action: 'HIRE' | 'REJECT' | 'BLOCK' | 'REPORT', reason?: string) {
+   357→    if (!connection || busy) return
+   358→    setBusy(true)
+   359→    try {
+   360→      const res = await api.decide(connection.id, action, reason)
+   361→      setData((d) => (d ? { ...d, connection: res.connection } : d))
+   362→      await refreshMe()
+   363→      if (action === 'HIRE') {
+   364→        toast.success('Teacher hired! 🎉', { description: 'Conversation is now locked.' })
+   365→      } else if (action === 'REJECT') {
+   366→        toast.success(
+   367→          'Request rejected',
+   368→          res.connection.refunded
+   369→            ? { description: `${res.connection.coinsSpent} coins refunded to the teacher.` }
+   370→            : { description: 'No coins were refunded — chat had already started.' }
+   371→        )
+   372→      } else if (action === 'BLOCK') {
+   373→        toast.success('User blocked')
+   374→      } else if (action === 'REPORT') {
+   375→        toast.success('Report submitted', { description: 'Our team will review it. Thank you.' })
+   376→      }
+   377→      setDialog(null)
+   378→      setReportReason('')
+   379→      onListChanged()
+   380→    } catch (err) {
+   381→      toast.error('Action failed', { description: errorMessage(err) })
+   382→    } finally {
+   383→      setBusy(false)
+   384→    }
+   385→  }
+   386→
+   387→  async function unblock() {
+   388→    if (!connection || busy) return
+   389→    setBusy(true)
+   390→    try {
+   391→      await api.decide(connection.id, 'UNBLOCK')
+   392→      toast.success('User unblocked', { description: 'You can chat again.' })
+   393→      await load()
+   394→      onListChanged()
+   395→    } catch (err) {
+   396→      toast.error('Could not unblock', { description: errorMessage(err) })
+   397→    } finally {
+   398→      setBusy(false)
+   399→    }
+   400→  }
+   401→
+   402→  // Build message nodes with system rows + day chips
+   403→  const messageNodes: ReactNode[] = []
+   404→  if (data) {
+   405→    let prevDay = ''
+   406→    for (const m of data.messages) {
+   407→      const day = dayLabel(m.createdAt)
+   408→      if (day !== prevDay) {
+   409→        messageNodes.push(<DayChip key={`day-${m.id}`} label={day} />)
+   410→        prevDay = day
+   411→      }
+   412→      if (m.system) messageNodes.push(<SystemMessage key={m.id} content={m.content} />)
+   413→      else messageNodes.push(<MessageBubble key={m.id} message={m} mine={m.senderId === me.id} />)
+   414→    }
+   415→  }
+   416→
+   417→  if (failed) {
+   418→    return (
+   419→      <div className="flex h-full flex-col items-center justify-center gap-2 bg-muted p-6 text-center">
+   420→        <EmptyState icon={MessageCircle} title="Chat not found" hint="It may have been removed." />
+   421→      </div>
+   422→    )
+   423→  }
+   424→
+   425→  return (
+   426→    <div className="flex h-full min-w-0 flex-col">
+   427→      {/* Blue header */}
+   428→      <div className="flex items-center gap-3 bg-gradient-to-r from-[#1877F2] to-[#0C63D8] p-3 text-white">
+   429→        <button
+   430→          type="button"
+   431→          onClick={back}
+   432→          aria-label="Back to chats"
+   433→          className="rounded-full p-1.5 transition-colors hover:bg-white/15 lg:hidden"
+   434→        >
+   435→          <ArrowLeft className="size-5" />
+   436→        </button>
+   437→        {other ? (
+   438→          <>
+   439→            <UserAvatar src={other.avatar} name={other.name} className="size-10 ring-2 ring-white/40" />
+   440→            <div className="min-w-0 flex-1">
+   441→              <p className="truncate font-bold leading-tight">{other.name}</p>
+   442→              <p className="truncate text-[11px] opacity-90">
+   443→                {typingName ? (
+   444→                  <span className="italic">typing…</span>
+   445→                ) : otherOnline ? (
+   446→                  <span className="flex items-center gap-1">
+   447→                    <span className="inline-block size-1.5 animate-pulse rounded-full bg-green-400" />
+   448→                    Active now
+   449→                  </span>
+   450→                ) : (
+   451→                  lastSeenLabel(connection?.lastMessage?.createdAt ?? connection?.createdAt ?? null)
+   452→                )}
+   453→              </p>
+   454→            </div>
+   455→            <div className="flex shrink-0 items-center gap-1.5">
+   456→              {connection?.tuitionPost ? (
+   457→                <span className="hidden max-w-[180px] items-center gap-1 truncate rounded-full bg-white/15 px-2 py-0.5 text-[11px] sm:flex">
+   458→                  <GraduationCap className="size-3 shrink-0" />
+   459→                  <span className="truncate">{connection.tuitionPost.title}</span>
+   460→                </span>
+   461→              ) : null}
+   462→              <span className="flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold">
+   463→                <Coins className="size-3" />
+   464→                {connection?.coinsSpent ?? 0} spent
+   465→              </span>
+   466→            </div>
+   467→          </>
+   468→        ) : (
+   469→          <div className="flex-1" />
+   470→        )}
+   471→      </div>
+   472→
+   473→      {/* Messages */}
+   474→      <div className="relative min-h-0 flex-1">
+   475→        <div ref={scrollRef} onScroll={handleScroll} className="absolute inset-0 space-y-1.5 overflow-y-auto bg-background p-4">
+   476→        {data === null ? (
+   477→          <div className="space-y-3">
+   478→            <Skeleton className="mx-auto h-5 w-24 rounded-full bg-card" />
+   479→            <Skeleton className="h-12 w-2/3 rounded-2xl bg-card" />
+   480→            <Skeleton className="ml-auto h-12 w-1/2 rounded-2xl bg-card/60" />
+   481→            <Skeleton className="h-12 w-2/3 rounded-2xl bg-card" />
+   482→          </div>
+   483→        ) : data.messages.length === 0 && !typingName ? (
+   484→          <div className="flex h-full items-center justify-center">
+   485→            <p className="rounded-full bg-card px-4 py-2 text-sm text-muted-foreground shadow-sm">
+   486→              Say hi 👋 — messages appear here
+   487→            </p>
+   488→          </div>
+   489→        ) : (
+   490→          <>
+   491→            {messageNodes}
+   492→            {typingName ? (
+   493→              <div className="pt-1">
+   494→                <TypingBubble name={typingName} />
+   495→              </div>
+   496→            ) : null}
+   497→          </>
+   498→        )}
+   499→        </div>
+   500→        {showJump ? (
+   501→          <button
+   502→            type="button"
+   503→            onClick={jumpToLatest}
+   504→            aria-label="Scroll to latest messages"
+   505→            className="absolute bottom-3 right-3 grid size-9 animate-in fade-in zoom-in-50 place-items-center rounded-full border bg-card text-muted-foreground shadow-md transition-colors hover:bg-muted hover:text-foreground duration-150"
+   506→          >
+   507→            <ArrowDown className="size-4" />
+   508→          </button>
+   509→        ) : null}
+   510→      </div>
+   511→
+   512→      {/* Bottom: banner / input / decision actions */}
+   513→      <div className="border-t bg-card">
+   514→        {blocked ? (
+   515→          <div className="p-3">
+   516→            <div className="flex items-center justify-between gap-2 rounded-lg bg-muted p-3 text-sm text-muted-foreground">
+   517→              <span>{iBlocked ? '🚫 You blocked this user. Unblock to chat again.' : '🚫 You are blocked by this user.'}</span>
+   518→              {iBlocked ? (
+   519→                <Button size="sm" variant="outline" onClick={unblock} disabled={busy}>
+   520→                  Unblock
+   521→                </Button>
+   522→              ) : null}
+   523→            </div>
+   524→          </div>
+   525→        ) : connection?.status === 'HIRED' ? (
+   526→          <div className="p-3">
+   527→            <div className="rounded-lg bg-green-500/10 p-3 text-sm text-green-700 dark:text-green-400">
+   528→              🎉 Hire confirmed. Conversation is locked.
+   529→              {connection.coinsSpent > 0 ? ` ${connection.coinsSpent} coins keep the platform running.` : ''}
+   530→            </div>
+   531→          </div>
+   532→        ) : connection?.status === 'REJECTED' ? (
+   533→          <div className="p-3">
+   534→            <div className="rounded-lg bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">
+   535→              Request rejected. Conversation closed.{' '}
+   536→              {connection.refunded
+   537→                ? `${connection.coinsSpent} coins refunded to teacher.`
+   538→                : 'Coins are not refunded after chat.'}
+   539→            </div>
+   540→          </div>
+   541→        ) : connection?.status === 'EXPIRED' ? (
+   542→          <div className="p-3">
+   543→            <div className="rounded-lg bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
+   544→              No reply within 10 days — coins auto-returned to teacher.
+   545→            </div>
+   546→          </div>
+   547→        ) : (
+   548→          <form onSubmit={send} className="flex gap-2 p-3">
+   549→            <Input
+   550→              value={draft}
+   551→              onChange={(e) => handleDraftChange(e.target.value)}
+   552→              placeholder="Write your message"
+   553→              className="rounded-full bg-muted"
+   554→              aria-label="Write your message"
+   555→            />
+   556→            <Button
+   557→              type="submit"
+   558→              size="icon"
+   559→              variant="ghost"
+   560→              disabled={!draft.trim() || sending}
+   561→              aria-label="Send message"
+   562→              className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-[#1877F2] hover:bg-blue-500/10 dark:text-blue-400"
+   563→            >
+   564→              <SendHorizonal className="size-5" />
+   565→            </Button>
+   566→          </form>
+   567→        )}
+   568→
+   569→        {showActions ? (
+   570→          <div className={cn('grid gap-2 px-3 pb-3', isPostOwner ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2')}>
+   571→            {isPostOwner ? (
+   572→              <>
+   573→                <Button
+   574→                  className="h-9 w-full rounded-lg bg-[#1877F2] text-sm font-bold text-white hover:bg-[#166FE5]"
+   575→                  onClick={() => setDialog('hire')}
+   576→                >
+   577→                  <Handshake className="size-4" />
+   578→                  Hire Teacher
+   579→                </Button>
+   580→                <Button
+   581→                  className="h-9 w-full rounded-lg bg-red-600 text-sm font-bold text-white hover:bg-red-700"
+   582→                  onClick={() => setDialog('reject')}
+   583→                >
+   584→                  <X className="size-4" />
+   585→                  Reject
+   586→                </Button>
+   587→              </>
+   588→            ) : null}
+   589→            <Button
+   590→              className="h-9 w-full rounded-lg bg-red-600 text-sm font-bold text-white hover:bg-red-700"
+   591→              onClick={() => setDialog('block')}
+   592→            >
+   593→              <Ban className="size-4" />
+   594→              Block
+   595→            </Button>
+   596→            <Button
+   597→              className="h-9 w-full rounded-lg bg-red-600 text-sm font-bold text-white hover:bg-red-700"
+   598→              onClick={() => setDialog('report')}
+   599→            >
+   600→              <Flag className="size-4" />
+   601→              Report
+   602→            </Button>
+   603→          </div>
+   604→        ) : null}
+   605→      </div>
+   606→
+   607→      {/* Decision dialogs */}
+   608→      <ConfirmDialog
+   609→        open={dialog === 'hire'}
+   610→        onOpenChange={(o) => !o && setDialog(null)}
+   611→        title="Hire this teacher?"
+   612→        message="Chat will be locked after hire."
+   613→        confirmLabel="Confirm Hire"
+   614→        loading={busy}
+   615→        onConfirm={() => decide('HIRE')}
+   616→      />
+   617→      <ConfirmDialog
+   618→        open={dialog === 'reject'}
+   619→        onOpenChange={(o) => !o && setDialog(null)}
+   620→        title="Reject this request?"
+   621→        message={
+   622→          connection && !connection.chatStartedAt && !connection.refunded
+   623→            ? `No chat started yet — the teacher's ${connection.coinsSpent} coins will be REFUNDED.`
+   624→            : 'Chat already started — NO coins will be refunded.'
+   625→        }
+   626→        confirmLabel="Reject"
+   627→        danger
+   628→        loading={busy}
+   629→        onConfirm={() => decide('REJECT')}
+   630→      />
+   631→      <ConfirmDialog
+   632→        open={dialog === 'block'}
+   633→        onOpenChange={(o) => !o && setDialog(null)}
+   634→        title="Block this user?"
+   635→        message="They will no longer be able to contact you. You can unblock later from Settings."
+   636→        confirmLabel="Block"
+   637→        danger
+   638→        loading={busy}
+   639→        onConfirm={() => decide('BLOCK')}
+   640→      />
+   641→      <ConfirmDialog
+   642→        open={dialog === 'report'}
+   643→        onOpenChange={(o) => {
+   644→          if (!o) {
+   645→            setReportReason('')
+   646→            setDialog(null)
+   647→          }
+   648→        }}
+   649→        title="Report this user?"
+   650→        message="Tell us what went wrong — our team will review the conversation."
+   651→        confirmLabel="Submit Report"
+   652→        danger
+   653→        loading={busy}
+   654→        onConfirm={() => decide('REPORT', reportReason.trim() || undefined)}
+   655→      >
+   656→        <Textarea
+   657→          value={reportReason}
+   658→          onChange={(e) => setReportReason(e.target.value)}
+   659→          placeholder="Reason for reporting (optional)"
+   660→          rows={3}
+   661→          maxLength={500}
+   662→          className="mb-2"
+   663→        />
+   664→      </ConfirmDialog>
+   665→    </div>
+   666→  )
+   667→}
+   668→
+   669→// ===== View =====
+   670→
+   671→export function ChatsView() {
+   672→  const me = useAppStore((s) => s.me)!
+   673→  const params = useAppStore((s) => s.params)
+   674→  const go = useAppStore((s) => s.go)
+   675→  const onlineIds = useAppStore((s) => s.onlineIds)
+   676→
+   677→  const [connections, setConnections] = useState<ConnectionDTO[] | null>(null)
+   678→  const [search, setSearch] = useState('')
+   679→
+   680→  const loadList = useCallback(async () => {
+   681→    try {
+   682→      const d = await api.getConnections()
+   683→      setConnections(d.connections)
+   684→    } catch {
+   685→      // keep previous list on failure
+   686→    }
+   687→  }, [])
+   688→
+   689→  useEffect(() => {
+   690→    // eslint-disable-next-line react-hooks/set-state-in-effect
+   691→    void loadList()
+   692→  }, [loadList])
+   693→
+   694→  // Realtime: refresh the list when chats change (new message/status) + slow fallback poll
+   695→  useEffect(() => {
+   696→    getSocket(me.id, me.name)
+   697→
+   698→    let timer: ReturnType<typeof setTimeout> | null = null
+   699→    const scheduleRefresh = () => {
+   700→      if (timer) clearTimeout(timer)
+   701→      timer = setTimeout(() => void loadList(), 250)
+   702→    }
+   703→    const onMessage = (p: { connectionId?: string }) => {
+   704→      if (p?.connectionId) scheduleRefresh()
+   705→    }
+   706→    const onUpdated = (p: { connectionId?: string }) => {
+   707→      if (p?.connectionId) scheduleRefresh()
+   708→    }
+   709→
+   710→    onEvent(RT.chatMessage, onMessage)
+   711→    onEvent(RT.chatUpdated, onUpdated)
+   712→    const poll = setInterval(() => void loadList(), 15000)
+   713→    return () => {
+   714→      if (timer) clearTimeout(timer)
+   715→      offEvent(RT.chatMessage, onMessage)
+   716→      offEvent(RT.chatUpdated, onUpdated)
+   717→      clearInterval(poll)
+   718→    }
+   719→  }, [loadList, me.id, me.name])
+   720→
+   721→  const sorted = useMemo(() => {
+   722→    if (!connections) return null
+   723→    return [...connections].sort((a, b) => {
+   724→      const ta = new Date(a.lastMessage?.createdAt ?? a.createdAt).getTime()
+   725→      const tb = new Date(b.lastMessage?.createdAt ?? b.createdAt).getTime()
+   726→      return tb - ta
+   727→    })
+   728→  }, [connections])
+   729→
+   730→  const filtered = useMemo(() => {
+   731→    if (!sorted) return null
+   732→    const q = search.trim().toLowerCase()
+   733→    if (!q) return sorted
+   734→    return sorted.filter((c) => otherParty(c, me.id).name.toLowerCase().includes(q))
+   735→  }, [sorted, search, me.id])
+   736→
+   737→  const activeId = params.connectionId
+   738→
+   739→  return (
+   740→    <div className="mx-auto card-shadow flex h-[calc(100vh-260px)] min-h-[440px] w-full max-w-[1100px] overflow-hidden rounded-xl border bg-card">
+   741→      {/* List pane */}
+   742→      <div className={cn('w-full flex-col lg:flex lg:w-[340px] lg:shrink-0 lg:border-r', activeId ? 'hidden' : 'flex')}>
+   743→        <div className="border-b px-4 py-3">
+   744→          <h1 className="text-lg font-bold">Chats</h1>
+   745→          <div className="relative mt-2">
+   746→            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+   747→            <Input
+   748→              value={search}
+   749→              onChange={(e) => setSearch(e.target.value)}
+   750→              placeholder="Search chats"
+   751→              className="h-9 rounded-full bg-muted pl-9"
+   752→            />
+   753→          </div>
+   754→        </div>
+   755→
+   756→        <div className="flex-1 divide-y overflow-y-auto">
+   757→          {filtered === null ? (
+   758→            <div className="space-y-3 p-3">
+   759→              {[0, 1, 2, 3].map((i) => (
+   760→                <div key={i} className="flex gap-3">
+   761→                  <Skeleton className="size-12 rounded-full" />
+   762→                  <div className="flex-1 space-y-1.5 py-1">
+   763→                    <Skeleton className="h-3.5 w-2/3" />
+   764→                    <Skeleton className="h-3 w-full" />
+   765→                  </div>
+   766→                </div>
+   767→              ))}
+   768→            </div>
+   769→          ) : filtered.length === 0 ? (
+   770→            <div className="p-4">
+   771→              <EmptyState
+   772→                icon={MessageCircle}
+   773→                title="No chats yet"
+   774→                hint="Contact a teacher from the feed (costs coins)"
+   775→              />
+   776→            </div>
+   777→          ) : (
+   778→            filtered.map((c) => {
+   779→              const other = otherParty(c, me.id)
+   780→              return (
+   781→                <ConnectionRow
+   782→                  key={c.id}
+   783→                  connection={c}
+   784→                  meId={me.id}
+   785→                  active={c.id === activeId}
+   786→                  online={onlineIds.includes(other.id)}
+   787→                  onSelect={() => go('chats', { connectionId: c.id })}
+   788→                />
+   789→              )
+   790→            })
+   791→          )}
+   792→        </div>
+   793→      </div>
+   794→
+   795→      {/* Thread pane */}
+   796→      <div className={cn('min-w-0 flex-1', activeId ? 'flex' : 'hidden lg:flex')}>
+   797→        {activeId ? (
+   798→          <ChatThread connectionId={activeId} onListChanged={loadList} />
+   799→        ) : (
+   800→          <div className="flex h-full flex-col items-center justify-center gap-2 bg-muted p-6 text-center">
+   801→            <div className="card-shadow grid size-16 place-items-center rounded-full bg-card">
+   802→              <MessageCircle className="size-8 text-[#1877F2]" />
+   803→            </div>
+   804→            <p className="font-semibold">Your messages</p>
+   805→            <p className="max-w-xs text-sm text-muted-foreground">
+   806→              Pick a chat from the list — or contact a teacher from the feed to start one.
+   807→            </p>
+   808→          </div>
+   809→        )}
+   810→      </div>
+   811→    </div>
+   812→  )
+   813→}
+   814→

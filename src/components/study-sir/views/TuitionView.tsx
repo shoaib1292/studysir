@@ -1,11 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { GraduationCap } from 'lucide-react'
+import { Bookmark, GraduationCap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { api } from '@/lib/api'
-import type { FeedItem } from '@/lib/types'
+import type { FeedItem, TuitionPostDTO } from '@/lib/types'
 import { useAppStore } from '@/store/useAppStore'
 import { PostTuitionDialog } from '../dialogs/PostTuitionDialog'
 import { TuitionCard } from '../cards/TuitionCard'
@@ -17,6 +17,7 @@ export function TuitionView() {
   const nonce = useAppStore((s) => s.nonce)
 
   const [items, setItems] = useState<FeedItem[] | null>(null)
+  const [savedItems, setSavedItems] = useState<TuitionPostDTO[] | null>(null)
   const [postOpen, setPostOpen] = useState(false)
 
   const load = useCallback(async () => {
@@ -25,6 +26,12 @@ export function TuitionView() {
       setItems(d.items)
     } catch {
       setItems([])
+    }
+    try {
+      const s = await api.getSaved()
+      setSavedItems(s.items)
+    } catch {
+      setSavedItems([])
     }
   }, [])
 
@@ -50,9 +57,13 @@ export function TuitionView() {
       </div>
 
       <Tabs defaultValue="open" className="gap-4">
-        <TabsList className="grid w-full grid-cols-2 sm:w-fit">
+        <TabsList className="grid w-full grid-cols-3 sm:w-fit">
           <TabsTrigger value="open">Open Requests</TabsTrigger>
           <TabsTrigger value="mine">My Posts</TabsTrigger>
+          <TabsTrigger value="saved" className="gap-1.5">
+            <Bookmark className="size-3.5" />
+            Saved{savedItems?.length ? ` (${savedItems.length})` : ''}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="open" className="space-y-4">
@@ -107,6 +118,21 @@ export function TuitionView() {
                 <TuitionCard key={i.tuition.id} tuition={i.tuition} onChanged={load} showOwnerActions />
               ) : null
             )
+          )}
+        </TabsContent>
+        <TabsContent value="saved" className="space-y-4">
+          {savedItems === null ? (
+            <CardSkeleton />
+          ) : savedItems.length === 0 ? (
+            <EmptyState
+              icon={Bookmark}
+              title="No saved posts yet"
+              hint="Tap the bookmark icon on any tuition post to keep it handy here."
+            />
+          ) : (
+            savedItems.map((t) => (
+              <TuitionCard key={t.id} tuition={t} onChanged={load} />
+            ))
           )}
         </TabsContent>
       </Tabs>

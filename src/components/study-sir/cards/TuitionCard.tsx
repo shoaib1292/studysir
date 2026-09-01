@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import {
   Banknote,
+  Bookmark,
   BookOpen,
   Clock,
   GraduationCap,
@@ -54,6 +55,7 @@ export function TuitionCard({
   const [liked, setLiked] = useState(tuition.myLike)
   const [likeCount, setLikeCount] = useState(tuition.likeCount)
   const [status, setStatus] = useState(tuition.status)
+  const [saved, setSaved] = useState(tuition.mySave)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [notEnough, setNotEnough] = useState(false)
@@ -72,6 +74,24 @@ export function TuitionCard({
       setLiked(!next)
       setLikeCount((c) => c + (next ? -1 : 1))
       toast.error('Could not update like', { description: errorMessage(e) })
+    }
+  }
+
+  async function toggleSave() {
+    const next = !saved
+    setSaved(next)
+    try {
+      const d = await api.toggleSave(tuition.id)
+      setSaved(d.saved)
+      toast.success(d.saved ? 'Saved to your list' : 'Removed from saved', {
+        description: d.saved
+          ? 'Find it anytime under Tution → Saved.'
+          : undefined,
+      })
+      onChanged?.()
+    } catch (e) {
+      setSaved(!next)
+      toast.error('Could not update saved list', { description: errorMessage(e) })
     }
   }
 
@@ -133,6 +153,20 @@ export function TuitionCard({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          {!isMine ? (
+            <button
+              type="button"
+              aria-label={saved ? 'Remove from saved' : 'Save post'}
+              title={saved ? 'Saved — tap to remove' : 'Save for later'}
+              onClick={toggleSave}
+              className={cn(
+                'rounded-full p-1.5 transition-colors hover:bg-muted',
+                saved ? 'text-[#1877F2] dark:text-blue-400' : 'text-muted-foreground'
+              )}
+            >
+              <Bookmark className={cn('size-5', saved && 'fill-current')} />
+            </button>
+          ) : null}
           {isMine ? (
             <span className="rounded bg-green-500/15 px-2 py-0.5 text-xs font-semibold text-green-700 dark:text-green-400">Hire</span>
           ) : null}

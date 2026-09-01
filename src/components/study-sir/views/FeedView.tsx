@@ -10,6 +10,7 @@ import { PostCourseDialog } from '../dialogs/PostCourseDialog'
 import { PostGoodDialog } from '../dialogs/PostGoodDialog'
 import { PostTuitionDialog } from '../dialogs/PostTuitionDialog'
 import { FeedItemCard } from '../cards/FeedItemCard'
+import { FeedRail } from './FeedRail'
 import { CardSkeleton, FbCard } from '../shared/bits'
 import { firstName } from '../shared/format'
 import { EmptyState } from '../shared/EmptyState'
@@ -119,7 +120,9 @@ export function FeedView() {
   }, [type, q, feedKey])
 
   return (
-    <div className="mx-auto w-full max-w-[680px]">
+    <div className="mx-auto flex w-full max-w-[1010px] items-start gap-5">
+      {/* Feed column */}
+      <div className="min-w-0 flex-1">
       {/* Search result chip */}
       {q ? (
         <div className="mb-3 flex items-center justify-center">
@@ -193,6 +196,10 @@ export function FeedView() {
         onOpenChange={(o) => !o && setDialog(null)}
         onPosted={refresh}
       />
+      </div>
+
+      {/* Right rail: suggested teachers + live contacts (xl+) */}
+      <FeedRail />
     </div>
   )
 }

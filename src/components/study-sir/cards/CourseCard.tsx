@@ -6,9 +6,11 @@ import {
   Banknote,
   BookOpen,
   CalendarClock,
+  CheckCircle2,
   Clock,
   HelpCircle,
   Languages,
+  MessagesSquare,
   Presentation,
   Repeat2,
   MessageSquareText,
@@ -47,6 +49,7 @@ export function CourseCard({ course, onChanged }: { course: CourseDTO; onChanged
   const [notEnough, setNotEnough] = useState<{ needed: number } | null>(null)
 
   const teacherRating = (course as CourseWithRating).teacherAvgRating
+  const alreadyJoined = !!course.myConnectionId
 
   async function toggleLike() {
     const next = !liked
@@ -120,9 +123,16 @@ export function CourseCard({ course, onChanged }: { course: CourseDTO; onChanged
               ★ {teacherRating.toFixed(1)}
             </span>
           ) : null}
-          <span className="rounded bg-green-500/15 px-2 py-0.5 text-xs font-semibold text-green-700 dark:text-green-400">
-            Hire Teacher
-          </span>
+          {alreadyJoined ? (
+            <span className="flex items-center gap-1 rounded bg-blue-500/15 px-2 py-0.5 text-xs font-semibold text-[#1877F2] dark:text-blue-400">
+              <CheckCircle2 className="size-3" />
+              Request sent
+            </span>
+          ) : (
+            <span className="rounded bg-green-500/15 px-2 py-0.5 text-xs font-semibold text-green-700 dark:text-green-400">
+              Hire Teacher
+            </span>
+          )}
         </div>
       </div>
 
@@ -149,8 +159,17 @@ export function CourseCard({ course, onChanged }: { course: CourseDTO; onChanged
         <ActionGrid count={4}>
           <CardAction icon={ThumbsUp} label="Like" active={liked} onClick={toggleLike} />
           <CardAction icon={MessageSquareText} label="Review" onClick={() => setReviewOpen(true)} />
-          <CardAction icon={HelpCircle} label="Question" onClick={() => setQuestionOpen(true)} />
-          <CardAction icon={Presentation} label="Join Request" primary onClick={() => setJoinOpen(true)} />
+          <CardAction icon={HelpCircle} label="Question" disabled={alreadyJoined} onClick={() => setQuestionOpen(true)} />
+          {alreadyJoined ? (
+            <CardAction
+              icon={MessagesSquare}
+              label="Open Chat"
+              primary
+              onClick={() => go('chats', { connectionId: course.myConnectionId! })}
+            />
+          ) : (
+            <CardAction icon={Presentation} label="Join Request" primary onClick={() => setJoinOpen(true)} />
+          )}
         </ActionGrid>
       </div>
 

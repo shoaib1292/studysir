@@ -174,3 +174,27 @@ Work Log:
 
 Stage Summary:
 - StudySir is now REALTIME: live chat delivery, typing indicators, online presence (rows/headers/profile), read receipts, live notification + wallet badges — with REST polling kept only as 15s safety net. Teacher profiles gained a Students tab. All coin rules untouched and re-verified through the new pipeline. Next ideas: report moderation queue (needs admin role), PWA manifest, unread separator, course enrollment state on cards (join-request flow already exists via courseId connections).
+
+---
+Task ID: 7
+Agent: Z.ai Code (lead)
+Task: Status assessment + agent-browser QA + features: saved/bookmarks, unread divider, emoji picker, course join-state, feed right rail, PWA + bug fix
+
+Work Log:
+- Assessed via worklog/dev.log/browser: MVP stable (all core flows render, 0 console errors). Chose feature round + one bug found during QA.
+- Schema: added Save model (bookmarked tuition posts, @@unique userId+tuitionPostId); db:push OK. NOTE: dev server holds stale PrismaClient in globalThis after regenerate — had to kill & restart (`(nohup bun run dev >> dev.log 2>&1 &)` subshell form survives tool-call boundaries; setsid variant got reaped).
+- API:
+  * GET /api/connections/:id now snapshots unseen incoming messages BEFORE marking read → returns `unread: {count, firstId} | null` (ThreadResponse type added)
+  * toCourseDTO gained myConnectionId/myConnectionStatus — query mirrors POST /api/connections reuse-check (ANY live PENDING/ACTIVE chat with that teacher, incl. tuition-based) 
+  * GET /api/saved (bookmarked posts, newest first) + POST /api/tuition/:id/save (toggle) + mySave flag on TuitionPostDTO
+- Chat upgrades (ChatsView): Messenger-style blue "N new messages" divider (snapshot captured at thread open, survives reloads within session); emoji picker (32-emoji "Frequently used" popover, focus-kept insertion); copy-message button on bubble hover (clipboard API + execCommand fallback, Check-icon feedback)
+- CourseCard: viewer's live chat with course teacher → blue "Request sent ✓" chip replaces green "Hire Teacher", footer Join Request becomes "Open Chat" (goes to thread), Question disabled. BUG FOUND & FIXED: initial myConnection query filtered tuitionPostId:null which missed tuition-based reused connections — removed filter to mirror reuse semantics (verified: Ahmed sees Request sent on Elon's Physics Bootcamp + Adani's Masterclass after joining without double charge, coins stayed 30)
+- Saved/bookmarks: TuitionCard header bookmark icon (fills blue when saved, optimistic toggle + toast); TuitionView 3rd tab "Saved (n)" listing bookmarked posts; e2e verified toggle true→false→true + list contents
+- GoodCard Download now downloads a REAL receipt .txt (item/seller/price/buyer/date) via blob instead of a fake toast
+- FeedRail (new, xl+ only, sticky): "Suggested Teachers" (top 3 by rating/hires from teacher feed) + "Contacts" (live online teachers via presence store, green pulse dots, "Active now") + demo footer note; FeedView restructured to flex 2-col (max-w 1010px); mobile/tablet unchanged (rail hidden)
+- PWA: public/manifest.webmanifest + StudySir icon.svg + sharp-rasterized icon-192/512 + apple-touch-icon (180) + metadata (manifest, icons, appleWebApp) + viewport themeColor #1877F2; all assets 200
+- QA (agent-browser): bookmark flow, Saved tab, emoji insert→send, unread divider (Alina msg via API → divider "1 new message" shown above it in Fatima's browser), course Request sent/Open Chat, dark mode (rail coherent), mobile 390 (rail hidden, composer fine), manifest/theme-color link present; curl e2e for save toggle + unread snapshot (first GET returns {count,firstId}, second GET null)
+- bun run lint: 0 errors; dev.log: 0 runtime errors (whole-file grep)
+
+Stage Summary:
+- New: saved tuition posts (schema+API+UI), chat unread divider, emoji picker, copy message, course join-state chips, real download receipts, feed right rail (suggested teachers + live contacts), PWA installability. Fixed course join-state mismatch bug. All coin rules untouched. Remaining ideas: report moderation queue (admin role), tuition post editing, chat image attachments, PWA service worker for offline shell.
