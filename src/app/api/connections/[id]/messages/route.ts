@@ -6,6 +6,8 @@ import { rtEmit, RT_EVENTS } from '@/lib/realtime'
 import { toMessageDTO } from '@/lib/dto'
 
 const LOCKED = ['HIRED', 'REJECTED', 'EXPIRED']
+// data-URL size guard (~700KB ≈ 525KB binary after base64 overhead)
+const MAX_IMAGE_CHARS = 700_000
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
@@ -33,8 +35,15 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     }
 
     const body = await req.json().catch(() => null)
-    const content = body?.content as string | undefined
-    if (!content || !content.trim()) return NextResponse.json({ error: 'Message cannot be empty' }, { status: 400 })
+    const content = typeof body?.content === 'string' ? body.content.trim() : ''
+    const image = typeof body?.image === 'string' ? body.image : ''
+
+    if (!content && !image) return NextResponse.json({ error: 'Message cannot be empty' }, { status: 400 })
+    if (image) {
+      if (!image.startsWith('data:image/') || image.length > MAX_IMAGE_CHARS) {
+        return NextResponse.json({ error: 'Image too large (max ~500KB) or invalid format' }, { status: 400 })
+      }
+    }
 
     // The "decider" is the side that did NOT pay (student for tuition flow, teacher for direct contact).
     // Chat officially starts when the decider replies — until then the refund window keeps running.
@@ -43,7 +52,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
     const [message] = await db.$transaction([
       db.message.create({
-        data: { connectionId: id, senderId: me.id, content: content.trim().slice(0, 2000) },
+        data: {
+          connectionId: id,
+          senderId: me.id,
+          content: content.slice(0, 2000) || (image ? '📷 Photo' : ''),
+          image: image || null,
+        },
         include: { sender: true },
       }),
       db.connection.update({
@@ -56,7 +70,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     ])
 
     const recipient = me.id === connection.teacherId ? connection.studentId : connection.teacherId
-    await notify(recipient, 'MESSAGE', `New message from ${me.name}`, content.trim().slice(0, 80), 'chats')
+    await notify(recipient, 'MESSAGE', `New message from ${me.name}`, image && !content ? '📷 Sent a photo' : content.slice(0, 80), 'chats')
 
     // Realtime: push the new message to both parties (thread + chat list)
     const messageDTO = toMessageDTO(message as never)

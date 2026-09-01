@@ -24,6 +24,10 @@ export interface UserDTO {
   coins: number
   money: number
   isVerified: boolean
+  /** moderation access (does not change the STUDENT/PARENT/TEACHER role) */
+  isAdmin: boolean
+  /** moderation state: ACTIVE | BANNED */
+  status: string
   createdAt: string
 }
 
@@ -121,6 +125,8 @@ export interface MessageDTO {
   senderId: string
   sender: Pick<UserDTO, 'id' | 'name' | 'avatar'>
   content: string
+  /** data-URL photo attachment (optional) */
+  image: string | null
   system: boolean
   createdAt: string
   /** Set once the other party has opened the chat (drives read receipts). */
@@ -203,6 +209,44 @@ export interface StudentDTO {
   hiredAt: string | null
 }
 
+// ===== Moderation (admin) =====
+export type ReportTargetType = 'CHAT' | 'GOOD' | 'COURSE' | 'TUITION' | 'USER'
+export type ReportStatus = 'OPEN' | 'RESOLVED' | 'DISMISSED'
+
+export interface ReportDTO {
+  id: string
+  targetType: ReportTargetType
+  targetId: string | null
+  connectionId: string | null
+  reason: string
+  details: string | null
+  status: ReportStatus
+  note: string | null
+  resolvedAt: string | null
+  createdAt: string
+  reporter: Pick<UserDTO, 'id' | 'name' | 'avatar' | 'role' | 'headline' | 'city'>
+  targetUser: Pick<UserDTO, 'id' | 'name' | 'avatar' | 'role' | 'headline' | 'city'> | null
+  /** snapshot of reported content title (good/course/tuition) */
+  targetLabel: string | null
+  targetImage: string | null
+}
+
+export interface AdminUserDTO extends UserDTO {
+  hireCount: number
+  postCount: number
+  openReports: number
+}
+
+export interface AdminStats {
+  open: number
+  resolved: number
+  dismissed: number
+  bannedUsers: number
+}
+
+// GET /api/admin/reports -> { reports, stats }
+// GET /api/admin/users   -> { users: AdminUserDTO[] }
+
 // ===== API endpoints =====
 // GET  /api/session                      -> { user: UserDTO | null }
 // POST  /api/session { userId }          -> { user }
@@ -221,8 +265,13 @@ export interface StudentDTO {
 // GET  /api/connections/:id              -> { connection, messages, unread: {count,firstId} | null }
 // GET  /api/saved                        -> { items: TuitionPostDTO[] }  (bookmarked tuition posts, newest save first)
 // POST /api/tuition/:id/save             -> { saved: boolean }  (toggle bookmark)
-// POST /api/connections/:id/messages { content } -> { message }
+// POST /api/connections/:id/messages { content, image? } -> { message }
 // POST /api/connections/:id/decide { action: 'HIRE'|'REJECT'|'BLOCK'|'UNBLOCK'|'REPORT' } -> { connection }
+// POST /api/reports { targetType, targetId?, targetUserId?, connectionId?, reason, details? } -> { report }  (create report)
+// GET  /api/admin/reports?status=       -> { reports: ReportDTO[], stats: AdminStats }          (admin only)
+// POST /api/admin/reports/:id { action: 'RESOLVE'|'DISMISS', note? } -> { report }               (admin only)
+// GET  /api/admin/users                 -> { users: AdminUserDTO[] }                             (admin only)
+// PATCH /api/admin/users/:id { status: 'BANNED'|'ACTIVE' } -> { user }                          (admin only)
 // GET  /api/wallet                       -> { coins, money, transactions: CoinTransactionDTO[] }
 // POST /api/wallet/buy-coins { packageId } -> { coins, transaction }
 // POST /api/wallet/add-money { amount }   -> { money, transaction }

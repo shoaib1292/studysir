@@ -1,15 +1,17 @@
 import { db } from '@/lib/db'
+import type { PrismaUser } from './dto-types'
 import type {
+  AdminUserDTO,
   ConnectionDTO,
   CourseDTO,
   FeedItem,
   GoodDTO,
   MessageDTO,
-  PrismaUser,
+  ReportDTO,
   TeacherCardDTO,
   TuitionPostDTO,
   UserDTO,
-} from './dto-types'
+} from './types'
 
 type AnyRecord = Record<string, unknown>
 
@@ -35,6 +37,8 @@ export function toUserDTO(u: AnyRecord | null): UserDTO | null {
     coins: u.coins as number,
     money: u.money as number,
     isVerified: u.isVerified as boolean,
+    isAdmin: Boolean(u.isAdmin),
+    status: (u.status as string) ?? 'ACTIVE',
     createdAt: (u.createdAt as Date).toISOString(),
   }
 }
@@ -61,9 +65,10 @@ export async function likeInfo(targetType: string, targetId: string, viewerId?: 
 }
 
 export async function toTuitionDTO(t: AnyRecord, viewerId?: string | null): Promise<TuitionPostDTO> {
+  const tuitionId = t.id as string
   const [like, connCount, existing, authorRating, saved] = await Promise.all([
-    likeInfo('TUITION', t.id as string, viewerId),
-    db.connection.count({ where: { tuitionPostId: t.id } }),
+    likeInfo('TUITION', tuitionId, viewerId),
+    db.connection.count({ where: { tuitionPostId: tuitionId } }),
     viewerId
       ? db.connection.findFirst({
           where: {
@@ -244,6 +249,7 @@ export function toMessageDTO(m: AnyRecord): MessageDTO {
     senderId: m.senderId as string,
     sender: pickUser(m.sender as AnyRecord),
     content: m.content as string,
+    image: (m.image as string) ?? null,
     system: m.system as boolean,
     createdAt: (m.createdAt as Date).toISOString(),
     readAt: m.readAt ? (m.readAt as Date).toISOString() : null,
@@ -252,3 +258,34 @@ export function toMessageDTO(m: AnyRecord): MessageDTO {
 
 export { db }
 export type { PrismaUser }
+
+// ===== Moderation (admin) serializers =====
+export function toReportDTO(r: AnyRecord): ReportDTO {
+  return {
+    id: r.id as string,
+    targetType: r.targetType as ReportDTO['targetType'],
+    targetId: (r.targetId as string) ?? null,
+    connectionId: (r.connectionId as string) ?? null,
+    reason: r.reason as string,
+    details: (r.details as string) ?? null,
+    status: r.status as ReportDTO['status'],
+    note: (r.note as string) ?? null,
+    resolvedAt: r.resolvedAt ? (r.resolvedAt as Date).toISOString() : null,
+    createdAt: (r.createdAt as Date).toISOString(),
+    reporter: pickUser(r.reporter as AnyRecord),
+    targetUser: r.targetUser ? pickUser(r.targetUser as AnyRecord) : null,
+    /** snapshot of the reported content (good/course/tuition) when applicable */
+    targetLabel: (r.targetLabel as string) ?? null,
+    targetImage: (r.targetImage as string) ?? null,
+  }
+}
+
+export function toAdminUserDTO(u: AnyRecord, extra: { hireCount: number; postCount: number; openReports: number }): AdminUserDTO {
+  const base = toUserDTO(u)!
+  return {
+    ...base,
+    hireCount: extra.hireCount,
+    postCount: extra.postCount,
+    openReports: extra.openReports,
+  }
+}

@@ -11,7 +11,10 @@ async function main() {
   await db.review.deleteMany()
   await db.block.deleteMany()
   await db.coinTransaction.deleteMany()
+  await db.report.deleteMany()
   await db.message.deleteMany()
+  await db.save.deleteMany()
+  await db.purchase.deleteMany()
   await db.connection.deleteMany()
   await db.digitalGood.deleteMany()
   await db.course.deleteMany()
@@ -24,8 +27,10 @@ async function main() {
     email: 'warren@studysir.app',
     name: 'Warren Buffett',
     role: 'STUDENT',
+    isAdmin: true,
+    status: 'ACTIVE',
     avatar: '/images/avatar-warren.png',
-    headline: 'Student · Finance Learner',
+    headline: 'Student · Finance Learner · Moderator',
     bio: 'Investor mindset student from Omaha. Learning value investing one tuition at a time.',
     city: 'Omaha',
     gender: 'Male',
@@ -449,6 +454,29 @@ async function main() {
       { userId: ahmed.id, type: 'CONNECT_REQUEST', title: 'Sir Elon Musk wants to connect', body: 'Spent 10 coins to contact you about “Online Class 10th Math teacher needed”.', link: 'chats' },
       { userId: warren.id, type: 'CONNECT_REQUEST', title: "Ma'am Alina Rose hired you back", body: 'You are hired for Finance & Investment mentor needed.', link: 'chats' },
       { userId: fatima.id, type: 'CONNECT_REQUEST', title: 'Sir Mukesh Ambani wants to connect', body: 'Spent 16 coins to contact you about your Spoken English post.', link: 'chats' },
+    ],
+  })
+
+  // ---------- Reports (moderation demo queue) ----------
+  await db.report.createMany({
+    data: [
+      {
+        reporterId: ahmed.id,
+        targetType: 'GOOD',
+        targetId: (await db.digitalGood.findFirst({ where: { title: { contains: 'RICH DAD' } } }))?.id,
+        targetUserId: noman.id,
+        reason: 'Copyright',
+        details: 'Selling a paid copy of a published book PDF. This is likely pirated content.',
+        createdAt: new Date(Date.now() - 3 * 3600 * 1000),
+      },
+      {
+        reporterId: fatima.id,
+        targetType: 'USER',
+        targetUserId: adani.id,
+        reason: 'Harassment',
+        details: 'Kept messaging outside the platform hours and was rude in chat.',
+        createdAt: new Date(Date.now() - 26 * 3600 * 1000),
+      },
     ],
   })
 

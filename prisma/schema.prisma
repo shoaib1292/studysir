@@ -28,6 +28,8 @@ model User {
   coins         Int      @default(0)
   money         Float    @default(0)
   isVerified    Boolean  @default(false)
+  isAdmin       Boolean  @default(false) // moderation access (role stays STUDENT/PARENT/TEACHER)
+  status        String   @default("ACTIVE") // ACTIVE | BANNED (moderation)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -47,6 +49,8 @@ model User {
   likes           Like[]
   availabilities  Availability[]
   saves           Save[]
+  reportsMade     Report[]     @relation("reporter")
+  reportsAgainst  Report[]     @relation("reportedUser")
 }
 
 // mode: ONLINE | HOME | CENTER  | status: OPEN | HIRED | CLOSED
@@ -95,6 +99,7 @@ model Connection {
 
   messages     Message[]
   transactions CoinTransaction[]
+  reports      Report[]
 }
 
 model Message {
@@ -104,6 +109,7 @@ model Message {
   senderId     String
   sender       User       @relation(fields: [senderId], references: [id])
   content      String
+  image        String?    // data URL for in-chat photo attachments
   system       Boolean    @default(false)
   readAt       DateTime?
   createdAt    DateTime   @default(now())
@@ -232,4 +238,24 @@ model DigitalGood {
   updatedAt   DateTime @updatedAt
 
   purchases Purchase[]
+}
+
+// Moderation queue. status: OPEN | RESOLVED | DISMISSED
+// targetType: CHAT | GOOD | COURSE | TUITION | USER
+model Report {
+  id           String      @id @default(cuid())
+  reporterId   String
+  reporter     User        @relation("reporter", fields: [reporterId], references: [id])
+  targetType   String
+  targetId     String?     // good/course/tuition id (for CHAT: connectionId)
+  targetUserId String?
+  targetUser   User?       @relation("reportedUser", fields: [targetUserId], references: [id])
+  connectionId String?
+  connection   Connection? @relation(fields: [connectionId], references: [id])
+  reason       String
+  details      String?
+  status       String      @default("OPEN")
+  note         String?     // moderator note on resolve/dismiss
+  resolvedAt   DateTime?
+  createdAt    DateTime    @default(now())
 }

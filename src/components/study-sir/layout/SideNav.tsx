@@ -8,6 +8,7 @@ import {
   History,
   MessageCircle,
   Settings,
+  ShieldCheck,
   ShoppingBag,
   Star,
   Wallet,
@@ -100,6 +101,9 @@ export function SideNav() {
       <SectionLabel>More</SectionLabel>
       <div className="space-y-1">
         <NavRow icon={Settings} label="Settings" active={view === 'settings'} onClick={nav('settings')} />
+        {me.isAdmin ? (
+          <NavRow icon={ShieldCheck} label="Admin Queue" active={view === 'admin'} onClick={nav('admin')} />
+        ) : null}
       </div>
 
       <p className="px-3 py-4 text-xs leading-relaxed text-muted-foreground">

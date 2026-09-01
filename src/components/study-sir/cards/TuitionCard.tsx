@@ -7,13 +7,16 @@ import {
   Bookmark,
   BookOpen,
   Clock,
+  Flag,
   GraduationCap,
   Handshake,
   Languages,
   MessageSquareText,
   MessagesSquare,
   MoreHorizontal,
+  Pencil,
   ThumbsUp,
+  XCircle,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -28,6 +31,8 @@ import { useAppStore } from '@/store/useAppStore'
 import { cn } from '@/lib/utils'
 import { ConnectConfirmDialog } from '../dialogs/ConnectConfirmDialog'
 import { NotEnoughCoinsDialog } from '../dialogs/NotEnoughCoinsDialog'
+import { PostTuitionDialog } from '../dialogs/PostTuitionDialog'
+import { ReportDialog } from '../dialogs/ReportDialog'
 import { ActionGrid, CardAction, DetailRow, FbCard, StatText, TuitionStatusBadge } from '../shared/bits'
 import { RichText } from '../shared/RichText'
 import { Stars } from '../shared/Stars'
@@ -59,6 +64,8 @@ export function TuitionCard({
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [notEnough, setNotEnough] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
 
   const authorRating = (tuition as TuitionWithRating).authorAvgRating
 
@@ -182,13 +189,41 @@ export function TuitionCard({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setEditOpen(true)} className="gap-2">
+                  <Pencil className="size-4" />
+                  Edit Post
+                </DropdownMenuItem>
                 {status === 'OPEN' ? (
-                  <DropdownMenuItem onClick={closePost} className="text-red-600 focus:text-red-600">
+                  <DropdownMenuItem onClick={closePost} className="gap-2 text-red-600 focus:text-red-600">
+                    <XCircle className="size-4" />
                     Close Post
                   </DropdownMenuItem>
                 ) : (
                   <DropdownMenuItem disabled>Closed</DropdownMenuItem>
                 )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+          {!isMine ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Report post"
+                  title="Report post"
+                  className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted"
+                >
+                  <Flag className="size-4.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => setReportOpen(true)}
+                  className="gap-2 text-red-600 focus:text-red-600"
+                >
+                  <Flag className="size-4" />
+                  Report
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           ) : null}
@@ -270,6 +305,22 @@ export function TuitionCard({
         onOpenChange={setNotEnough}
         needed={tuition.coinCost}
         balance={me.coins}
+      />
+      <PostTuitionDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        post={tuition}
+        onPosted={onChanged ?? (() => undefined)}
+      />
+      <ReportDialog
+        open={reportOpen}
+        onOpenChange={setReportOpen}
+        target={{
+          type: 'TUITION',
+          targetId: tuition.id,
+          targetUserId: tuition.authorId,
+          label: tuition.title,
+        }}
       />
     </FbCard>
   )

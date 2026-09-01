@@ -2,11 +2,18 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Download, MessageSquareText, Share2, ThumbsUp } from 'lucide-react'
+import { Download, Flag, MessageSquareText, MoreVertical, Share2, ThumbsUp } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { api, errorMessage } from '@/lib/api'
 import type { GoodDTO } from '@/lib/types'
 import { useAppStore } from '@/store/useAppStore'
 import { BuyGoodDialog } from '../dialogs/BuyGoodDialog'
+import { ReportDialog } from '../dialogs/ReportDialog'
 import { ReviewDialog } from '../dialogs/ReviewDialog'
 import { ActionGrid, CardAction, FbCard, StatText } from '../shared/bits'
 import { RichText } from '../shared/RichText'
@@ -22,8 +29,10 @@ export function GoodCard({ good, onChanged }: { good: GoodDTO; onChanged?: () =>
   const [purchased, setPurchased] = useState(good.purchased)
   const [buyOpen, setBuyOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
 
   const sellerIsTeacher = good.seller.role === 'TEACHER'
+  const isMine = good.sellerId === me.id
 
   async function toggleLike() {
     const next = !liked
@@ -43,8 +52,9 @@ export function GoodCard({ good, onChanged }: { good: GoodDTO; onChanged?: () =>
   async function share() {
     const url = typeof window !== 'undefined' ? window.location.origin : ''
     try {
-      if (typeof navigator !== 'undefined' && 'share' in navigator) {
-        await navigator.share({ title: good.title, text: good.description ?? good.title, url })
+      const shareApi = navigator as Navigator & { share?: (data: ShareData) => Promise<void> }
+      if (typeof shareApi.share === 'function') {
+        await shareApi.share({ title: good.title, text: good.description ?? good.title, url })
         return
       }
       await navigator.clipboard.writeText(url)
@@ -95,11 +105,36 @@ export function GoodCard({ good, onChanged }: { good: GoodDTO; onChanged?: () =>
       <div className="flex min-w-0 flex-1 flex-col gap-2 p-4">
         <div className="flex items-start justify-between gap-2">
           <h3 className="text-[17px] font-bold leading-snug">{good.title}</h3>
-          {purchased ? (
-            <span className="shrink-0 rounded bg-green-500/15 px-2 py-0.5 text-xs font-semibold text-green-700 dark:text-green-400">
-              Purchased
-            </span>
-          ) : null}
+          <div className="flex shrink-0 items-center gap-1">
+            {purchased ? (
+              <span className="rounded bg-green-500/15 px-2 py-0.5 text-xs font-semibold text-green-700 dark:text-green-400">
+                Purchased
+              </span>
+            ) : null}
+            {!isMine ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Report item"
+                    title="Report item"
+                    className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted"
+                  >
+                    <MoreVertical className="size-4.5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onClick={() => setReportOpen(true)}
+                    className="gap-2 text-red-600 focus:text-red-600"
+                  >
+                    <Flag className="size-4" />
+                    Report
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+          </div>
         </div>
         <RichText text={good.description} clamp={3} />
         <div className="mt-auto space-y-1 pt-2">
@@ -151,6 +186,16 @@ export function GoodCard({ good, onChanged }: { good: GoodDTO; onChanged?: () =>
           onSubmitted={onChanged}
         />
       ) : null}
+      <ReportDialog
+        open={reportOpen}
+        onOpenChange={setReportOpen}
+        target={{
+          type: 'GOOD',
+          targetId: good.id,
+          targetUserId: good.sellerId,
+          label: good.title,
+        }}
+      />
     </FbCard>
   )
 }

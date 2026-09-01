@@ -101,8 +101,10 @@ export function CardAction({
       type="button"
       disabled={disabled}
       onClick={onClick}
+      aria-label={label}
+      title={label}
       className={cn(
-        'flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-md px-1 text-sm font-semibold transition-colors',
+        '@container flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-md px-1 text-sm font-semibold transition-colors',
         disabled
           ? 'cursor-default text-muted-foreground/70'
           : active
@@ -118,7 +120,7 @@ export function CardAction({
           active && !disabled && 'fill-[#1877F2] text-[#1877F2]'
         )}
       />
-      <span className="truncate">{label}</span>
+      <span className="hidden truncate @min-[76px]:inline">{label}</span>
     </button>
   )
 }

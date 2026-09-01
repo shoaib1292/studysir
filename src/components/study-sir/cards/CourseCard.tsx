@@ -8,21 +8,30 @@ import {
   CalendarClock,
   CheckCircle2,
   Clock,
+  Flag,
   HelpCircle,
   Languages,
   MessagesSquare,
+  MoreVertical,
   Presentation,
   Repeat2,
   MessageSquareText,
   MonitorPlay,
   ThumbsUp,
 } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { api, ApiError, errorMessage } from '@/lib/api'
 import type { CourseDTO } from '@/lib/types'
 import { useAppStore } from '@/store/useAppStore'
 import { ConfirmDialog } from '../dialogs/ConfirmDialog'
 import { ConnectConfirmDialog } from '../dialogs/ConnectConfirmDialog'
 import { NotEnoughCoinsDialog } from '../dialogs/NotEnoughCoinsDialog'
+import { ReportDialog } from '../dialogs/ReportDialog'
 import { ReviewDialog } from '../dialogs/ReviewDialog'
 import { ActionGrid, CardAction, DetailRow, FbCard, StatText } from '../shared/bits'
 import { RichText } from '../shared/RichText'
@@ -47,9 +56,11 @@ export function CourseCard({ course, onChanged }: { course: CourseDTO; onChanged
   const [joinOpen, setJoinOpen] = useState(false)
   const [joining, setJoining] = useState(false)
   const [notEnough, setNotEnough] = useState<{ needed: number } | null>(null)
+  const [reportOpen, setReportOpen] = useState(false)
 
   const teacherRating = (course as CourseWithRating).teacherAvgRating
   const alreadyJoined = !!course.myConnectionId
+  const isMine = course.teacherId === me.id
 
   async function toggleLike() {
     const next = !liked
@@ -72,7 +83,7 @@ export function CourseCard({ course, onChanged }: { course: CourseDTO; onChanged
       const { connection } = await api.createConnection({ courseId: course.id })
       if (withQuestion && withQuestion.trim()) {
         try {
-          await api.sendMessage(connection.id, withQuestion.trim())
+          await api.sendMessage(connection.id, { content: withQuestion.trim() })
         } catch {
           // non-blocking — chat is open anyway
         }
@@ -133,6 +144,29 @@ export function CourseCard({ course, onChanged }: { course: CourseDTO; onChanged
               Hire Teacher
             </span>
           )}
+          {!isMine ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Report course"
+                  title="Report course"
+                  className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted"
+                >
+                  <MoreVertical className="size-4.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => setReportOpen(true)}
+                  className="gap-2 text-red-600 focus:text-red-600"
+                >
+                  <Flag className="size-4" />
+                  Report
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
         </div>
       </div>
 
@@ -213,6 +247,16 @@ export function CourseCard({ course, onChanged }: { course: CourseDTO; onChanged
         onOpenChange={(o) => !o && setNotEnough(null)}
         needed={notEnough?.needed ?? course.connectionCost}
         balance={me.coins}
+      />
+      <ReportDialog
+        open={reportOpen}
+        onOpenChange={setReportOpen}
+        target={{
+          type: 'COURSE',
+          targetId: course.id,
+          targetUserId: course.teacherId,
+          label: course.title,
+        }}
       />
     </FbCard>
   )

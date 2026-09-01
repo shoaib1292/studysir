@@ -1,6 +1,8 @@
 // Typed fetch helpers for the StudySir API.
 // Always sends cookies (credentials: 'include'), always relative URLs.
 import type {
+  AdminStats,
+  AdminUserDTO,
   AvailabilityDTO,
   CoinTransactionDTO,
   ConnectionDTO,
@@ -10,6 +12,7 @@ import type {
   MessageDTO,
   NotificationDTO,
   ProfileStats,
+  ReportDTO,
   ReviewDTO,
   StudentDTO,
   ThreadResponse,
@@ -149,7 +152,7 @@ export const api = {
   // tuition
   createTuition: (body: TuitionInput) =>
     request<{ tuition: TuitionPostDTO }>('/api/tuition', { method: 'POST', body }),
-  updateTuition: (id: string, body: { status: string }) =>
+  updateTuition: (id: string, body: { status?: string; edit?: boolean } & Partial<TuitionInput>) =>
     request<{ tuition: TuitionPostDTO }>(`/api/tuition/${id}`, { method: 'PATCH', body }),
   /** Toggle a tuition-post bookmark ("Saved" list). */
   toggleSave: (id: string) =>
@@ -167,8 +170,8 @@ export const api = {
   getConnection: (id: string) => request<ThreadResponse>(`/api/connections/${id}`),
   createConnection: (body: { tuitionPostId?: string; teacherId?: string; courseId?: string }) =>
     request<{ connection: ConnectionDTO }>('/api/connections', { method: 'POST', body }),
-  sendMessage: (id: string, content: string) =>
-    request<{ message: MessageDTO }>(`/api/connections/${id}/messages`, { method: 'POST', body: { content } }),
+  sendMessage: (id: string, body: { content?: string; image?: string }) =>
+    request<{ message: MessageDTO }>(`/api/connections/${id}/messages`, { method: 'POST', body }),
   decide: (id: string, action: 'HIRE' | 'REJECT' | 'BLOCK' | 'UNBLOCK' | 'REPORT', reason?: string) =>
     request<{ connection: ConnectionDTO }>(`/api/connections/${id}/decide`, {
       method: 'POST',
@@ -206,6 +209,30 @@ export const api = {
   getBlockedUsers: () => request<{ users: UserDTO[] }>('/api/settings/blocked'),
   unblockUser: (userId: string) =>
     request<{ ok: true }>('/api/settings/unblock', { method: 'POST', body: { userId } }),
+
+  // moderation
+  createReport: (body: {
+    targetType: 'CHAT' | 'GOOD' | 'COURSE' | 'TUITION' | 'USER'
+    targetId?: string
+    targetUserId?: string
+    connectionId?: string
+    reason: string
+    details?: string
+  }) => request<{ report: ReportDTO }>('/api/reports', { method: 'POST', body }),
+
+  // admin (role === 'ADMIN' only)
+  getAdminReports: (status?: string) =>
+    request<{ reports: ReportDTO[]; stats: AdminStats }>(
+      `/api/admin/reports${status ? `?status=${encodeURIComponent(status)}` : ''}`
+    ),
+  adminReportAction: (id: string, action: 'RESOLVE' | 'DISMISS', note?: string) =>
+    request<{ report: ReportDTO }>(`/api/admin/reports/${id}`, {
+      method: 'POST',
+      body: { action, ...(note ? { note } : {}) },
+    }),
+  getAdminUsers: () => request<{ users: AdminUserDTO[] }>('/api/admin/users'),
+  adminSetUserStatus: (id: string, status: 'BANNED' | 'ACTIVE') =>
+    request<{ user: UserDTO }>(`/api/admin/users/${id}`, { method: 'PATCH', body: { status } }),
 }
 
 export function errorMessage(e: unknown): string {

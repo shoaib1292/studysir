@@ -29,7 +29,7 @@ export function AvailabilityEditor({
   initial: AvailabilityDTO[]
   onChange?: (rows: { day: string; slots: string }[]) => void
 }) {
-  const me = useAppStore((s) => s.me)
+  const me = useAppStore((s) => s.me)!
   const [rows, setRows] = useState<Row[]>(() => toRows(initial))
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)

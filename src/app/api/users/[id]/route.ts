@@ -90,7 +90,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
         avatar: c.student.avatar,
         headline: c.student.headline,
         city: c.student.city,
-        role: c.student.role,
+        role: c.student.role as import('@/lib/types').Role,
         hiredAt: (c.decidedAt ?? c.updatedAt).toISOString(),
       })
     }

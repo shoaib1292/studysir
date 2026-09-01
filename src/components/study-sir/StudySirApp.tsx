@@ -20,6 +20,9 @@ import { WalletView } from './views/WalletView'
 import { MonetizeView } from './views/MonetizeView'
 import { ReviewsView } from './views/ReviewsView'
 import { SettingsView } from './views/SettingsView'
+import { AdminView } from './views/AdminView'
+import { ShieldOff } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 function renderView(view: ViewName) {
   switch (view) {
@@ -43,6 +46,8 @@ function renderView(view: ViewName) {
       return <ReviewsView />
     case 'settings':
       return <SettingsView />
+    case 'admin':
+      return <AdminView />
     default:
       return <FeedView />
   }
@@ -152,6 +157,33 @@ export default function StudySirApp() {
 
   if (!me) {
     return <LoginScreen />
+  }
+
+  // Suspended account screen — session user was banned while logged in
+  if (me.status === 'BANNED') {
+    return (
+      <div className="grid min-h-screen place-items-center bg-background p-6">
+        <div className="w-full max-w-md rounded-2xl border bg-card p-8 text-center shadow-sm">
+          <div className="mx-auto grid size-14 place-items-center rounded-full bg-red-500/15">
+            <ShieldOff className="size-7 text-red-600 dark:text-red-400" />
+          </div>
+          <h1 className="mt-4 text-xl font-extrabold">Account suspended</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Your account was suspended by a moderator for violating StudySir platform rules. If you believe this is a
+            mistake, contact support.
+          </p>
+          <Button
+            variant="outline"
+            className="mt-5"
+            onClick={() => {
+              void api.logout().then(() => useAppStore.getState().setMe(null))
+            }}
+          >
+            Log out
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   return (

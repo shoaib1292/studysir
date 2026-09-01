@@ -54,12 +54,12 @@ export function onConnect(handler: () => void): void {
 
 export function onEvent<T = unknown>(event: string, handler: (payload: T) => void): void {
   if (!socket) return
-  socket.on(event, handler)
+  socket.on(event, handler as (...args: unknown[]) => void)
 }
 
-export function offEvent(event: string, handler: (payload: unknown) => void): void {
+export function offEvent<T = unknown>(event: string, handler: (payload: T) => void): void {
   if (!socket) return
-  socket.off(event, handler)
+  socket.off(event, handler as (...args: unknown[]) => void)
 }
 
 /** Announce typing status to the other party of a chat. */

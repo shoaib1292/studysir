@@ -13,6 +13,7 @@ import {
   Flag,
   GraduationCap,
   Handshake,
+  ImagePlus,
   MessageCircle,
   Search,
   SendHorizonal,
@@ -21,11 +22,13 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { api, errorMessage } from '@/lib/api'
+import { fileToCompactDataUrl } from '@/lib/image'
 import type { ConnectionDTO, MessageDTO } from '@/lib/types'
 import { emitTyping, getSocket, onEvent, offEvent, RT } from '@/lib/socket'
 import { toast } from 'sonner'
@@ -224,6 +227,9 @@ async function copyText(text: string): Promise<boolean> {
 
 function MessageBubble({ message, mine }: { message: MessageDTO; mine: boolean }) {
   const [copied, setCopied] = useState(false)
+  const [zoom, setZoom] = useState(false)
+  const hasImage = Boolean(message.image)
+  const hasText = Boolean(message.content) && message.content !== '📷 Photo'
 
   async function onCopy() {
     const ok = await copyText(message.content)
@@ -252,11 +258,27 @@ function MessageBubble({ message, mine }: { message: MessageDTO; mine: boolean }
       <div
         className={cn(
           'max-w-[78%] rounded-2xl px-3.5 py-2',
-          mine ? 'rounded-br-md bg-[#1877F2] text-white' : 'rounded-bl-md bg-card shadow-sm'
+          mine ? 'rounded-br-md bg-[#1877F2] text-white' : 'rounded-bl-md bg-card shadow-sm',
+          hasImage && 'p-1.5'
         )}
       >
-        <p className="whitespace-pre-line break-words text-[15px]">{message.content}</p>
-        <div className="mt-0.5 flex items-center justify-end gap-1">
+        {hasImage ? (
+          <>
+            <img
+              src={message.image!}
+              alt={hasText ? message.content : `Photo from ${message.sender.name}`}
+              onClick={() => setZoom(true)}
+              className={cn(
+                'max-h-72 w-full max-w-[280px] cursor-zoom-in rounded-xl object-cover',
+                mine ? 'bg-[#166FE5]' : 'bg-muted'
+              )}
+            />
+            {hasText ? <p className="whitespace-pre-line break-words px-2 pb-1 pt-1.5 text-[15px]">{message.content}</p> : null}
+          </>
+        ) : (
+          <p className="whitespace-pre-line break-words text-[15px]">{message.content}</p>
+        )}
+        <div className={cn('flex items-center justify-end gap-1', hasImage && !hasText && 'px-1.5 pb-0.5')}>
           <span className="text-[10px] opacity-70">{clockTime(message.createdAt)}</span>
           {mine && !message.system ? (
             message.readAt ? (
@@ -278,6 +300,25 @@ function MessageBubble({ message, mine }: { message: MessageDTO; mine: boolean }
           {copied ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5" />}
         </button>
       ) : null}
+
+      {/* Fullscreen lightbox */}
+      <Dialog open={zoom} onOpenChange={setZoom}>
+        <DialogContent
+          className="max-h-[92dvh] border-none bg-black/90 p-2 sm:max-w-3xl [&>button]:bg-white/10 [&>button]:rounded-full"
+          onClick={() => setZoom(false)}
+        >
+          <DialogHeader className="sr-only">
+            <DialogTitle>Photo from {message.sender.name}</DialogTitle>
+            <DialogDescription>Photo attachment in chat with {message.sender.name}</DialogDescription>
+          </DialogHeader>
+          <img
+            src={message.image!}
+            alt={hasText ? message.content : `Photo from ${message.sender.name}`}
+            className="max-h-[85dvh] w-full rounded-lg object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -327,6 +368,7 @@ function ChatThread({
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastTypingSent = useRef(0)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const onlineIds = useAppStore((s) => s.onlineIds)
 
@@ -435,7 +477,7 @@ function ChatThread({
   const blocked = !!connection?.blockedBy
   const iBlocked = connection?.blockedBy === me.id
   const decided = !!connection && ['HIRED', 'REJECTED', 'EXPIRED'].includes(connection.status)
-  const isPostOwner = connection?.student.id === me.id ?? false
+  const isPostOwner = connection?.student.id === me.id
   const showActions = !!connection && !blocked && !decided
 
   function handleDraftChange(value: string) {
@@ -463,18 +505,50 @@ function ChatThread({
       senderId: me.id,
       sender: { id: me.id, name: me.name, avatar: me.avatar },
       content,
+      image: null,
       system: false,
       createdAt: new Date().toISOString(),
+      readAt: null,
     }
     setData((d) => (d ? { ...d, messages: [...d.messages, optimistic] } : d))
     if (connection && other) emitTyping(other.id, connection.id, false)
     try {
-      await api.sendMessage(connection.id, content)
+      await api.sendMessage(connection.id, { content })
       await load()
     } catch (err) {
       setData((d) => (d ? { ...d, messages: d.messages.filter((m) => m.id !== optimistic.id) } : d))
       setDraft(content)
       toast.error('Message not sent', { description: errorMessage(err) })
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function sendImage(file: File) {
+    if (!connection || sending) return
+    setSending(true)
+    const optimisticId = `tmp-${Date.now()}`
+    try {
+      const image = await fileToCompactDataUrl(file)
+      // optimistic bubble with the local preview
+      const optimistic: MessageDTO = {
+        id: optimisticId,
+        connectionId: connection.id,
+        senderId: me.id,
+        sender: { id: me.id, name: me.name, avatar: me.avatar },
+        content: '',
+        image,
+        system: false,
+        createdAt: new Date().toISOString(),
+        readAt: null,
+      }
+      setData((d) => (d ? { ...d, messages: [...d.messages, optimistic] } : d))
+      if (other) emitTyping(other.id, connection.id, false)
+      await api.sendMessage(connection.id, { image })
+      await load()
+    } catch (err) {
+      setData((d) => (d ? { ...d, messages: d.messages.filter((m) => m.id !== optimisticId) } : d))
+      toast.error('Photo not sent', { description: errorMessage(err) })
     } finally {
       setSending(false)
     }
@@ -684,6 +758,28 @@ function ChatThread({
                 inputRef.current?.focus()
               }}
             />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              aria-label="Attach a photo"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                e.target.value = ''
+                if (file) void sendImage(file)
+              }}
+            />
+            <button
+              type="button"
+              aria-label="Attach a photo"
+              title="Send a photo"
+              disabled={sending}
+              onClick={() => fileInputRef.current?.click()}
+              className="grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+            >
+              <ImagePlus className="size-5" />
+            </button>
             <Input
               ref={inputRef}
               value={draft}
@@ -936,7 +1032,7 @@ export function ChatsView() {
         {activeId ? (
           <ChatThread connectionId={activeId} onListChanged={loadList} />
         ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-2 bg-muted p-6 text-center">
+          <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-muted p-6 text-center">
             <div className="card-shadow grid size-16 place-items-center rounded-full bg-card">
               <MessageCircle className="size-8 text-[#1877F2]" />
             </div>

@@ -23,6 +23,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     // decider = the side that did NOT pay (student/parent for tuition flow, teacher for direct contact)
     const deciderId = connection.payerId === connection.teacherId ? connection.studentId : connection.teacherId
     const otherId = me.id === connection.teacherId ? connection.studentId : connection.teacherId
+    let refundedNow = false
 
     if (action === 'HIRE') {
       if (me.id !== deciderId) return NextResponse.json({ error: 'Only the request receiver can hire' }, { status: 403 })
@@ -60,7 +61,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       }
 
       const chatStarted = Boolean(connection.chatStartedAt)
-      let refundedNow = false
 
       if (!chatStarted) {
         // Rejected BEFORE any chat → coins go back to the payer
@@ -132,7 +132,22 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
           system: true,
         },
       })
+      // Feed the moderation queue so admins can actually review this chat
+      await db.report.create({
+        data: {
+          reporterId: me.id,
+          targetType: 'CHAT',
+          targetId: id,
+          connectionId: id,
+          targetUserId: otherId,
+          reason: reason || 'Inappropriate Content',
+          details: reason ? `Reported in chat: ${reason}` : 'Reported from the chat action row.',
+        },
+      })
       await notify(otherId, 'SYSTEM', 'Conversation reported', 'A report was submitted on this conversation.')
+      // Let admins refresh their queue live
+      const admins = await db.user.findMany({ where: { isAdmin: true, status: 'ACTIVE' }, select: { id: true } })
+      rtEmit(RT_EVENTS.chatUpdated, { connectionId: id, action, adminRefresh: true }, { userIds: admins.map((a) => a.id) })
     } else {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
     }
@@ -146,9 +161,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     rtEmit(RT_EVENTS.chatUpdated, { connectionId: id, action }, {
       userIds: [connection.teacherId, connection.studentId],
     })
-    // Realtime: wallet badges after hire bonus / refunds
+    // Realtime: wallet badges after hire bonus (refund wallet emit already happens in the REJECT early-return)
     if (action === 'HIRE') rtWalletChanged([connection.teacherId, connection.studentId])
-    if (action === 'REJECT' && refundedNow) rtWalletChanged([connection.payerId || connection.teacherId])
 
     return NextResponse.json({ connection: toConnectionDTO(updated as never, me.id), refunded: false })
   } catch (e) {

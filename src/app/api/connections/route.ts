@@ -4,6 +4,7 @@ import { requireSessionUser, HttpError } from '@/lib/session'
 import { notify, processExpiredConnections } from '@/lib/coins'
 import { toConnectionDTO } from '@/lib/dto'
 import { rtEmit, RT_EVENTS, rtWalletChanged } from '@/lib/realtime'
+import type { ConnectionDTO } from '@/lib/types'
 
 export async function GET() {
   try {
@@ -18,7 +19,7 @@ export async function GET() {
       include: { teacher: true, student: true, tuitionPost: { select: { id: true, title: true, coinCost: true } } },
     })
 
-    const dtos = []
+    const dtos: ConnectionDTO[] = []
     for (const c of connections) {
       const [lastMessage, unreadCount] = await Promise.all([
         db.message.findFirst({ where: { connectionId: c.id }, orderBy: { createdAt: 'desc' } }),

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireSessionUser, HttpError } from '@/lib/session'
 import { toTuitionDTO } from '@/lib/dto'
+import type { TuitionPostDTO } from '@/lib/types'
 
 /** GET /api/saved — tuition posts bookmarked by the current user (newest save first). */
 export async function GET() {
@@ -12,7 +13,7 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
       include: { tuitionPost: { include: { author: true } } },
     })
-    const items = []
+    const items: TuitionPostDTO[] = []
     for (const s of saves) {
       items.push(await toTuitionDTO(s.tuitionPost as never, me.id))
     }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Coins } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -17,17 +17,23 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { api, errorMessage } from '@/lib/api'
+import type { TuitionPostDTO } from '@/lib/types'
 import { clientCoinCost } from '../shared/constants'
 
 export function PostTuitionDialog({
   open,
   onOpenChange,
   onPosted,
+  /** pass an existing post to run the dialog in EDIT mode */
+  post,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   onPosted: () => void
+  post?: TuitionPostDTO | null
 }) {
+  const editing = Boolean(post)
+
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [mode, setMode] = useState<'ONLINE' | 'HOME' | 'CENTER'>('ONLINE')
@@ -40,6 +46,34 @@ export function PostTuitionDialog({
   const [timing, setTiming] = useState('')
   const [loading, setLoading] = useState(false)
 
+  // Prefill on open (edit mode pulls the post, create mode resets)
+  useEffect(() => {
+    if (!open) return
+    if (post) {
+      setTitle(post.title)
+      setDescription(post.description)
+      setMode(post.mode)
+      setCity(post.city ?? '')
+      setSubjects(post.subjects ?? '')
+      setLanguages(post.languages ?? '')
+      setQualification(post.qualification ?? '')
+      setFeeMin(String(post.feeMin))
+      setFeeMax(String(post.feeMax))
+      setTiming(post.timing ?? '')
+    } else {
+      setTitle('')
+      setDescription('')
+      setMode('ONLINE')
+      setCity('')
+      setSubjects('')
+      setLanguages('')
+      setQualification('')
+      setFeeMin('5')
+      setFeeMax('100')
+      setTiming('')
+    }
+  }, [open, post])
+
   const min = Number(feeMin) || 0
   const max = Number(feeMax) || 0
   const estimated = clientCoinCost(min, max, mode)
@@ -50,7 +84,7 @@ export function PostTuitionDialog({
     if (!valid || loading) return
     setLoading(true)
     try {
-      await api.createTuition({
+      const payload = {
         title: title.trim(),
         description: description.trim(),
         mode,
@@ -61,37 +95,33 @@ export function PostTuitionDialog({
         feeMin: min,
         feeMax: max,
         timing: timing.trim() || undefined,
-      })
-      toast.success('Tuition posted!', { description: 'Teachers can now contact you using coins.' })
+      }
+      if (editing && post) {
+        await api.updateTuition(post.id, { edit: true, ...payload })
+        toast.success('Tuition updated!', { description: 'Teachers will see the new details and coin cost.' })
+      } else {
+        await api.createTuition(payload)
+        toast.success('Tuition posted!', { description: 'Teachers can now contact you using coins.' })
+      }
       onOpenChange(false)
       onPosted()
-      reset()
     } catch (e) {
-      toast.error('Could not post tuition', { description: errorMessage(e) })
+      toast.error(editing ? 'Could not update tuition' : 'Could not post tuition', { description: errorMessage(e) })
     } finally {
       setLoading(false)
     }
-  }
-
-  function reset() {
-    setTitle('')
-    setDescription('')
-    setMode('ONLINE')
-    setCity('')
-    setSubjects('')
-    setLanguages('')
-    setQualification('')
-    setFeeMin('5')
-    setFeeMax('100')
-    setTiming('')
   }
 
   return (
     <Dialog open={open} onOpenChange={(o) => !loading && onOpenChange(o)}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Post Tuition</DialogTitle>
-          <DialogDescription>Describe what you need — posting is completely free.</DialogDescription>
+          <DialogTitle>{editing ? 'Edit Tuition' : 'Post Tuition'}</DialogTitle>
+          <DialogDescription>
+            {editing
+              ? 'Update the details — the coin cost for teachers follows the fee range automatically.'
+              : 'Describe what you need — posting is completely free.'}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-3">
@@ -157,7 +187,7 @@ export function PostTuitionDialog({
             Cancel
           </Button>
           <Button onClick={submit} disabled={!valid || loading}>
-            {loading ? 'Posting…' : 'Post Tuition'}
+            {loading ? (editing ? 'Saving…' : 'Posting…') : editing ? 'Save Changes' : 'Post Tuition'}
           </Button>
         </DialogFooter>
       </DialogContent>

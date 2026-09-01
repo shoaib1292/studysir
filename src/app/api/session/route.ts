@@ -15,6 +15,12 @@ export async function POST(req: NextRequest) {
 
   const user = await db.user.findUnique({ where: { id: userId } })
   if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+  if (user.status === 'BANNED') {
+    return NextResponse.json(
+      { error: 'This account has been suspended for violating platform rules.' },
+      { status: 403 }
+    )
+  }
 
   await setSessionUser(user.id)
   return NextResponse.json({ user: toUserDTO(user) })

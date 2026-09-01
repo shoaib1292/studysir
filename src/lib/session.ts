@@ -36,6 +36,7 @@ export async function getSessionUser() {
 export async function requireSessionUser() {
   const user = await getSessionUser()
   if (!user) throw new HttpError(401, 'Not logged in')
+  if (user.status === 'BANNED') throw new HttpError(403, 'Account suspended — contact support.')
   return user
 }
 
