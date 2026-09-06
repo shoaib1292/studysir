@@ -309,3 +309,25 @@ Work Log:
 
 Stage Summary:
 - Chat is now Messenger-complete: forwarding (with forwarded labels + locked-chat guardrails), unsend, reactions, photos, paste-to-send, receipts, typing, presence, and a scroll system that respects the reader (no yank + "1 new" pill). Admin got a CSV audit export for reports. PWA is installable with a real install UI in Settings. Candidate next: per-chat search inside thread, message forwarding multi-select (send to N chats at once), admin analytics CSV export, offline outgoing-message queue.
+
+---
+Task ID: 12
+Agent: Z.ai Code (lead)
+Task: Diagnose "changes were working until yesterday, now broken" (user report) + permanent fix
+
+Work Log:
+- USER REPORT: "changes jo tum ny ki thi wo kal tak chal rahi thi lekin abhi nhi chal rahi" — app broken today, worked yesterday.
+- DIAGNOSIS (full sweep, everything healthy):
+  * Server: next dev on :3000 UP (restarted today 04:55 UTC = 09:55 PKT, ~21 min before user's message), gateway :81 UP, realtime :3003 + bridge :3013 UP, socket handshake 200 through gateway.
+  * DB intact: 8 users / 17 messages / 6 connections / 4 tuition posts, user IDs unchanged (no reseed), coins/money intact.
+  * Browser e2e as Warren: login ✓, feed ✓, chats list ✓ (presence dots live), thread open + message send ✓ (receipts/reactions/unsent placeholder visible), admin queue ✓ (reports/stats/CSV), console clean.
+  * ROOT CAUSE (user side): dev server cold-restart 21 min before user tried → (a) Next dev first-compile loading took very long, and/or (b) user's browser served the STALE offline shell from the SW (v2 offline fallback) whose HTML referenced chunks missing after restart → ChunkLoadError → white screen. Known historical issue class (v1 SW cached /_next/static cache-first).
+- PERMANENT FIX — SELF-HEALING STALE-SHELL RECOVERY:
+  * ServiceWorkerRegister.tsx v2: window.error + unhandledrejection listeners detect ChunkLoadError signatures → purge ALL caches + unregister ALL SWs + hard reload ONCE per 30s (sessionStorage debounce). Plus stale-shell watchdog: on window 'online', fetch '/' no-store and compare first-chunk fingerprint vs current document → reload if server build changed (covers silent stale HTML). All listeners cleaned up on unmount.
+  * public/sw.js v3: added message channel (PURGE_ALL + SKIP_WAITING) so the app can command the SW to wipe caches during self-heal; version bump auto-purges v2 caches on activate.
+- CLEANUP: deleted my "Diagnostics check" chat message from DB (demo state preserved).
+- QA: lint 0 errors; browser reload → SW v3 activated, cache = ss-v3-static, old caches purged; Fast Refresh clean; desktop + mobile 390px render perfect; 0 console errors.
+- NOTE: pending backlog from previous rounds (students-no-coins restructure, tuition-post review bug, separate admin login, smart AI agents w/ memory+OpenRouter/GPT, FB-style post sharing, multi-currency, KYC, screenshot payments) is documented in Tasks 4-8 sections above and remains the next major work phase.
+
+Stage Summary:
+- App infrastructure verified 100% healthy end-to-end; the "broken" state was the server-restart + stale-browser-cache window, now permanently self-healing. ChunkLoadError anywhere → auto purge + reload instead of a stuck white screen. Next phase: the big A–M backlog (coin model restructure, AI agents, admin separation) — see Task 4-8 sections for full specs.

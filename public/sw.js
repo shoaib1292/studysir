@@ -1,11 +1,13 @@
-/* StudySir service worker — offline shell (v2)
+/* StudySir service worker — offline shell (v3)
+ * v3: purge message channel so the app can wipe all caches when it detects
+ *     a stale shell (ChunkLoadError self-heal in ServiceWorkerRegister.tsx).
  * Strategy:
  *  - cache-first: truly immutable assets only (/images, /icon*, manifest)
  *  - network-first: app chunks (/_next/static — changes between dev builds), documents
  *  - offline fallback: cached "/" document for navigations
  *  - never intercepted: /api/*, socket.io, HMR, anything with XTransformPort (gateway)
  */
-const VERSION = 'ss-v2'
+const VERSION = 'ss-v3'
 const STATIC_CACHE = `${VERSION}-static`
 const PAGE_KEY = '/'
 
@@ -21,6 +23,7 @@ self.addEventListener('install', (event) => {
     })()
   )
 })
+// tip: don't call clients.claim() here — activate() does it after purging
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
@@ -30,6 +33,20 @@ self.addEventListener('activate', (event) => {
       await self.clients.claim()
     })()
   )
+})
+
+// message channel: app asks us to step aside / wipe everything on self-heal
+self.addEventListener('message', (event) => {
+  const type = event.data && event.data.type
+  if (type === 'PURGE_ALL') {
+    event.waitUntil(
+      (async () => {
+        const keys = await caches.keys()
+        await Promise.all(keys.map((k) => caches.delete(k)))
+      })()
+    )
+  }
+  if (type === 'SKIP_WAITING') self.skipWaiting()
 })
 
 self.addEventListener('fetch', (event) => {
