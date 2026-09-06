@@ -9,6 +9,7 @@ import {
   Handshake,
   MessageSquare,
   ShoppingBag,
+  ShieldCheck,
   Undo2,
   Wallet as WalletIcon,
 } from 'lucide-react'
@@ -89,6 +90,7 @@ function TransactionRow({ tx }: { tx: CoinTransactionDTO }) {
 export function WalletView() {
   const params = useAppStore((s) => s.params)
   const nonce = useAppStore((s) => s.nonce)
+  const me = useAppStore((s) => s.me)!
   const refreshMe = useAppStore((s) => s.refreshMe)
   const replace = useAppStore((s) => s.replace)
 
@@ -120,8 +122,10 @@ export function WalletView() {
   }, [load, nonce])
 
   // 'coins' | 'buy' -> packages grid; 'history'; 'money'
-  const rawTab = params.tab ?? 'coins'
-  const tab = rawTab === 'history' ? 'history' : rawTab === 'money' ? 'money' : 'coins'
+  // Students/parents have NO coins — their wallet is money-only (buy-coins is teacher-only).
+  const isTeacher = me.role === 'TEACHER'
+  const rawTab = params.tab ?? (isTeacher ? 'coins' : 'money')
+  const tab = !isTeacher && rawTab !== 'history' && rawTab !== 'money' ? 'money' : rawTab === 'history' ? 'history' : rawTab === 'money' ? 'money' : 'coins'
 
   const REFUND_TYPES = new Set(['REFUND_AUTO', 'REFUND_REJECT'])
   const SPEND_TYPES = new Set(['SPEND_CONTACT', 'GOOD_PURCHASE'])
@@ -167,22 +171,24 @@ export function WalletView() {
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-5">
-      {/* Balance cards */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 p-5 text-white shadow-md">
-          <div className="flex items-start justify-between">
-            <Coins className="h-8 w-8" />
-            <Button
-              size="sm"
-              className="bg-white/20 text-white hover:bg-white/30"
-              onClick={() => replace('wallet', { tab: 'coins' })}
-            >
-              Buy Coins
-            </Button>
+      {/* Balance cards — students/parents see money only; teachers also see coins */}
+      <div className={isTeacher ? 'grid gap-4 sm:grid-cols-2' : 'grid gap-4'}>
+        {isTeacher ? (
+          <div className="rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 p-5 text-white shadow-md">
+            <div className="flex items-start justify-between">
+              <Coins className="h-8 w-8" />
+              <Button
+                size="sm"
+                className="bg-white/20 text-white hover:bg-white/30"
+                onClick={() => replace('wallet', { tab: 'coins' })}
+              >
+                Buy Coins
+              </Button>
+            </div>
+            <p className="mt-3 text-3xl font-bold">{coins ?? '—'}</p>
+            <p className="mt-1 text-sm opacity-90">Coins — spent when you accept student requests</p>
           </div>
-          <p className="mt-3 text-3xl font-bold">{coins ?? '—'}</p>
-          <p className="mt-1 text-sm opacity-90">Coins — contact teachers by tuition weight</p>
-        </div>
+        ) : null}
 
         <div className="rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 p-5 text-white shadow-md">
           <div className="flex items-start justify-between">
@@ -196,37 +202,49 @@ export function WalletView() {
         </div>
       </div>
 
+      {!isTeacher ? (
+        <div className="flex items-start gap-2 rounded-xl border bg-blue-500/5 p-4 text-sm text-muted-foreground">
+          <ShieldCheck className="mt-0.5 size-4 shrink-0 text-[#1877F2]" />
+          <span>
+            <span className="font-semibold text-foreground">Students &amp; parents never need coins.</span> Posting
+            tuition and contacting teachers is always free — you only pay for digital goods from your money wallet.
+          </span>
+        </div>
+      ) : null}
+
       {/* Tabs */}
       <Tabs value={tab} onValueChange={(v) => replace('wallet', { tab: v })} className="gap-4">
-        <TabsList className="grid w-full grid-cols-3 sm:w-96">
-          <TabsTrigger value="coins">Buy Coins</TabsTrigger>
-          <TabsTrigger value="history">Coins History</TabsTrigger>
+        <TabsList className={isTeacher ? 'grid w-full grid-cols-3 sm:w-96' : 'grid w-full grid-cols-2 sm:w-64'}>
+          {isTeacher ? <TabsTrigger value="coins">Buy Coins</TabsTrigger> : null}
+          <TabsTrigger value="history">Wallet History</TabsTrigger>
           <TabsTrigger value="money">Money</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="coins">
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {COIN_PACKAGES.map((pkg) => (
-              <div key={pkg.id} className="card-shadow rounded-xl border bg-card p-4 text-center">
-                <Coins className="mx-auto size-6 text-amber-500" />
-                <p className="mt-2 text-2xl font-bold">{pkg.coins}</p>
-                <p className="text-sm text-muted-foreground">{pkg.label}</p>
-                <p className="mt-0.5 font-semibold">${pkg.price}</p>
-                <Button
-                  className="mt-3 w-full"
-                  size="sm"
-                  disabled={buying !== null}
-                  onClick={() => buyPackage(pkg.id, pkg.coins)}
-                >
-                  {buying === pkg.id ? 'Buying…' : 'Buy'}
-                </Button>
-              </div>
-            ))}
-          </div>
-          <p className="mt-3 text-center text-xs text-muted-foreground">
-            Coins are spent to approach tuition posts, hire teachers and join courses.
-          </p>
-        </TabsContent>
+        {isTeacher ? (
+          <TabsContent value="coins">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {COIN_PACKAGES.map((pkg) => (
+                <div key={pkg.id} className="card-shadow rounded-xl border bg-card p-4 text-center">
+                  <Coins className="mx-auto size-6 text-amber-500" />
+                  <p className="mt-2 text-2xl font-bold">{pkg.coins}</p>
+                  <p className="text-sm text-muted-foreground">{pkg.label}</p>
+                  <p className="mt-0.5 font-semibold">${pkg.price}</p>
+                  <Button
+                    className="mt-3 w-full"
+                    size="sm"
+                    disabled={buying !== null}
+                    onClick={() => buyPackage(pkg.id, pkg.coins)}
+                  >
+                    {buying === pkg.id ? 'Buying…' : 'Buy'}
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-center text-xs text-muted-foreground">
+              Coins are spent when you accept tuition posts and student requests.
+            </p>
+          </TabsContent>
+        ) : null}
 
         <TabsContent value="history">
           <FbCard className="p-4">

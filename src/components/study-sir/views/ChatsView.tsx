@@ -515,7 +515,7 @@ function TypingBubble({ name }: { name: string }) {
   )
 }
 
-type ThreadDialog = 'hire' | 'reject' | 'block' | 'report' | null
+type ThreadDialog = 'hire' | 'reject' | 'accept' | 'block' | 'report' | null
 
 /** Messenger-style "Forward to…" dialog: pick one of your other chats. */
 function ForwardDialog({
@@ -848,6 +848,7 @@ function ChatThread({
   const blocked = !!connection?.blockedBy
   const iBlocked = connection?.blockedBy === me.id
   const decided = !!connection && ['HIRED', 'REJECTED', 'EXPIRED'].includes(connection.status)
+  const pending = !!connection && connection.status === 'PENDING'
   const isPostOwner = connection?.student.id === me.id
   const showActions = !!connection && !blocked && !decided
 
@@ -976,21 +977,25 @@ function ChatThread({
     }
   }
 
-  async function decide(action: 'HIRE' | 'REJECT' | 'BLOCK' | 'REPORT', reason?: string) {
+  async function decide(action: 'HIRE' | 'REJECT' | 'ACCEPT' | 'BLOCK' | 'REPORT', reason?: string) {
     if (!connection || busy) return
     setBusy(true)
     try {
       const res = await api.decide(connection.id, action, reason)
       setData((d) => (d ? { ...d, connection: res.connection } : d))
       await refreshMe()
-      if (action === 'HIRE') {
+      if (action === 'ACCEPT') {
+        toast.success('Request accepted!', {
+          description: `${res.connection.coinsSpent} coins deducted — chat unlocked. Say salam 👋`,
+        })
+      } else if (action === 'HIRE') {
         toast.success('Teacher hired! 🎉', { description: 'Conversation is now locked.' })
       } else if (action === 'REJECT') {
         toast.success(
-          'Request rejected',
+          connection?.status === 'PENDING' ? 'Request declined' : 'Request rejected',
           res.connection.refunded
             ? { description: `${res.connection.coinsSpent} coins refunded to the teacher.` }
-            : { description: 'No coins were refunded — chat had already started.' }
+            : { description: connection?.status === 'PENDING' ? 'The request was cancelled.' : 'No coins were refunded — chat had already started.' }
         )
       } else if (action === 'BLOCK') {
         toast.success('User blocked')
@@ -1167,6 +1172,22 @@ function ChatThread({
               ) : null}
             </div>
           </div>
+        ) : pending ? (
+          // PENDING: chat unlocks when the TEACHER accepts (and pays coins)
+          <div className="p-3">
+            {isPostOwner ? (
+              <div className="rounded-lg bg-blue-500/10 p-3 text-sm text-[#1877F2] dark:text-blue-400">
+                ⏳ <span className="font-semibold">Waiting for {other?.name} to accept.</span> Request is free — the chat
+                unlocks when the teacher accepts. You can cancel it below.
+              </div>
+            ) : (
+              <div className="rounded-lg bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
+                📨 <span className="font-semibold">New request from {other?.name}.</span> Accept to unlock the chat —{' '}
+                <span className="font-bold">accepting deducts {connection.coinsSpent || 10} coins</span>. If the student
+                never replies within 10 days, coins are auto-refunded.
+              </div>
+            )}
+          </div>
         ) : connection?.status === 'HIRED' ? (
           <div className="p-3">
             <div className="rounded-lg bg-green-500/10 p-3 text-sm text-green-700 dark:text-green-400">
@@ -1253,23 +1274,45 @@ function ChatThread({
         )}
 
         {showActions ? (
-          <div className={cn('grid gap-2 px-3 pb-3', isPostOwner ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2')}>
+          <div className={cn('grid gap-2 px-3 pb-3', isPostOwner ? 'grid-cols-2 sm:grid-cols-4' : pending ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-2')}>
+            {pending && !isPostOwner ? (
+              // Teacher accepting a pending request — pays coins (banner shows the cost)
+              <Button
+                className="h-9 w-full rounded-lg bg-emerald-600 text-sm font-bold text-white hover:bg-emerald-700 sm:col-span-1"
+                onClick={() => setDialog('accept')}
+              >
+                <Handshake className="size-4" />
+                Accept · {connection.coinsSpent || 10} coins
+              </Button>
+            ) : null}
             {isPostOwner ? (
               <>
-                <Button
-                  className="h-9 w-full rounded-lg bg-[#1877F2] text-sm font-bold text-white hover:bg-[#166FE5]"
-                  onClick={() => setDialog('hire')}
-                >
-                  <Handshake className="size-4" />
-                  Hire Teacher
-                </Button>
-                <Button
-                  className="h-9 w-full rounded-lg bg-red-600 text-sm font-bold text-white hover:bg-red-700"
-                  onClick={() => setDialog('reject')}
-                >
-                  <X className="size-4" />
-                  Reject
-                </Button>
+                {pending ? (
+                  <Button
+                    className="h-9 w-full rounded-lg bg-red-600 text-sm font-bold text-white hover:bg-red-700"
+                    onClick={() => setDialog('reject')}
+                  >
+                    <X className="size-4" />
+                    Cancel Request
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      className="h-9 w-full rounded-lg bg-[#1877F2] text-sm font-bold text-white hover:bg-[#166FE5]"
+                      onClick={() => setDialog('hire')}
+                    >
+                      <Handshake className="size-4" />
+                      Hire Teacher
+                    </Button>
+                    <Button
+                      className="h-9 w-full rounded-lg bg-red-600 text-sm font-bold text-white hover:bg-red-700"
+                      onClick={() => setDialog('reject')}
+                    >
+                      <X className="size-4" />
+                      Reject
+                    </Button>
+                  </>
+                )}
               </>
             ) : null}
             <Button
@@ -1292,6 +1335,15 @@ function ChatThread({
 
       {/* Decision dialogs */}
       <ConfirmDialog
+        open={dialog === 'accept'}
+        onOpenChange={(o) => !o && setDialog(null)}
+        title="Accept this request?"
+        message={`Accepting deducts ${connection?.coinsSpent || 10} coins from your balance and unlocks the chat with ${other?.name}. If the student never replies within 10 days, the coins are auto-refunded.`}
+        confirmLabel={`Accept for ${connection?.coinsSpent || 10} coins`}
+        loading={busy}
+        onConfirm={() => decide('ACCEPT')}
+      />
+      <ConfirmDialog
         open={dialog === 'hire'}
         onOpenChange={(o) => !o && setDialog(null)}
         title="Hire this teacher?"
@@ -1303,13 +1355,15 @@ function ChatThread({
       <ConfirmDialog
         open={dialog === 'reject'}
         onOpenChange={(o) => !o && setDialog(null)}
-        title="Reject this request?"
+        title={pending ? 'Cancel this request?' : 'Reject this request?'}
         message={
-          connection && !connection.chatStartedAt && !connection.refunded
-            ? `No chat started yet — the teacher's ${connection.coinsSpent} coins will be REFUNDED.`
-            : 'Chat already started — NO coins will be refunded.'
+          pending
+            ? 'Your request is free — cancelling just withdraws it. No coins are involved for you.'
+            : connection && !connection.chatStartedAt && !connection.refunded
+              ? `No chat started yet — the teacher's ${connection.coinsSpent} coins will be REFUNDED.`
+              : 'Chat already started — NO coins will be refunded.'
         }
-        confirmLabel="Reject"
+        confirmLabel={pending ? 'Cancel Request' : 'Reject'}
         danger
         loading={busy}
         onConfirm={() => decide('REJECT')}

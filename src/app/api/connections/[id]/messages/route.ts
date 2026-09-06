@@ -4,6 +4,7 @@ import { requireSessionUser, HttpError } from '@/lib/session'
 import { notify } from '@/lib/coins'
 import { rtEmit, RT_EVENTS } from '@/lib/realtime'
 import { toMessageDTO } from '@/lib/dto'
+import { onMessageToAI } from '@/lib/ai'
 
 const LOCKED = ['HIRED', 'REJECTED', 'EXPIRED']
 // data-URL size guard (~700KB ≈ 525KB binary after base64 overhead)
@@ -23,6 +24,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     if (LOCKED.includes(connection.status)) {
       return NextResponse.json(
         { error: 'This conversation is locked — the request was already decided.' },
+        { status: 423 }
+      )
+    }
+    if (connection.status === 'PENDING') {
+      // Chat unlocks when the TEACHER accepts the request (and pays coins).
+      return NextResponse.json(
+        { error: 'Chat unlocks when the teacher accepts this request.' },
         { status: 423 }
       )
     }
@@ -71,6 +79,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
     const recipient = me.id === connection.teacherId ? connection.studentId : connection.teacherId
     await notify(recipient, 'MESSAGE', `New message from ${me.name}`, image && !content ? '📷 Sent a photo' : content.slice(0, 80), 'chats')
+
+    // AI hook: if the other side is an AI agent, schedule a humanlike reply
+    onMessageToAI(id).catch(() => null)
 
     // Realtime: push the new message to both parties (thread + chat list)
     const messageDTO = toMessageDTO(message as never)

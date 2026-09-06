@@ -4,7 +4,21 @@ import { requireSessionUser, HttpError } from '@/lib/session'
 import { notify, refundPendingConnection } from '@/lib/coins'
 import { toConnectionDTO } from '@/lib/dto'
 import { rtEmit, RT_EVENTS, rtWalletChanged } from '@/lib/realtime'
+import { scheduleAIOnNewRequest } from '@/lib/ai'
 
+/**
+ * Connection decisions — NEW coin model:
+ *  - ACCEPT (TEACHER, on PENDING): teacher pays coins → chat unlocks (ACTIVE).
+ *    The UI shows "Accepting will deduct X coins" BEFORE calling this.
+ *  - HIRE   (STUDENT/PARENT, on ACTIVE): student hires the teacher. Platform
+ *    keeps the teacher's coins; teacher gets a monetize reward.
+ *  - REJECT (STUDENT/PARENT):
+ *      · while PENDING → free (nobody paid), status REJECTED.
+ *      · after ACCEPT but before the student sent any real message → teacher
+ *        is refunded automatically.
+ *      · after chatting → no refund per policy.
+ *  - BLOCK / UNBLOCK / REPORT unchanged.
+ */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
     const me = await requireSessionUser()
@@ -20,13 +34,61 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     const action = body?.action as string
     const reason = typeof body?.reason === 'string' ? body.reason.slice(0, 500) : undefined
 
-    // decider = the side that did NOT pay (student/parent for tuition flow, teacher for direct contact)
-    const deciderId = connection.payerId === connection.teacherId ? connection.studentId : connection.teacherId
     const otherId = me.id === connection.teacherId ? connection.studentId : connection.teacherId
     let refundedNow = false
 
-    if (action === 'HIRE') {
-      if (me.id !== deciderId) return NextResponse.json({ error: 'Only the request receiver can hire' }, { status: 403 })
+    if (action === 'ACCEPT') {
+      // Only the TEACHER accepts a pending request, and it costs coins
+      if (me.id !== connection.teacherId) {
+        return NextResponse.json({ error: 'Only the teacher can accept this request' }, { status: 403 })
+      }
+      if (connection.status !== 'PENDING') {
+        return NextResponse.json({ error: 'This request is not pending' }, { status: 409 })
+      }
+      const cost = connection.coinsSpent || 10
+      if (me.coins < cost) {
+        return NextResponse.json(
+          { error: `Not enough coins — accepting costs ${cost} coins, you have ${me.coins}` },
+          { status: 402 }
+        )
+      }
+
+      await db.$transaction(async (tx) => {
+        await tx.user.update({ where: { id: me.id }, data: { coins: { decrement: cost } } })
+        await tx.coinTransaction.create({
+          data: {
+            userId: me.id,
+            amount: -cost,
+            type: 'SPEND_CONTACT',
+            description: `Accepted request from ${me.name === connection.teacherId ? 'student' : 'student'} (Connection ${id.slice(-6)})`,
+            connectionId: id,
+          },
+        })
+        await tx.connection.update({
+          where: { id },
+          data: { status: 'ACTIVE', coinsSpent: cost, payerId: me.id, chatStartedAt: new Date() },
+        })
+        await tx.message.create({
+          data: {
+            connectionId: id,
+            senderId: me.id,
+            content: `🤝 ${me.name} accepted the request (${cost} coins). Chat is now open.`,
+            system: true,
+          },
+        })
+        if (connection.tuitionPostId) {
+          await tx.tuitionPost.update({ where: { id: connection.tuitionPostId }, data: { status: 'ACTIVE' } })
+        }
+      })
+
+      await notify(connection.studentId, 'CONNECT_REQUEST', `${me.name} accepted your request`, 'Chat is now open — say salam!', 'chats')
+      // AI hook: AI student should start chatting once its request is accepted
+      scheduleAIOnNewRequest(id).catch(() => null)
+      rtWalletChanged([me.id])
+    } else if (action === 'HIRE') {
+      if (me.id !== connection.studentId) {
+        return NextResponse.json({ error: 'Only the student/parent can hire' }, { status: 403 })
+      }
       if (!['PENDING', 'ACTIVE'].includes(connection.status)) {
         return NextResponse.json({ error: 'This request is already decided' }, { status: 409 })
       }
@@ -44,60 +106,67 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       await notify(connection.teacherId, 'HIRED', 'You are hired! 🎉', `${me.name} hired you${connection.tuitionPostId ? ' for their tuition post' : ''}.`, 'chats')
 
       // Monetize reward for the teacher (platform keeps the spent coins)
-      await db.coinTransaction.create({
-        data: {
-          userId: connection.teacherId,
-          amount: Math.round(connection.coinsSpent / 2),
-          type: 'HIRE_BONUS',
-          description: `Monetize reward — hired for ${connection.coinsSpent} coins contact`,
-          connectionId: id,
-        },
-      })
-      await db.user.update({ where: { id: connection.teacherId }, data: { coins: { increment: Math.round(connection.coinsSpent / 2) } } })
+      const reward = Math.round((connection.coinsSpent || 0) / 2)
+      if (reward > 0) {
+        await db.coinTransaction.create({
+          data: {
+            userId: connection.teacherId,
+            amount: reward,
+            type: 'HIRE_BONUS',
+            description: `Monetize reward — hired after ${connection.coinsSpent} coins contact`,
+            connectionId: id,
+          },
+        })
+        await db.user.update({ where: { id: connection.teacherId }, data: { coins: { increment: reward } } })
+      }
     } else if (action === 'REJECT') {
-      if (me.id !== deciderId) return NextResponse.json({ error: 'Only the request receiver can reject' }, { status: 403 })
+      if (me.id !== connection.studentId) {
+        return NextResponse.json({ error: 'Only the student/parent can reject' }, { status: 403 })
+      }
       if (!['PENDING', 'ACTIVE'].includes(connection.status)) {
         return NextResponse.json({ error: 'This request is already decided' }, { status: 409 })
       }
 
-      const chatStarted = Boolean(connection.chatStartedAt)
+      const teacherPaid = (connection.coinsSpent || 0) > 0 && Boolean(connection.chatStartedAt)
 
-      if (!chatStarted) {
-        // Rejected BEFORE any chat → coins go back to the payer
+      if (teacherPaid) {
+        // Teacher already paid. Refund only if the student never sent a real message.
         const res = await refundPendingConnection(id, 'REJECTED')
         refundedNow = Boolean(res)
         await db.message.create({
           data: {
             connectionId: id,
             senderId: me.id,
-            content: `❌ ${me.name} rejected this request before any chat — ${connection.coinsSpent} coins were refunded to the payer.`,
+            content: refundedNow
+              ? `❌ ${me.name} rejected before chatting — ${connection.coinsSpent} coins were refunded to the teacher.`
+              : `❌ ${me.name} rejected this request after chatting — coins are not refunded.`,
             system: true,
           },
         })
-        await notify(otherId, 'REJECTED', 'Request rejected — coins refunded', `${me.name} rejected before chat started. Your ${connection.coinsSpent} coins were returned.`, 'chats')
+        await notify(
+          otherId,
+          'REJECTED',
+          refundedNow ? 'Request rejected — coins refunded' : 'Request rejected',
+          refundedNow
+            ? `${me.name} rejected before chat started. Your ${connection.coinsSpent} coins were returned.`
+            : `${me.name} rejected after chat — no coin refund per policy.`,
+          'chats'
+        )
       } else {
-        // Rejected AFTER chat → no refund
+        // Free pending request — nothing to refund
         await db.$transaction([
           db.connection.update({ where: { id }, data: { status: 'REJECTED', decidedAt: new Date() } }),
           db.message.create({
             data: {
               connectionId: id,
               senderId: me.id,
-              content: `❌ ${me.name} rejected this request after chatting — coins are not refunded.`,
+              content: `❌ ${me.name} declined this request.`,
               system: true,
             },
           }),
         ])
-        await notify(otherId, 'REJECTED', 'Request rejected', `${me.name} rejected after chat — no coin refund per policy.`, 'chats')
+        await notify(otherId, 'REJECTED', 'Request declined', `${me.name} declined the request.`, 'chats')
       }
-
-      const updated = await db.connection.findUnique({ where: { id }, include: { teacher: true, student: true, tuitionPost: { select: { id: true, title: true, coinCost: true } } } })
-      // Realtime: both parties refresh their thread + chat list
-      rtEmit(RT_EVENTS.chatUpdated, { connectionId: id, action }, {
-        userIds: [connection.teacherId, connection.studentId],
-      })
-      if (refundedNow) rtWalletChanged([connection.payerId || connection.teacherId])
-      return NextResponse.json({ connection: toConnectionDTO(updated as never, me.id), refunded: refundedNow })
     } else if (action === 'BLOCK') {
       if (connection.blockedBy) return NextResponse.json({ error: 'Already blocked' }, { status: 409 })
 
@@ -164,7 +233,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     // Realtime: wallet badges after hire bonus (refund wallet emit already happens in the REJECT early-return)
     if (action === 'HIRE') rtWalletChanged([connection.teacherId, connection.studentId])
 
-    return NextResponse.json({ connection: toConnectionDTO(updated as never, me.id), refunded: false })
+    return NextResponse.json({ connection: toConnectionDTO(updated as never, me.id), refunded: refundedNow })
   } catch (e) {
     if (e instanceof HttpError) return NextResponse.json({ error: e.message }, { status: e.status })
     console.error(e)

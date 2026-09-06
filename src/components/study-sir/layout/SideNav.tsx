@@ -102,11 +102,17 @@ export function SideNav() {
 
       <SectionLabel>Monetize</SectionLabel>
       <div className="space-y-1">
-        <NavRow icon={Coins} label="Buy Coins" active={false} onClick={nav('wallet', { tab: 'coins' })} />
+        {me.role === 'TEACHER' ? (
+          <NavRow icon={Coins} label="Buy Coins" active={false} onClick={nav('wallet', { tab: 'coins' })} />
+        ) : null}
         <NavRow icon={History} label="Coins History" active={false} onClick={nav('wallet', { tab: 'history' })} />
         <NavRow icon={Banknote} label="Money Wallet" active={false} onClick={nav('wallet', { tab: 'money' })} />
-        <NavRow icon={BadgeDollarSign} label="Monetize Program" active={view === 'monetize'} onClick={nav('monetize')} />
-        <NavRow icon={Star} label="Monetize Reviews" active={view === 'reviews'} onClick={nav('reviews')} />
+        {me.role === 'TEACHER' ? (
+          <>
+            <NavRow icon={BadgeDollarSign} label="Monetize Program" active={view === 'monetize'} onClick={nav('monetize')} />
+            <NavRow icon={Star} label="Monetize Reviews" active={view === 'reviews'} onClick={nav('reviews')} />
+          </>
+        ) : null}
       </div>
 
       <SectionLabel>More</SectionLabel>

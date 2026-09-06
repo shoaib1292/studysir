@@ -116,7 +116,12 @@ export function TuitionCard({
       const { connection } = await api.createConnection({ tuitionPostId: tuition.id })
       void refreshMe()
       setConfirmOpen(false)
-      toast.success('Request sent!', { description: 'Chat unlocked — say hi 👋' })
+      toast.success(connection.status === 'ACTIVE' ? 'Request accepted!' : 'Request sent!', {
+        description:
+          connection.status === 'ACTIVE'
+            ? `${tuition.coinCost} coins deducted — chat unlocked. Say salam 👋`
+            : 'The student will see you in their requests once accepted.',
+      })
       go('chats', { connectionId: connection.id })
     } catch (e) {
       if (e instanceof ApiError && e.status === 402) {
@@ -257,7 +262,7 @@ export function TuitionCard({
           <CardAction icon={ThumbsUp} label="Like" active={liked} onClick={toggleLike} />
           <CardAction icon={MessageSquareText} label="Review" disabled />
           {isTeacherViewer && !isMine ? (
-            <CardAction icon={Handshake} label="Hire" onClick={startContact} />
+            <CardAction icon={Handshake} label={`Accept · ${tuition.coinCost}`} onClick={startContact} />
           ) : null}
           {isTeacherViewer || (isMine && tuition.existingConnectionId) ? (
             <CardAction icon={MessagesSquare} label="Live Chat" onClick={startContact} />
@@ -292,11 +297,11 @@ export function TuitionCard({
       <ConnectConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Contact this tuition?"
-        message={`You are about to approach "${tuition.title}". Chat unlocks instantly after this.`}
+        title="Accept this tuition?"
+        message={`Accepting "${tuition.title}" will deduct ${tuition.coinCost} coins from your balance and unlock the chat with the student. If the student never replies in 10 days, coins are auto-refunded.`}
         cost={tuition.coinCost}
         balance={me.coins}
-        confirmLabel={`Contact for ${tuition.coinCost} coins`}
+        confirmLabel={`Accept for ${tuition.coinCost} coins`}
         loading={connecting}
         onConfirm={confirmConnect}
       />

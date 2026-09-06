@@ -7,6 +7,13 @@ import { rtWalletChanged } from '@/lib/realtime'
 export async function POST(req: NextRequest) {
   try {
     const me = await requireSessionUser()
+    // Requirement B: students/parents NEVER hold coins — only teachers buy them.
+    if (me.role !== 'TEACHER') {
+      return NextResponse.json(
+        { error: 'Only teachers buy coins. Students & parents post and request for free.' },
+        { status: 403 }
+      )
+    }
     const body = await req.json().catch(() => null)
     const pkg = COIN_PACKAGES.find((p) => p.id === body?.packageId)
     if (!pkg) return NextResponse.json({ error: 'Invalid package' }, { status: 400 })

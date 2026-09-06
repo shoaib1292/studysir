@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client'
+import { hashPassword } from '../src/lib/password'
 
 const db = new PrismaClient()
 
@@ -9,6 +10,7 @@ async function main() {
   await db.notification.deleteMany()
   await db.like.deleteMany()
   await db.review.deleteMany()
+  await db.reaction.deleteMany()
   await db.block.deleteMany()
   await db.coinTransaction.deleteMany()
   await db.report.deleteMany()
@@ -22,20 +24,108 @@ async function main() {
   await db.user.deleteMany()
 
   const mkUser = (data: any) => db.user.create({ data })
+  const demoPw = hashPassword('demo123') // every demo account logs in with demo123
 
+  // ─────────────── Platform admin (SEPARATE login entry) ───────────────
+  await mkUser({
+    email: 'admin@studysir.app',
+    name: 'Platform Admin',
+    role: 'STUDENT',
+    password: hashPassword('admin123'),
+    isAdmin: true,
+    status: 'ACTIVE',
+    avatar: '/images/avatar-admin.png',
+    headline: 'StudySir Platform Administration',
+    bio: 'Keeps StudySir safe: reviews reports, verifies payments, manages coin pricing and AI agents.',
+    city: 'Lahore',
+    country: 'Pakistan',
+    coins: 0,
+    money: 0,
+  })
+
+  // ─────────────── AI agents ───────────────
+  const aiTeacher = await mkUser({
+    email: 'ai.ahsan@studysir.app',
+    name: 'Prof. Ahsan Raza',
+    role: 'TEACHER',
+    isAI: true,
+    password: null, // AI accounts cannot log in
+    avatar: '/images/avatar-ai-teacher.png',
+    headline: 'Math & Physics Teacher · 8 years experience',
+    bio: 'Assalam o alaikum! Main Class 9-12 ke students ko Math aur Physics parhata hun. Concept-based teaching, board exam preparation, aur weekly tests. Online aur home tuition dono available hain.',
+    city: 'Lahore',
+    country: 'Pakistan',
+    gender: 'Male',
+    qualification: 'MSc Mathematics (PU)',
+    subjects: 'Math, Physics',
+    languages: 'Urdu, English',
+    feeMin: 30,
+    feeMax: 80,
+    coins: 500, // admin-funded so the agent can accept requests
+    money: 0,
+    aiPersona: JSON.stringify({
+      tagline: 'Senior Math/Physics teacher, kadi-mita friendly uncle vibe',
+      style:
+        'Warm desi teacher. Mixes Roman Urdu + English naturally ("ji", "beta", "theek hai"). Short messages. Talks about concepts, tests, student progress. Asks about the student class/subjects. Never reveals being AI.',
+      activeFrom: 5,
+      activeTo: 17,
+      minDelaySec: 20,
+      maxDelaySec: 90,
+      mergeWindowSec: 7,
+      replyChance: 0.95,
+      declineChances: [
+        'Sorry beta, is month mere batches full hain — next month check karein.',
+        'Ji main abhi full hoon, aap kisi aur teacher ko try karein. Best of luck!',
+      ],
+    }),
+  })
+
+  const aiStudent = await mkUser({
+    email: 'ai.zara@studysir.app',
+    name: 'Zara Malik',
+    role: 'STUDENT',
+    isAI: true,
+    password: null,
+    avatar: '/images/avatar-ai-student.png',
+    headline: 'Student · Class 11 (Pre-Medical)',
+    bio: 'Class 11 pre-medical student. Biology aur Chemistry ke liye achhi teacher dhoond rahi hun. Evening time chal jata hai.',
+    city: 'Karachi',
+    country: 'Pakistan',
+    gender: 'Female',
+    languages: 'Urdu, English',
+    coins: 0, // students NEVER have coins
+    money: 0,
+    aiPersona: JSON.stringify({
+      tagline: 'Class 11 student, polite thori shy, fee-conscious',
+      style:
+        'Polite young student girl. Roman Urdu + simple English. Short messages, sometimes asks 2 questions about fee and timing. Says "ji", "shukriya". Never reveals being AI.',
+      activeFrom: 6,
+      activeTo: 17,
+      minDelaySec: 15,
+      maxDelaySec: 75,
+      mergeWindowSec: 6,
+      replyChance: 0.85,
+      declineChances: [
+        'Ji actually maine apni timing change kar li hai, ab possible nahi. Sorry!',
+        'Sorry, mummy ne kaha hai abhi tuition nahi. Shukriya waqt ke liye!',
+      ],
+    }),
+  })
+
+  // ─────────────── Real demo users (students have NO coins — money wallet only) ───────────────
   const warren = await mkUser({
     email: 'warren@studysir.app',
     name: 'Warren Buffett',
     role: 'STUDENT',
-    isAdmin: true,
+    password: demoPw,
     status: 'ACTIVE',
     avatar: '/images/avatar-warren.png',
-    headline: 'Student · Finance Learner · Moderator',
+    headline: 'Student · Finance Learner',
     bio: 'Investor mindset student from Omaha. Learning value investing one tuition at a time.',
     city: 'Omaha',
     gender: 'Male',
     languages: 'English',
-    coins: 40,
+    coins: 0,
     money: 25,
   })
 
@@ -43,13 +133,15 @@ async function main() {
     email: 'ahmed@studysir.app',
     name: 'Ahmed Raza',
     role: 'STUDENT',
+    password: demoPw,
     avatar: '/images/avatar-student.png',
     headline: 'Student · Class 10th',
     bio: 'Class 10 student looking for great teachers for Math and Urdu.',
-    city: 'Mumbai',
+    city: 'Karachi',
+    country: 'Pakistan',
     gender: 'Male',
     languages: 'English, Urdu, Hindi',
-    coins: 30,
+    coins: 0,
     money: 10,
   })
 
@@ -57,13 +149,15 @@ async function main() {
     email: 'fatima@studysir.app',
     name: 'Fatima Khan',
     role: 'PARENT',
+    password: demoPw,
     avatar: '/images/avatar-parent.png',
     headline: 'Parent · Hiring for kids',
     bio: 'Mother of two, finding the best tutors for my children.',
-    city: 'Mumbai',
+    city: 'Karachi',
+    country: 'Pakistan',
     gender: 'Female',
     languages: 'English, Hindi, Urdu',
-    coins: 60,
+    coins: 0,
     money: 40,
   })
 
@@ -71,10 +165,11 @@ async function main() {
     email: 'mukesh@studysir.app',
     name: 'Sir Mukesh Ambani',
     role: 'TEACHER',
+    password: demoPw,
     avatar: '/images/avatar-mukesh.png',
     coverImage: '/images/cover-meeting.png',
     headline: 'Business & Finance Coach',
-    bio: 'Chairman-level mentor. I teach business strategy, finance and entrepreneurship the practical way. Attended the Hill Grange High School at Peddar Road, Mumbai, and later studied at St. Xavier’s College, Mumbai.',
+    bio: 'Chairman-level mentor. I teach business strategy, finance and entrepreneurship the practical way.',
     city: 'Mumbai',
     gender: 'Male',
     qualification: 'Bachelor in Finance',
@@ -91,6 +186,7 @@ async function main() {
     email: 'adani@studysir.app',
     name: 'Sir Gautam Adani',
     role: 'TEACHER',
+    password: demoPw,
     avatar: '/images/avatar-adani.png',
     coverImage: '/images/cover-meeting.png',
     headline: 'Business Coach',
@@ -111,6 +207,7 @@ async function main() {
     email: 'elon@studysir.app',
     name: 'Sir Elon Musk',
     role: 'TEACHER',
+    password: demoPw,
     avatar: '/images/avatar-elon.png',
     coverImage: '/images/cover-classroom.png',
     headline: 'Physics & Math Teacher',
@@ -131,6 +228,7 @@ async function main() {
     email: 'alina@studysir.app',
     name: "Ma'am Alina Rose",
     role: 'TEACHER',
+    password: demoPw,
     avatar: '/images/avatar-alina.png',
     coverImage: '/images/cover-classroom.png',
     headline: 'Spoken English Teacher',
@@ -151,11 +249,13 @@ async function main() {
     email: 'noman@studysir.app',
     name: 'Noman Ali',
     role: 'TEACHER',
+    password: demoPw,
     avatar: '/images/avatar-noman.png',
     coverImage: '/images/cover-classroom.png',
     headline: 'Digital Store · Study Materials',
     bio: 'Selling curated study guides, e-books and notes. Download instantly after purchase.',
     city: 'Karachi',
+    country: 'Pakistan',
     gender: 'Male',
     qualification: 'Masters in Education',
     subjects: 'Study Skills, Economics',
@@ -166,15 +266,15 @@ async function main() {
     money: 300,
   })
 
-  // ---------- Tuition posts ----------
+  // ---------- Tuition posts (students post FREE — coinCost = what the ACCEPTING teacher pays) ----------
   const t1 = await db.tuitionPost.create({
     data: {
       authorId: ahmed.id,
       title: 'Online Class 10th Math teacher needed',
       description:
-        'I need a private tutor for my 10 Class boy, kid is continuing his 4th std now. I need a tutor for all subjects, especially mathematics and English and maths. Home tutors only. Location: Malad and Kandivali.',
+        'I need a private tutor for my 10th class boy. I need a tutor for all subjects, especially mathematics and English. Online classes preferred.',
       mode: 'ONLINE',
-      city: 'Mumbai',
+      city: 'Karachi',
       subjects: 'Math, Urdu',
       languages: 'English, Urdu, Hindi',
       qualification: 'Bachelors',
@@ -190,9 +290,9 @@ async function main() {
       authorId: fatima.id,
       title: 'Spoken English tutor for my 6 year old kid',
       description:
-        'Kid is continuing his 1st in class 1st B, and continue since he is in year 1 (B) months. Fun, patient teacher needed for spoken English basics with interactive activities.',
+        'Fun, patient teacher needed for spoken English basics with interactive activities for my class 1 kid.',
       mode: 'HOME',
-      city: 'Mumbai',
+      city: 'Karachi',
       subjects: 'Spoken English, Phonics',
       languages: 'English, Hindi',
       qualification: 'Bachelors',
@@ -221,20 +321,22 @@ async function main() {
     },
   })
 
-  const t4 = await db.tuitionPost.create({
+  // AI student posts her requirement (AI teachers will accept these)
+  await db.tuitionPost.create({
     data: {
-      authorId: ahmed.id,
-      title: 'Home tutor for Urdu & Islamiat near Malad',
-      description: 'Need a patient home tutor for Urdu and Islamiat subjects, evening timings near Malad West.',
-      mode: 'HOME',
-      city: 'Mumbai',
-      subjects: 'Urdu, Islamiat',
-      languages: 'Urdu, Hindi',
-      qualification: 'Bachelors',
+      authorId: aiStudent.id,
+      title: 'Biology + Chemistry tutor for Class 11 (pre-medical)',
+      description:
+        'Assalam o alaikum! Mujhe Class 11 pre-medical ke liye Biology aur Chemistry ki teacher chahiye. Evening 5-8 pm time chalega. Online classes prefer karungi. Concept clear karne wali teacher ho to best hai.',
+      mode: 'ONLINE',
+      city: 'Karachi',
+      subjects: 'Biology, Chemistry',
+      languages: 'Urdu, English',
+      qualification: 'Masters preferred',
       feeMin: 20,
-      feeMax: 40,
-      timing: '7 pm to 8:30 pm',
-      coinCost: 13,
+      feeMax: 60,
+      timing: '5 pm to 8 pm',
+      coinCost: 12,
     },
   })
 
@@ -244,7 +346,7 @@ async function main() {
       teacherId: alina.id,
       title: 'Spoken English Course',
       description:
-        'Kid is continuing his 1st in class... no wait — this is a complete spoken English course for beginners and intermediate learners. Interactive group classes, real-life conversation practice, weekly assessments and a certificate at the end. Join now and speak English with confidence!',
+        'A complete spoken English course for beginners and intermediate learners. Interactive group classes, real-life conversation practice, weekly assessments and a certificate at the end.',
       cover: '/images/course-english.png',
       language: 'English',
       subject: 'Spoken English',
@@ -257,7 +359,7 @@ async function main() {
     },
   })
 
-  const c2 = await db.course.create({
+  await db.course.create({
     data: {
       teacherId: mukesh.id,
       title: 'Business & Finance Masterclass',
@@ -275,7 +377,7 @@ async function main() {
     },
   })
 
-  const c3 = await db.course.create({
+  await db.course.create({
     data: {
       teacherId: elon.id,
       title: 'Physics Problem-Solving Bootcamp',
@@ -293,6 +395,25 @@ async function main() {
     },
   })
 
+  // AI teacher also lists a course
+  await db.course.create({
+    data: {
+      teacherId: aiTeacher.id,
+      title: 'Math Concept Builder — Class 9-12',
+      description:
+        'Board-exam focused Math course: algebra, geometry, trigonometry with weekly tests aur detailed feedback. Har student ka separate progress track hota hai.',
+      cover: '/images/cover-classroom.png',
+      language: 'Urdu, English',
+      subject: 'Math',
+      duration: '3 Months',
+      timing: '6 pm to 8 pm',
+      classDuration: '75:00 mins',
+      classesPerWeek: '4 Days',
+      format: 'Live online via Zoom',
+      fee: 35,
+    },
+  })
+
   // ---------- Digital goods ----------
   const g1 = await db.digitalGood.create({
     data: {
@@ -305,7 +426,7 @@ async function main() {
       fileUrl: '/downloads/rich-dad.pdf',
     },
   })
-  const g2 = await db.digitalGood.create({
+  await db.digitalGood.create({
     data: {
       sellerId: noman.id,
       title: 'Class 10 Math Formula Sheet (PDF)',
@@ -314,7 +435,7 @@ async function main() {
       price: 50,
     },
   })
-  const g3 = await db.digitalGood.create({
+  await db.digitalGood.create({
     data: {
       sellerId: alina.id,
       title: 'English Grammar Workbook — 80 Exercises',
@@ -324,8 +445,8 @@ async function main() {
     },
   })
 
-  // ---------- Connections (chat requests) ----------
-  // 1) ACTIVE chat between Elon and Ahmed (chat started => no refund on reject)
+  // ---------- Connections (NEW model: teacher pays on accept; student requests are free) ----------
+  // 1) ACTIVE: Elon accepted Ahmed's tuition post earlier (paid 10 coins) — chat started
   const connActive = await db.connection.create({
     data: {
       teacherId: elon.id,
@@ -342,11 +463,11 @@ async function main() {
       { connectionId: connActive.id, senderId: elon.id, content: 'Hello Ahmed! I saw your post for Class 10th Math. I can cover algebra, geometry and trigonometry with weekly tests.', createdAt: new Date(Date.now() - 2 * 24 * 3600 * 1000 + 60000) },
       { connectionId: connActive.id, senderId: ahmed.id, content: 'Have a great working week!! 😄', createdAt: new Date(Date.now() - 2 * 24 * 3600 * 1000 + 120000) },
       { connectionId: connActive.id, senderId: ahmed.id, content: 'Yes sure, what is your fee for the full term?', createdAt: new Date(Date.now() - 1 * 24 * 3600 * 1000) },
-      { connectionId: connActive.id, senderId: elon.id, content: 'For the full term (6 months, 4 classes/week) it is $80 total. First demo class is free. You did your job well choosing Math!', createdAt: new Date(Date.now() - 1 * 24 * 3600 * 1000 + 300000) },
+      { connectionId: connActive.id, senderId: elon.id, content: 'For the full term (6 months, 4 classes/week) it is $80 total. First demo class is free.', createdAt: new Date(Date.now() - 1 * 24 * 3600 * 1000 + 300000) },
     ],
   })
 
-  // 2) HIRED connection: Alina hired by Warren
+  // 2) HIRED: Alina accepted Warren's post (paid 18) and Warren hired her
   const connHired = await db.connection.create({
     data: {
       teacherId: alina.id,
@@ -367,29 +488,16 @@ async function main() {
     ],
   })
 
-  // 3) PENDING: Mukesh → Fatima (no chat yet — can be rejected with refund, or auto-refunds in 10 days)
+  // 3) PENDING (free): Mukesh received a request from Fatima — he can accept (16 coins) or ignore
   await db.connection.create({
     data: {
       teacherId: mukesh.id,
       payerId: mukesh.id,
       studentId: fatima.id,
       tuitionPostId: t2.id,
-      coinsSpent: 16,
+      coinsSpent: 0,
       status: 'PENDING',
       createdAt: new Date(Date.now() - 2 * 24 * 3600 * 1000),
-    },
-  })
-
-  // 4) STALE PENDING: Adani → Warren, created 11 days ago => auto-refund demo
-  const connStale = await db.connection.create({
-    data: {
-      teacherId: adani.id,
-      payerId: adani.id,
-      studentId: warren.id,
-      tuitionPostId: t3.id,
-      coinsSpent: 18,
-      status: 'PENDING',
-      createdAt: new Date(Date.now() - 11 * 24 * 3600 * 1000),
     },
   })
 
@@ -400,7 +508,14 @@ async function main() {
       { authorId: fatima.id, targetId: mukesh.id, rating: 4, comment: 'Very patient with kids.' },
       { authorId: warren.id, targetId: alina.id, rating: 5, comment: 'Her course fixed my accent in 2 months.' },
       { authorId: ahmed.id, targetId: elon.id, rating: 5, comment: 'Physics from first principles — mind blown.' },
-      { authorId: warren.id, targetId: adani.id, rating: 4, comment: 'Great infrastructure stories.' },
+    ],
+  })
+
+  // Reviews FOR the AI teacher (social proof)
+  await db.review.createMany({
+    data: [
+      { authorId: ahmed.id, targetId: aiTeacher.id, rating: 5, comment: 'Prof. sahab ne geometry ke concepts 2 hafte mein clear kar diye. Highly recommended!' },
+      { authorId: fatima.id, targetId: aiTeacher.id, rating: 4, comment: 'Bachay ko physics mein interest aa gaya. Weekly tests ka system acha hai.' },
     ],
   })
 
@@ -412,10 +527,7 @@ async function main() {
       { userId: fatima.id, targetType: 'TEACHER', targetId: mukesh.id },
       { userId: warren.id, targetType: 'TEACHER', targetId: alina.id },
       { userId: ahmed.id, targetType: 'TEACHER', targetId: elon.id },
-      { userId: warren.id, targetType: 'TEACHER', targetId: adani.id },
       { userId: warren.id, targetType: 'COURSE', targetId: c1.id },
-      { userId: ahmed.id, targetType: 'COURSE', targetId: c1.id },
-      { userId: fatima.id, targetType: 'COURSE', targetId: c2.id },
       { userId: ahmed.id, targetType: 'GOOD', targetId: g1.id },
     ],
   })
@@ -427,33 +539,29 @@ async function main() {
       { userId: mukesh.id, day: 'Saturday', slots: '11 am to 2 pm' },
       { userId: alina.id, day: 'Mon to Fri', slots: '4 pm to 6 pm' },
       { userId: elon.id, day: 'Tue, Thu, Sat', slots: '7 pm to 8:30 pm' },
-      { userId: adani.id, day: 'Weekends', slots: '10 am to 1 pm' },
+      { userId: aiTeacher.id, day: 'Mon to Sat', slots: '5 pm to 9 pm' },
     ],
   })
 
-  // ---------- Coin transactions ----------
+  // ---------- Coin transactions (teacher-side economy only) ----------
   await db.coinTransaction.createMany({
     data: [
-      { userId: warren.id, amount: 50, type: 'WELCOME', description: 'Welcome bonus' },
-      { userId: ahmed.id, amount: 50, type: 'WELCOME', description: 'Welcome bonus' },
-      { userId: fatima.id, amount: 50, type: 'WELCOME', description: 'Welcome bonus' },
       { userId: mukesh.id, amount: 200, type: 'PURCHASE', description: 'Purchased Starter pack' },
       { userId: adani.id, amount: 200, type: 'PURCHASE', description: 'Purchased Starter pack' },
       { userId: elon.id, amount: 150, type: 'PURCHASE', description: 'Purchased Starter pack' },
       { userId: alina.id, amount: 100, type: 'PURCHASE', description: 'Purchased Starter pack' },
-      { userId: elon.id, amount: -10, type: 'SPEND_CONTACT', description: 'Contacted Ahmed Raza', connectionId: connActive.id },
-      { userId: alina.id, amount: -18, type: 'SPEND_CONTACT', description: 'Contacted Warren Buffett', connectionId: connHired.id },
-      { userId: mukesh.id, amount: -16, type: 'SPEND_CONTACT', description: 'Contacted Fatima Khan', connectionId: (await db.connection.findFirst({ where: { teacherId: mukesh.id } }))!.id },
-      { userId: adani.id, amount: -18, type: 'SPEND_CONTACT', description: 'Contacted Warren Buffett', connectionId: connStale.id },
+      { userId: aiTeacher.id, amount: 500, type: 'ADMIN_GRANT', description: 'AI agent coin funding' },
+      { userId: elon.id, amount: -10, type: 'SPEND_CONTACT', description: 'Accepted tuition “Online Class 10th Math teacher needed”', connectionId: connActive.id },
+      { userId: alina.id, amount: -18, type: 'SPEND_CONTACT', description: 'Accepted tuition “Finance & Investment mentor needed”', connectionId: connHired.id },
     ],
   })
 
   // ---------- Notifications ----------
   await db.notification.createMany({
     data: [
-      { userId: ahmed.id, type: 'CONNECT_REQUEST', title: 'Sir Elon Musk wants to connect', body: 'Spent 10 coins to contact you about “Online Class 10th Math teacher needed”.', link: 'chats' },
-      { userId: warren.id, type: 'CONNECT_REQUEST', title: "Ma'am Alina Rose hired you back", body: 'You are hired for Finance & Investment mentor needed.', link: 'chats' },
-      { userId: fatima.id, type: 'CONNECT_REQUEST', title: 'Sir Mukesh Ambani wants to connect', body: 'Spent 16 coins to contact you about your Spoken English post.', link: 'chats' },
+      { userId: ahmed.id, type: 'CONNECT_REQUEST', title: 'Sir Elon Musk accepted your request', body: 'Sir Elon Musk is now available in chat for “Online Class 10th Math teacher needed”.', link: 'chats' },
+      { userId: warren.id, type: 'CONNECT_REQUEST', title: "Ma'am Alina Rose accepted your request", body: 'Chat is open for “Finance & Investment mentor needed”.', link: 'chats' },
+      { userId: mukesh.id, type: 'CONNECT_REQUEST', title: 'New request from Fatima Khan', body: 'Fatima Khan sent you a request. Accept (16 coins) to unlock chat.', link: 'chats' },
     ],
   })
 
@@ -463,7 +571,7 @@ async function main() {
       {
         reporterId: ahmed.id,
         targetType: 'GOOD',
-        targetId: (await db.digitalGood.findFirst({ where: { title: { contains: 'RICH DAD' } } }))?.id,
+        targetId: g1.id,
         targetUserId: noman.id,
         reason: 'Copyright',
         details: 'Selling a paid copy of a published book PDF. This is likely pirated content.',
@@ -482,6 +590,8 @@ async function main() {
 
   console.log('✅ Seed complete:', {
     users: await db.user.count(),
+    aiAgents: await db.user.count({ where: { isAI: true } }),
+    admins: await db.user.count({ where: { isAdmin: true } }),
     tuitionPosts: await db.tuitionPost.count(),
     courses: await db.course.count(),
     goods: await db.digitalGood.count(),

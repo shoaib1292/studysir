@@ -13,6 +13,7 @@ model User {
   email         String   @unique
   name          String
   role          String   @default("STUDENT")
+  password      String? // scrypt hash (null = demo-only account until first signup-style login)
   avatar        String?
   coverImage    String?
   headline      String? // e.g. "Business Coach"
@@ -28,7 +29,9 @@ model User {
   coins         Int      @default(0)
   money         Float    @default(0)
   isVerified    Boolean  @default(false)
-  isAdmin       Boolean  @default(false) // moderation access (role stays STUDENT/PARENT/TEACHER)
+  isAdmin       Boolean  @default(false) // platform-admin access (separate login entry)
+  isAI          Boolean  @default(false) // AI-powered demo agent (teacher or student)
+  aiPersona     String? // JSON: { style, activeFrom, activeTo, minDelaySec, maxDelaySec, replyChance, ... }
   status        String   @default("ACTIVE") // ACTIVE | BANNED (moderation)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

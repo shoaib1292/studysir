@@ -2,17 +2,15 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { BadgeCheck, Clock, Handshake, MessageSquareText, ThumbsUp, Users } from 'lucide-react'
-import { api, ApiError, errorMessage } from '@/lib/api'
+import { BadgeCheck, Clock, Handshake, MessageSquareText, Send, ThumbsUp, Users } from 'lucide-react'
+import { api, errorMessage } from '@/lib/api'
 import type { TeacherCardDTO } from '@/lib/types'
 import { useAppStore } from '@/store/useAppStore'
 import { cn } from '@/lib/utils'
 import { ConnectConfirmDialog } from '../dialogs/ConnectConfirmDialog'
-import { NotEnoughCoinsDialog } from '../dialogs/NotEnoughCoinsDialog'
 import { ReviewDialog } from '../dialogs/ReviewDialog'
 import { TimingDialog } from '../dialogs/TimingDialog'
 import { ActionGrid, CardAction, FbCard, StatText } from '../shared/bits'
-import { DIRECT_CONTACT_COST } from '../shared/constants'
 import { RichText } from '../shared/RichText'
 import { Stars } from '../shared/Stars'
 import { SafeImage } from '../shared/SafeImage'
@@ -29,7 +27,6 @@ export function TeacherCard({ teacher, onChanged }: { teacher: TeacherCardDTO; o
   const [timingOpen, setTimingOpen] = useState(false)
   const [hireOpen, setHireOpen] = useState(false)
   const [connecting, setConnecting] = useState(false)
-  const [notEnough, setNotEnough] = useState(false)
 
   async function toggleLike() {
     const next = !liked
@@ -52,15 +49,12 @@ export function TeacherCard({ teacher, onChanged }: { teacher: TeacherCardDTO; o
       const { connection } = await api.createConnection({ teacherId: teacher.id })
       void refreshMe()
       setHireOpen(false)
-      toast.success('Hire request sent!', { description: `Chat with ${teacher.name} is open.` })
+      toast.success('Request sent — FREE!', {
+        description: `${teacher.name} accepts it to unlock the chat. You'll be notified.`,
+      })
       go('chats', { connectionId: connection.id })
     } catch (e) {
-      if (e instanceof ApiError && e.status === 402) {
-        setHireOpen(false)
-        setNotEnough(true)
-      } else {
-        toast.error('Could not hire teacher', { description: errorMessage(e) })
-      }
+      toast.error('Could not send request', { description: errorMessage(e) })
     } finally {
       setConnecting(false)
     }
@@ -148,19 +142,14 @@ export function TeacherCard({ teacher, onChanged }: { teacher: TeacherCardDTO; o
       <ConnectConfirmDialog
         open={hireOpen}
         onOpenChange={setHireOpen}
-        title={`Hire ${teacher.name}?`}
-        message="A direct chat request opens instantly — introduce yourself and agree on terms."
-        cost={DIRECT_CONTACT_COST}
+        title={`Request ${teacher.name}?`}
+        message={`Your request is FREE. ${teacher.name} accepts it to unlock the chat — accepting costs the teacher coins, not you.`}
+        cost={0}
         balance={me.coins}
-        confirmLabel={`Hire for ${DIRECT_CONTACT_COST} coins`}
+        confirmLabel="Send Request — Free"
+        confirmIcon={Send}
         loading={connecting}
         onConfirm={hire}
-      />
-      <NotEnoughCoinsDialog
-        open={notEnough}
-        onOpenChange={setNotEnough}
-        needed={DIRECT_CONTACT_COST}
-        balance={me.coins}
       />
     </FbCard>
   )

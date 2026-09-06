@@ -136,6 +136,12 @@ export const api = {
   // session
   getSession: () => request<{ user: UserDTO | null }>('/api/session'),
   login: (userId: string) => request<{ user: UserDTO }>('/api/session', { method: 'POST', body: { userId } }),
+  loginWithPassword: (email: string, password: string) =>
+    request<{ user: UserDTO }>('/api/auth/login', { method: 'POST', body: { email, password } }),
+  signup: (data: { name: string; email: string; password: string; role: string }) =>
+    request<{ user: UserDTO }>('/api/auth/signup', { method: 'POST', body: data }),
+  adminLogin: (email: string, password: string) =>
+    request<{ user: UserDTO }>('/api/auth/admin-login', { method: 'POST', body: { email, password } }),
   logout: () => request<{ ok: true }>('/api/session', { method: 'DELETE' }),
 
   // users / profile
@@ -189,7 +195,7 @@ export const api = {
       method: 'POST',
       body: { connectionId },
     }),
-  decide: (id: string, action: 'HIRE' | 'REJECT' | 'BLOCK' | 'UNBLOCK' | 'REPORT', reason?: string) =>
+  decide: (id: string, action: 'HIRE' | 'REJECT' | 'ACCEPT' | 'BLOCK' | 'UNBLOCK' | 'REPORT', reason?: string) =>
     request<{ connection: ConnectionDTO }>(`/api/connections/${id}/decide`, {
       method: 'POST',
       body: reason ? { action, reason } : { action },

@@ -25,12 +25,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { api, ApiError, errorMessage } from '@/lib/api'
+import { api, errorMessage } from '@/lib/api'
 import type { CourseDTO } from '@/lib/types'
 import { useAppStore } from '@/store/useAppStore'
 import { ConfirmDialog } from '../dialogs/ConfirmDialog'
 import { ConnectConfirmDialog } from '../dialogs/ConnectConfirmDialog'
-import { NotEnoughCoinsDialog } from '../dialogs/NotEnoughCoinsDialog'
 import { ReportDialog } from '../dialogs/ReportDialog'
 import { ReviewDialog } from '../dialogs/ReviewDialog'
 import { ActionGrid, CardAction, DetailRow, FbCard, StatText } from '../shared/bits'
@@ -55,7 +54,6 @@ export function CourseCard({ course, onChanged }: { course: CourseDTO; onChanged
   const [questionLoading, setQuestionLoading] = useState(false)
   const [joinOpen, setJoinOpen] = useState(false)
   const [joining, setJoining] = useState(false)
-  const [notEnough, setNotEnough] = useState<{ needed: number } | null>(null)
   const [reportOpen, setReportOpen] = useState(false)
 
   const teacherRating = (course as CourseWithRating).teacherAvgRating
@@ -85,26 +83,20 @@ export function CourseCard({ course, onChanged }: { course: CourseDTO; onChanged
         try {
           await api.sendMessage(connection.id, { content: withQuestion.trim() })
         } catch {
-          // non-blocking — chat is open anyway
+          // PENDING chat: teacher sees the question after accepting
         }
       }
       void refreshMe()
       setJoinOpen(false)
       setQuestionOpen(false)
       setQuestion('')
-      toast.success(withQuestion ? 'Question sent!' : 'Join request sent!', {
-        description: `Chat with ${course.teacher.name} is open.`,
+      toast.success(withQuestion ? 'Question sent — waiting for teacher' : 'Join request sent!', {
+        description: `FREE for you — ${course.teacher.name} will accept to unlock the chat.`,
       })
       go('chats', { connectionId: connection.id })
       onChanged?.()
     } catch (e) {
-      if (e instanceof ApiError && e.status === 402) {
-        setJoinOpen(false)
-        setQuestionOpen(false)
-        setNotEnough({ needed: course.connectionCost })
-      } else {
-        toast.error('Could not join course', { description: errorMessage(e) })
-      }
+      toast.error('Could not join course', { description: errorMessage(e) })
     } finally {
       setJoining(false)
     }
@@ -218,8 +210,8 @@ export function CourseCard({ course, onChanged }: { course: CourseDTO; onChanged
         open={questionOpen}
         onOpenChange={setQuestionOpen}
         title={`Ask ${course.teacher.name} a question`}
-        message={`This opens a private chat with ${course.teacher.name} — it costs ${course.connectionCost} coins.`}
-        confirmLabel={`Send Question · ${course.connectionCost} coins`}
+        message={`FREE for you — your question is sent with the join request. ${course.teacher.name} accepts it to unlock the private chat.`}
+        confirmLabel="Send Request — Free"
         loading={questionLoading || joining}
         onConfirm={() => enroll(question)}
       >
@@ -234,19 +226,13 @@ export function CourseCard({ course, onChanged }: { course: CourseDTO; onChanged
       <ConnectConfirmDialog
         open={joinOpen}
         onOpenChange={setJoinOpen}
-        title="Join this course?"
-        message={`Joining "${course.title}" costs ${course.connectionCost} coins — continue?`}
-        cost={course.connectionCost}
+        title="Request to join this course?"
+        message={`Joining "${course.title}" is FREE for you. ${course.teacher.name} will accept the request to unlock the chat (accepting costs the teacher coins).`}
+        cost={0}
         balance={me.coins}
-        confirmLabel="Join Course"
+        confirmLabel="Send Join Request — Free"
         loading={joining}
         onConfirm={() => enroll()}
-      />
-      <NotEnoughCoinsDialog
-        open={notEnough !== null}
-        onOpenChange={(o) => !o && setNotEnough(null)}
-        needed={notEnough?.needed ?? course.connectionCost}
-        balance={me.coins}
       />
       <ReportDialog
         open={reportOpen}
