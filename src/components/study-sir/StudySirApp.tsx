@@ -273,6 +273,16 @@ export default function StudySirApp() {
     )
   }
 
+  // Platform admin console: dedicated FULL-SCREEN app — no student header/nav/sidebar.
+  if (view === 'admin' && me.isAdmin) {
+    return (
+      <div className="flex min-h-screen flex-col bg-background">
+        <AdminView />
+        <OfflineBanner online={online} />
+      </div>
+    )
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <Header />

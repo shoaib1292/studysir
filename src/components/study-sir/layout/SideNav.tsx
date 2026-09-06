@@ -119,7 +119,7 @@ export function SideNav() {
       <div className="space-y-1">
         <NavRow icon={Settings} label="Settings" active={view === 'settings'} onClick={nav('settings')} />
         {me.isAdmin ? (
-          <NavRow icon={ShieldCheck} label="Admin Queue" active={view === 'admin'} onClick={nav('admin')} />
+          <NavRow icon={ShieldCheck} label="Admin Console" active={view === 'admin'} onClick={nav('admin')} />
         ) : null}
       </div>
 

@@ -6,23 +6,36 @@ import {
   ArrowLeft,
   BarChart3,
   Bot,
-  ChevronDown,
   IdCard,
   Landmark,
   LayoutDashboard,
+  LogOut,
   Menu,
+  Moon,
   ShieldAlert,
   ShieldCheck,
+  Sun,
+  User,
   Users,
   Wallet,
 } from 'lucide-react'
+import { useTheme } from 'next-themes'
 import { api } from '@/lib/api'
-import type { AdminOverview } from '@/lib/types'
 import { useAppStore } from '@/store/useAppStore'
 import { cn } from '@/lib/utils'
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { UserAvatar } from '../shared/UserAvatar'
 import { EmptyState } from '../shared/EmptyState'
+import { NotificationsPopover } from '../layout/NotificationsPopover'
 import type { AdminSection } from './admin/OverviewTab'
 import { OverviewTab } from './admin/OverviewTab'
 import { UsersTab } from './admin/UsersTab'
@@ -202,33 +215,64 @@ function AdminFooter({ onBack, name }: { onBack: () => void; name: string }) {
   )
 }
 
+function AdminThemeToggle() {
+  const { resolvedTheme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true)
+  }, [])
+
+  const isDark = mounted && resolvedTheme === 'dark'
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      aria-label="Toggle dark mode"
+      title="Toggle dark mode"
+      onClick={() => setTheme(isDark ? 'light' : 'dark')}
+      className="size-10 shrink-0 rounded-full hover:bg-accent"
+    >
+      {isDark ? <Sun className="size-5" /> : <Moon className="size-5" />}
+    </Button>
+  )
+}
+
 export function AdminView() {
   const me = useAppStore((s) => s.me)!
   const go = useAppStore((s) => s.go)
+  const setMe = useAppStore((s) => s.setMe)
   const isAdmin = me.isAdmin
   const isOwner = !me.subRole || me.subRole === 'OWNER'
 
   const [section, setSection] = useState<AdminSection>('overview')
   const [sheetOpen, setSheetOpen] = useState(false)
-  /** Fetched once for the sidebar queue badges — each tab loads its own data. */
+  /** Fetched on mount + polled for the sidebar queue badges — each tab loads its own data. */
   const [badges, setBadges] = useState<BadgeCounts | null>(null)
 
   useEffect(() => {
     if (!isAdmin) return
     let cancelled = false
-    api
-      .adminOverview()
-      .then((d) => {
-        if (cancelled) return
-        setBadges({
-          reports: d.overview.queues.openReports,
-          payments: d.overview.queues.pendingPayments + d.overview.queues.pendingWithdrawals,
-          kyc: d.overview.queues.pendingKyc,
+    const load = () => {
+      api
+        .adminOverview()
+        .then((d) => {
+          if (cancelled) return
+          setBadges({
+            reports: d.overview.queues.openReports,
+            payments: d.overview.queues.pendingPayments + d.overview.queues.pendingWithdrawals,
+            kyc: d.overview.queues.pendingKyc,
+          })
         })
-      })
-      .catch(() => null)
+        .catch(() => null)
+    }
+    load()
+    const timer = setInterval(load, 60000)
     return () => {
       cancelled = true
+      clearInterval(timer)
     }
   }, [isAdmin])
 
@@ -270,56 +314,106 @@ export function AdminView() {
     }
   }
 
+  async function logout() {
+    try {
+      await api.logout()
+    } catch {
+      // demo session may already be gone — continue
+    }
+    setMe(null)
+  }
+
   return (
-    <div className="w-full">
-      {/* Mobile section bar — sticky under the app header + main nav */}
-      <div className="sticky top-[111px] z-30 -mx-3 mb-3 border-b bg-background/95 px-3 py-2 backdrop-blur md:-mx-5 lg:hidden">
-        <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-          <SheetTrigger asChild>
-            <Button variant="outline" className="w-full justify-start gap-2 font-bold">
-              <Menu className="size-4" />
-              StudySir Admin
-              <span className="truncate font-normal text-muted-foreground">· {meta.title}</span>
-              <ChevronDown className="ml-auto size-4 shrink-0 text-muted-foreground" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="w-72 gap-0 p-0">
-            <SheetTitle className="sr-only">Admin navigation</SheetTitle>
-            <SheetDescription className="sr-only">Switch between admin console sections.</SheetDescription>
-            <div className="flex h-full flex-col bg-zinc-950 p-3 text-zinc-300">
-              <AdminBrand isOwner={isOwner} />
-              <div className="mt-1 flex-1 overflow-y-auto">
-                <AdminNav active={current} onSelect={selectSection} isOwner={isOwner} badges={badges} />
-              </div>
-              <AdminFooter onBack={() => go('feed', {})} name={me.name} />
+    <div className="flex min-h-screen w-full bg-background">
+      {/* Desktop sidebar — owns the full viewport height like a real admin console */}
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col gap-1 overflow-y-auto border-r border-zinc-800/80 bg-zinc-950 p-3 text-zinc-300 lg:flex">
+        <AdminBrand isOwner={isOwner} />
+        <div className="mt-1 flex flex-1 flex-col">
+          <AdminNav active={current} onSelect={selectSection} isOwner={isOwner} badges={badges} />
+        </div>
+        <AdminFooter onBack={() => go('feed', {})} name={me.name} />
+      </aside>
+
+      {/* Right column: console top bar + content */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+          <div className="flex h-14 items-center gap-2 px-3 md:gap-3 md:px-6">
+            {/* Mobile section nav */}
+            <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+              <SheetTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Open admin navigation"
+                  className="size-10 shrink-0 rounded-full hover:bg-accent lg:hidden"
+                >
+                  <Menu className="size-5" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-72 gap-0 border-zinc-800 bg-zinc-950 p-0 text-zinc-300">
+                <SheetTitle className="sr-only">Admin navigation</SheetTitle>
+                <SheetDescription className="sr-only">Switch between admin console sections.</SheetDescription>
+                <div className="flex h-full flex-col p-3">
+                  <AdminBrand isOwner={isOwner} />
+                  <div className="mt-1 flex-1 overflow-y-auto">
+                    <AdminNav active={current} onSelect={selectSection} isOwner={isOwner} badges={badges} />
+                  </div>
+                  <AdminFooter onBack={() => go('feed', {})} name={me.name} />
+                </div>
+              </SheetContent>
+            </Sheet>
+
+            {/* Console identity / section title */}
+            <div className="min-w-0 flex-1">
+              <p className="hidden text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:block">
+                StudySir Admin{me.subRole === 'STAFF' ? ' · Staff' : ''}
+              </p>
+              <h1 className="truncate text-base font-extrabold leading-tight md:text-lg">{meta.title}</h1>
             </div>
-          </SheetContent>
-        </Sheet>
-      </div>
 
-      <div className="flex w-full">
-        {/* Desktop sidebar — dark professional console nav (sticky below the 57px header + 41px main nav) */}
-        <aside className="sticky top-[98px] hidden h-[calc(100vh-98px)] w-60 shrink-0 flex-col gap-1 overflow-y-auto border-r bg-zinc-950 p-3 text-zinc-300 dark:bg-zinc-950 lg:flex">
-          <AdminBrand isOwner={isOwner} />
-          <div className="mt-1 flex flex-1 flex-col">
-            <AdminNav active={current} onSelect={selectSection} isOwner={isOwner} badges={badges} />
+            {/* Console actions */}
+            <div className="flex shrink-0 items-center gap-1 md:gap-1.5">
+              <NotificationsPopover />
+              <AdminThemeToggle />
+              <Button variant="outline" size="sm" onClick={() => go('feed', {})} className="hidden gap-1.5 sm:inline-flex">
+                <ArrowLeft className="size-4" />
+                StudySir
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Admin account menu"
+                    className="rounded-full ring-[#1877F2] focus-visible:outline-none focus-visible:ring-2"
+                  >
+                    <UserAvatar src={me.avatar} name={me.name} className="size-9" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">Signed in as {me.name}</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => go('profile', { userId: me.id })}>
+                    <User className="size-4" />
+                    My profile
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => go('feed', {})}>
+                    <ArrowLeft className="size-4" />
+                    Back to StudySir
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={logout} className="text-red-600 focus:text-red-600">
+                    <LogOut className="size-4" />
+                    Log out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
-          <AdminFooter onBack={() => go('feed', {})} name={me.name} />
-        </aside>
+        </header>
 
-        {/* Console content */}
-        <main className="min-w-0 flex-1 p-4 lg:p-6">
-          <div className="mb-4">
-            <h1 className="flex flex-wrap items-center gap-2 text-xl font-extrabold">
-              {meta.title}
-              {me.subRole === 'STAFF' ? (
-                <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                  Staff · limited access
-                </span>
-              ) : null}
-            </h1>
-            <p className="text-sm text-muted-foreground">{meta.description}</p>
-          </div>
+        {/* Console content — full width of the remaining viewport */}
+        <main className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-4 md:px-6 md:py-6 lg:px-8">
+          <p className="mb-4 text-sm text-muted-foreground">{meta.description}</p>
           {renderSection()}
         </main>
       </div>

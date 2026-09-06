@@ -13,7 +13,7 @@ async function notifyAdmins(reporterName: string) {
     const admins = await db.user.findMany({ where: { isAdmin: true, status: 'ACTIVE' }, select: { id: true } })
     await Promise.all(
       admins.map((a) =>
-        notify(a.id, 'SYSTEM', 'New report submitted', `${reporterName} reported content — review it in the Admin Queue.`, 'admin')
+        notify(a.id, 'SYSTEM', 'New report submitted', `${reporterName} reported content — review it in the Admin Console.`, 'admin')
       )
     )
   } catch {

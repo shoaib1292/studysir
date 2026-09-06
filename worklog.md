@@ -519,3 +519,27 @@ Stage Summary:
 - FB sharing is now REAL: Share → composer → "Post to StudySir" → feed shows "<user> shared a post" with the ORIGINAL post embedded (content travels, not a link), like/re-share/delete on wrapper, author notified. Copy-text + WhatsApp external paths still available.
 - Admin is now a PROPER platform console: dark sidebar (not a tab queue), Overview dashboard with live KPIs/chart/queues, Users management table with search+filters+ban, Reports/Payments/KYC/Economy/AI Engine/Analytics re-wired as sections; staff still limited.
 - QA evidence: agent-browser end-to-end — Warren shared a good with caption → wrapper rendered "shared a post" + caption + embedded card → liked (0→1) → deleted own share (gone); admin: overview KPIs real (12 users, 4/1000 milestone, Rs 29,800 wallets), Reports/Payments/Users sections render with live queue data, search "mukesh" filters to 1 row. lint 0, tsc src clean, console + dev.log clean.
+
+---
+Task ID: 17
+Agent: Z.ai Code (lead)
+Task: User: "yaar pori screen pr platform admin banao na" — make the platform admin console take the FULL screen (dedicated app, not embedded in the StudySir shell)
+
+Work Log:
+- StudySirApp.tsx: added a dedicated branch BEFORE the normal shell return — `if (view === 'admin' && me.isAdmin)` renders ONLY <AdminView /> (+ OfflineBanner): no Header, no MainNav, no SideNav, no Footer. Non-admin fallback still renders inside the shell with the EmptyState guard.
+- AdminView.tsx rewritten as a true full-screen console:
+  - Root `flex min-h-screen w-full bg-background`; desktop sidebar is now `sticky top-0 h-screen w-64` (owns the full viewport height, own scroll, border-r zinc-800/80, always-dark zinc-950) — no more top-[98px] offset hacks.
+  - NEW own sticky top bar (h-14, z-40, bg-background/95 backdrop-blur): mobile Menu → Sheet (same AdminNav + brand + footer), "STUDYSIR ADMIN [· STAFF]" breadcrumb + section h1, right cluster = NotificationsPopover, AdminThemeToggle (local, next-themes), "← StudySir" outline button (go('feed')), avatar DropdownMenu (My profile / Back to StudySir / Log out with api.logout + setMe(null)).
+  - Content: `mx-auto w-full max-w-[1600px] flex-1 px-4 md:px-6 lg:px-8` with section description lead line; all 8 sections (Overview/Users/Reports/Payments/KYC/Economy/AI Engine/Analytics) unchanged functionally.
+  - Sidebar queue badges now POLL every 60s (was fetch-once) so Reports/Payments/KYC counts stay live while the admin works.
+- SideNav.tsx: "Admin Queue" → "Admin Console" (stale name from the old queue UI). /api/reports notify text updated to match.
+- VERIFY: eslint 0 errors; tsc 0 errors in touched files. agent-browser QA via gateway :81 (owner + staff, 1280px + 390px):
+  - Owner: console renders with ONLY admin chrome (no search field / wallet pill / student nav in a11y tree); sidebar measured 256×577 = exactly viewport height; KPIs + chart + milestone live (12 users, Reports 2/Payments 2/KYC 1 badges).
+  - Section switching: Overview → Payments shows Fatima's pending screenshot queue; back via "Back to StudySir" restores the student shell (verified Header + nav present, admin gone).
+  - Mobile 390×844 (`agent-browser set viewport 390 844`): sidebar hidden, hamburger + title bar, no horizontal scroll, 2-col KPIs; Sheet opens with full nav, selecting Users navigates + closes.
+  - Staff: logged out via avatar menu → "Admin Login" separate entrance → staff@studysir.app → console shows ONLY General(Overview,Users)+Moderation(Reports 2), STAFF chip in brand + breadcrumb "STUDYSIR ADMIN · STAFF".
+  - NOTE: one agent-browser ref (e21) went stale after login re-render and clicked nothing — re-clicking with a fresh ref/JS click worked; NOT an app bug.
+- Screenshots: download/qa17-admin-fullscreen-top.png, qa17-admin-payments.png, qa17-admin-mobile.png, qa17-admin-mobile-users.png, qa17-staff-console.png. dev.log clean (no errors/warnings).
+
+Stage Summary:
+- The platform admin is now a true FULL-SCREEN console application: it owns the entire viewport with its own dark sidebar (full height), its own top bar (breadcrumb, notifications, theme toggle, back-to-app, account menu with logout), and full-width content — zero StudySir student chrome. Owner sees all 8 sections, staff sees a locked-down moderation subset. Entry: SideNav "Admin Console" or the dedicated Admin Login on the login screen. lint/tsc clean, QA'd on desktop + mobile for both roles.
