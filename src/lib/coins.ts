@@ -6,8 +6,8 @@ export const REFUND_WINDOW_DAYS = 10
 export const TEACHER_SIGNUP_COINS = 60
 
 /**
- * Coin cost scales with the "weight" of the tuition:
- * - average fee range drives the base cost
+ * Coin cost scales with the "weight" of the tuition (fees are in PKR):
+ * - average fee range drives the base cost (avg 4,000 PKR ≈ 13 coins)
  * - home tuition is heavier (extra coins)
  * - clamped between 5 and 50 coins
  * (Charged to the TEACHER when they accept a request — students post & request free.)
@@ -16,7 +16,7 @@ export function computeCoinCost(feeMin: number, feeMax: number, mode: string): n
   const safeMin = Number.isFinite(feeMin) ? Math.max(0, feeMin) : 0
   const safeMax = Number.isFinite(feeMax) ? Math.max(0, feeMax) : 0
   const avg = (safeMin + safeMax) / 2
-  let cost = 5 + Math.round(avg / 10)
+  let cost = 5 + Math.round(avg / 500)
   if (mode === 'HOME') cost += 5
   if (mode === 'CENTER') cost += 2
   return Math.min(50, Math.max(5, cost))
@@ -25,11 +25,12 @@ export function computeCoinCost(feeMin: number, feeMax: number, mode: string): n
 /** Direct-contact accept cost (teacher accepts a student's profile request). */
 export const DIRECT_ACCEPT_COST = 10
 
+/** Coin packages — prices in PKR (display converts to the user's currency). */
 export const COIN_PACKAGES = [
-  { id: 'pack_100', coins: 100, price: 1, label: 'Starter' },
-  { id: 'pack_500', coins: 500, price: 4.5, label: 'Value' },
-  { id: 'pack_1000', coins: 1000, price: 8, label: 'Pro' },
-  { id: 'pack_5000', coins: 5000, price: 35, label: 'Academy' },
+  { id: 'pack_100', coins: 100, price: 280, label: 'Starter' },
+  { id: 'pack_500', coins: 500, price: 1260, label: 'Value' },
+  { id: 'pack_1000', coins: 1000, price: 2240, label: 'Pro' },
+  { id: 'pack_5000', coins: 5000, price: 9800, label: 'Academy' },
 ]
 
 export async function notify(userId: string, type: string, title: string, body?: string, link?: string) {

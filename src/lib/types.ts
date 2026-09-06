@@ -24,6 +24,12 @@ export interface UserDTO {
   coins: number
   money: number
   isVerified: boolean
+  /** teacher verification state: NONE | PENDING | APPROVED | REJECTED */
+  kycStatus?: string
+  /** preferred display currency: PKR | USD | EUR | INR */
+  currency?: string | null
+  /** admin sub-role: OWNER | STAFF */
+  subRole?: string | null
   /** moderation access (does not change the STUDENT/PARENT/TEACHER role) */
   isAdmin: boolean
   /** moderation state: ACTIVE | BANNED */
@@ -313,3 +319,113 @@ export interface AdminAnalytics {
 // POST /api/likes { targetType, targetId } -> { liked, likeCount }
 // POST /api/reviews { targetId, rating, comment } -> { review }
 // POST /api/cron/process-refunds         -> { processed }
+
+// ===== Payments / wallet / currency (requirements B, D, G) =====
+
+export type TopUpKind = 'TEACHER_COINS' | 'STUDENT_MONEY'
+export type TopUpStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+
+export interface TopUpDTO {
+  id: string
+  kind: TopUpKind
+  amount: number
+  method: string
+  reference?: string | null
+  screenshot?: string
+  coinsGranted: number
+  status: TopUpStatus
+  adminNote?: string | null
+  createdAt: string
+  user?: { id: string; name: string; avatar: string | null; role: string; coins: number; money: number }
+}
+
+export interface WithdrawalDTO {
+  id: string
+  amount: number
+  bankName: string
+  accountTitle: string
+  accountNumber: string
+  status: TopUpStatus
+  adminNote?: string | null
+  createdAt: string
+  user?: { id: string; name: string; avatar: string | null; role: string; money: number }
+}
+
+export interface KycDTO {
+  id: string
+  fullName: string
+  cnic: string
+  phone: string
+  city: string
+  documentImage?: string
+  selfieImage?: string | null
+  status: TopUpStatus
+  adminNote?: string | null
+  decidedAt?: string | null
+  createdAt: string
+  user?: { id: string; name: string; avatar: string | null; role: string; isVerified: boolean; city: string | null }
+}
+
+export interface BankAccountDTO {
+  id: string
+  bankName: string
+  accountTitle: string
+  accountNumber: string
+  instructions?: string | null
+  active: boolean
+}
+
+export interface RateDTO {
+  code: 'PKR' | 'USD' | 'EUR' | 'INR'
+  label: string
+  symbol: string
+  pkrPer: number
+}
+
+export interface WalletResponse {
+  coins: number
+  money: number
+  bankDetails: { bankName: string | null; accountTitle: string | null; accountNumber: string | null }
+  transactions: CoinTransactionDTO[]
+  topups: TopUpDTO[]
+  withdrawals: WithdrawalDTO[]
+}
+
+export interface AdminSettingsDTO {
+  commissionRate: number
+  milestonePaid: boolean
+  paidTeachers: number
+  milestoneTarget: number
+}
+
+export interface AiAgentDTO {
+  id: string
+  name: string
+  email: string
+  role: string
+  avatar: string | null
+  coins: number
+  money: number
+  headline: string | null
+  bio: string | null
+  city: string | null
+  subjects: string | null
+  feeMin: number | null
+  feeMax: number | null
+  isAI: boolean
+  aiPersona: string | null
+  status: string
+  createdAt: string
+}
+
+export interface AiPersona {
+  tagline?: string
+  style?: string
+  activeFrom?: number
+  activeTo?: number
+  minDelaySec?: number
+  maxDelaySec?: number
+  mergeWindowSec?: number
+  replyChance?: number
+  declineChances?: string[]
+}

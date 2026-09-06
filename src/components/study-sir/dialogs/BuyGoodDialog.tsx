@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog'
 import { api, errorMessage } from '@/lib/api'
 import { useAppStore } from '@/store/useAppStore'
+import { useMoney } from '@/store/useCurrencyStore'
 import { SafeImage } from '../shared/SafeImage'
 
 /**
@@ -35,6 +36,8 @@ export function BuyGoodDialog({
   onBought: () => void
 }) {
   const go = useAppStore((s) => s.go)
+  const me = useAppStore((s) => s.me)
+  const { fmt } = useMoney(me)
   const [loading, setLoading] = useState(false)
   const [insufficient, setInsufficient] = useState(false)
 
@@ -79,9 +82,13 @@ export function BuyGoodDialog({
           <SafeImage src={good.image} alt={good.title} className="size-14 shrink-0 rounded-lg object-cover" />
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">{good.title}</p>
-            <p className="text-lg font-extrabold">Rs {good.price}</p>
+            <p className="text-lg font-extrabold">{fmt(good.price)}</p>
           </div>
         </div>
+
+        <p className="rounded-lg bg-blue-500/5 p-2.5 text-xs text-muted-foreground">
+          The seller receives this payment minus the platform commission — the rest supports StudySir.
+        </p>
 
         <div className="flex items-center justify-between rounded-lg bg-muted/70 p-3 text-sm">
           <span className="flex items-center gap-2 text-muted-foreground">
@@ -90,14 +97,14 @@ export function BuyGoodDialog({
           </span>
           <span className="flex items-center gap-1 font-semibold">
             <Banknote className="size-4 text-green-600" />
-            Rs {balance}
+            {fmt(balance)}
           </span>
         </div>
 
         {insufficient ? (
           <div className="flex items-center justify-between gap-3 rounded-lg bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">
             <span className="font-medium">
-              Insufficient money — you need Rs {Math.max(0, good.price - balance)} more.
+              Insufficient money — you need {fmt(Math.max(0, good.price - balance))} more.
             </span>
             <Button
               size="sm"
@@ -119,7 +126,7 @@ export function BuyGoodDialog({
           </Button>
           <Button onClick={pay} disabled={!enough || loading} className="gap-1.5">
             <Download className="size-4" />
-            {loading ? 'Paying…' : `Pay Rs ${good.price}`}
+            {loading ? 'Paying…' : `Pay ${fmt(good.price)}`}
           </Button>
         </DialogFooter>
       </DialogContent>

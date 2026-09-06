@@ -14,9 +14,11 @@ import { api, errorMessage, type ProfilePatch } from '@/lib/api'
 import type { AvailabilityDTO } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store/useAppStore'
+import { useCurrencyStore, useMoney } from '@/store/useCurrencyStore'
 import { AVATAR_OPTIONS, COVER_OPTIONS, ROLE_LABEL } from '../shared/constants'
 import { FbCard } from '../shared/bits'
 import { InstallAppCard } from '../shared/InstallAppCard'
+import { KycCard } from '../shared/KycCard'
 import { AvailabilityEditor } from '../shared/AvailabilityEditor'
 import { SafeImage } from '../shared/SafeImage'
 import { UserAvatar } from '../shared/UserAvatar'
@@ -38,6 +40,54 @@ interface SettingsForm {
 
 function SectionTitle({ children }: { children: string }) {
   return <h2 className="text-lg font-bold">{children}</h2>
+}
+
+/** Display-currency picker (requirement D): region default, overridable. */
+function CurrencyCard() {
+  const me = useAppStore((s) => s.me)!
+  const rates = useCurrencyStore((s) => s.rates)
+  const preferred = useCurrencyStore((s) => s.preferred)
+  const setPreferred = useCurrencyStore((s) => s.setPreferred)
+  const { fmt, rate } = useMoney(me)
+
+  const options = [
+    { code: 'PKR', hint: 'Pakistan — base currency' },
+    { code: 'USD', hint: 'International / default abroad' },
+    { code: 'EUR', hint: 'Eurozone' },
+    { code: 'INR', hint: 'India' },
+  ] as const
+
+  return (
+    <FbCard className="p-4">
+      <p className="text-sm text-muted-foreground">
+        Prices are stored in PKR and shown in your currency. Currently displaying{' '}
+        <b className="text-foreground">{rate.code}</b> — a 2,800 PKR fee shows as <b className="text-foreground">{fmt(2800)}</b>.
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {options.map((opt) => {
+          const r = rates.find((x) => x.code === opt.code)
+          return (
+            <button
+              key={opt.code}
+              type="button"
+              onClick={() => setPreferred(opt.code, me.id)}
+              className={
+                (preferred ? preferred === opt.code : rate.code === opt.code)
+                  ? 'rounded-xl border border-[#1877F2] bg-blue-500/5 p-2.5 text-left ring-1 ring-[#1877F2]'
+                  : 'rounded-xl border p-2.5 text-left transition-colors hover:bg-muted'
+              }
+            >
+              <span className="block text-sm font-bold">
+                {r?.symbol} {opt.code}
+              </span>
+              <span className="block text-[11px] text-muted-foreground">{opt.hint}</span>
+              <span className="mt-0.5 block text-[11px] font-semibold text-muted-foreground">1 = {r?.pkrPer ?? '—'} PKR</span>
+            </button>
+          )
+        })}
+      </div>
+    </FbCard>
+  )
 }
 
 export function SettingsView() {
@@ -197,11 +247,11 @@ export function SettingsView() {
             {isTeacher ? (
               <>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="st-feemin">Fee min ($)</Label>
+                  <Label htmlFor="st-feemin">Fee min (PKR)</Label>
                   <Input id="st-feemin" type="number" min={0} value={form.feeMin} onChange={(e) => set('feeMin')(e.target.value)} />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="st-feemax">Fee max ($)</Label>
+                  <Label htmlFor="st-feemax">Fee max (PKR)</Label>
                   <Input id="st-feemax" type="number" min={0} value={form.feeMax} onChange={(e) => set('feeMax')(e.target.value)} />
                 </div>
               </>
@@ -224,6 +274,20 @@ export function SettingsView() {
 
       {/* Time availability (teachers) */}
       {isTeacher ? <AvailabilitySection /> : null}
+
+      {/* Currency (requirement D) */}
+      <section className="space-y-3">
+        <SectionTitle>Currency</SectionTitle>
+        <CurrencyCard />
+      </section>
+
+      {/* Teacher verification (KYC) */}
+      {isTeacher ? (
+        <section className="space-y-3">
+          <SectionTitle>Verification</SectionTitle>
+          <KycCard />
+        </section>
+      ) : null}
 
       {/* Appearance */}
       <section className="space-y-3">

@@ -30,7 +30,7 @@ export function clientCoinCost(feeMin: number, feeMax: number, mode: string): nu
   const safeMin = Number.isFinite(feeMin) ? Math.max(0, feeMin) : 0
   const safeMax = Number.isFinite(feeMax) ? Math.max(0, feeMax) : 0
   const avg = (safeMin + safeMax) / 2
-  let cost = 5 + Math.round(avg / 10)
+  let cost = 5 + Math.round(avg / 500)
   if (mode === 'HOME') cost += 5
   if (mode === 'CENTER') cost += 2
   return Math.min(50, Math.max(5, cost))

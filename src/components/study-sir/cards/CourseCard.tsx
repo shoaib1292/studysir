@@ -17,6 +17,7 @@ import {
   Repeat2,
   MessageSquareText,
   MonitorPlay,
+  Share2,
   ThumbsUp,
 } from 'lucide-react'
 import {
@@ -28,10 +29,12 @@ import {
 import { api, errorMessage } from '@/lib/api'
 import type { CourseDTO } from '@/lib/types'
 import { useAppStore } from '@/store/useAppStore'
+import { useMoney } from '@/store/useCurrencyStore'
 import { ConfirmDialog } from '../dialogs/ConfirmDialog'
 import { ConnectConfirmDialog } from '../dialogs/ConnectConfirmDialog'
 import { ReportDialog } from '../dialogs/ReportDialog'
 import { ReviewDialog } from '../dialogs/ReviewDialog'
+import { ShareDialog, type ShareContent } from '../dialogs/ShareDialog'
 import { ActionGrid, CardAction, DetailRow, FbCard, StatText } from '../shared/bits'
 import { RichText } from '../shared/RichText'
 import { SafeImage } from '../shared/SafeImage'
@@ -45,6 +48,7 @@ export function CourseCard({ course, onChanged }: { course: CourseDTO; onChanged
   const me = useAppStore((s) => s.me)!
   const go = useAppStore((s) => s.go)
   const refreshMe = useAppStore((s) => s.refreshMe)
+  const { fmt } = useMoney(me)
 
   const [liked, setLiked] = useState(course.myLike)
   const [likeCount, setLikeCount] = useState(course.likeCount)
@@ -55,6 +59,22 @@ export function CourseCard({ course, onChanged }: { course: CourseDTO; onChanged
   const [joinOpen, setJoinOpen] = useState(false)
   const [joining, setJoining] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
+
+  const shareContent: ShareContent = {
+    emoji: '🎓',
+    title: course.title,
+    byline: `— course by ${course.teacher.name}`,
+    details: [
+      ['Subject', course.subject ?? ''],
+      ['Language', course.language ?? ''],
+      ['Duration', course.duration ?? ''],
+      ['Timing', course.timing ?? ''],
+      ['Format', course.format ?? ''],
+    ],
+    description: course.description,
+    price: `💰 Course fee: ${fmt(course.fee)}`,
+  }
 
   const teacherRating = (course as CourseWithRating).teacherAvgRating
   const alreadyJoined = !!course.myConnectionId
@@ -175,16 +195,17 @@ export function CourseCard({ course, onChanged }: { course: CourseDTO; onChanged
           <DetailRow icon={CalendarClock} label="Class duration" value={course.classDuration} />
           <DetailRow icon={Repeat2} label="Classes Per Week" value={course.classesPerWeek} />
           <DetailRow icon={MonitorPlay} label="Course Format" value={course.format} />
-          <DetailRow icon={Banknote} label="Fee" value={`$${course.fee}`} bold />
+          <DetailRow icon={Banknote} label="Fee" value={fmt(course.fee)} bold />
         </div>
       </div>
 
       {/* Footer */}
       <div className="border-t px-3 pb-2 pt-1.5">
         <StatText>{likeCount} Likes</StatText>
-        <ActionGrid count={4}>
+        <ActionGrid count={5}>
           <CardAction icon={ThumbsUp} label="Like" active={liked} onClick={toggleLike} />
           <CardAction icon={MessageSquareText} label="Review" onClick={() => setReviewOpen(true)} />
+          <CardAction icon={Share2} label="Share" onClick={() => setShareOpen(true)} />
           <CardAction icon={HelpCircle} label="Question" disabled={alreadyJoined} onClick={() => setQuestionOpen(true)} />
           {alreadyJoined ? (
             <CardAction
@@ -244,6 +265,7 @@ export function CourseCard({ course, onChanged }: { course: CourseDTO; onChanged
           label: course.title,
         }}
       />
+      <ShareDialog open={shareOpen} onOpenChange={setShareOpen} content={shareContent} />
     </FbCard>
   )
 }

@@ -15,6 +15,7 @@ import {
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store/useAppStore'
+import { useMoney } from '@/store/useCurrencyStore'
 import { UserAvatar } from '../shared/UserAvatar'
 import { NotificationsPopover } from './NotificationsPopover'
 
@@ -89,6 +90,7 @@ export function Header() {
   const go = useAppStore((s) => s.go)
   const resetNav = useAppStore((s) => s.resetNav)
   const setMe = useAppStore((s) => s.setMe)
+  const { fmt } = useMoney(me)
 
   const [q, setQ] = useState('')
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
@@ -156,10 +158,10 @@ export function Header() {
               variant="ghost"
               onClick={() => go('wallet')}
               className="h-10 rounded-full bg-muted px-3 hover:bg-secondary"
-              aria-label={`Money wallet: ${me.money}`}
+              aria-label={`Money wallet: ${fmt(me.money)}`}
             >
               <Wallet className="size-5 text-emerald-600" />
-              <span className="text-sm font-semibold">{me.money}</span>
+              <span className="text-sm font-semibold">{fmt(me.money)}</span>
             </Button>
           )}
 

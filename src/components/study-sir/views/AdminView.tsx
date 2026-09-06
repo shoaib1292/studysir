@@ -5,10 +5,13 @@ import {
   Ban,
   BarChart3,
   BookOpen,
+  Bot,
   CheckCircle2,
   EyeOff,
   Eye,
   FileDown,
+  IdCard,
+  Landmark,
   MessageSquare,
   Package,
   ShieldAlert,
@@ -16,6 +19,7 @@ import {
   ShoppingBag,
   UserCircle,
   Users,
+  Wallet,
   XCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -34,6 +38,10 @@ import { UserAvatar } from '../shared/UserAvatar'
 import { EmptyState } from '../shared/EmptyState'
 import { timeAgo } from '../shared/format'
 import { AnalyticsTab } from './AnalyticsTab'
+import PaymentsTab from './admin/PaymentsTab'
+import { KycTab } from './admin/KycTab'
+import { EconomyTab } from './admin/EconomyTab'
+import { AiEngineTab } from './admin/AiEngineTab'
 
 const TARGET_META: Record<string, { icon: typeof Package; label: string; chip: string }> = {
   CHAT: { icon: MessageSquare, label: 'Chat', chip: 'bg-blue-500/15 text-blue-700 dark:text-blue-300' },
@@ -418,8 +426,10 @@ function UserRow({ user, onChanged }: { user: AdminUserDTO; onChanged: () => voi
 export function AdminView() {
   const me = useAppStore((s) => s.me)!
   const isAdmin = me.isAdmin
+  /** STAFF sub-accounts only see moderation (reports + users); owner manages economy/AI/payments. */
+  const isOwner = !me.subRole || me.subRole === 'OWNER'
 
-  const [tab, setTab] = useState<'reports' | 'users' | 'analytics'>('reports')
+  const [tab, setTab] = useState<'reports' | 'users' | 'payments' | 'kyc' | 'economy' | 'ai' | 'analytics'>('reports')
   const [filter, setFilter] = useState<'ALL' | ReportStatus>('OPEN')
   const [reports, setReports] = useState<ReportDTO[] | null>(null)
   const [stats, setStats] = useState<AdminStats | null>(null)
@@ -473,13 +483,24 @@ export function AdminView() {
           <ShieldAlert className="size-6" />
         </div>
         <div className="min-w-0">
-          <h1 className="text-xl font-extrabold">Admin Queue</h1>
-          <p className="text-sm text-muted-foreground">Review reports, keep StudySir safe.</p>
+          <h1 className="flex flex-wrap items-center gap-2 text-xl font-extrabold">
+            Admin Queue
+            {me.subRole === 'STAFF' ? (
+              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                Staff · limited access
+              </span>
+            ) : null}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {me.subRole === 'STAFF'
+              ? 'Staff mode — review reports and manage users.'
+              : 'Reports, payments, KYC, economy, AI engine and analytics.'}
+          </p>
         </div>
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as 'reports' | 'users' | 'analytics')} className="mt-4">
-        <TabsList className="w-full sm:w-auto">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="mt-4">
+        <TabsList className="w-full flex-wrap sm:w-auto">
           <TabsTrigger value="reports" className="gap-1.5">
             <ShieldAlert className="size-4" />
             Reports
@@ -493,10 +514,32 @@ export function AdminView() {
             <Users className="size-4" />
             Users
           </TabsTrigger>
-          <TabsTrigger value="analytics" className="gap-1.5">
-            <BarChart3 className="size-4" />
-            Analytics
-          </TabsTrigger>
+          {isOwner ? (
+            <>
+              <TabsTrigger value="payments" className="gap-1.5">
+                <Wallet className="size-4" />
+                Payments
+              </TabsTrigger>
+              <TabsTrigger value="kyc" className="gap-1.5">
+                <IdCard className="size-4" />
+                KYC
+              </TabsTrigger>
+              <TabsTrigger value="economy" className="gap-1.5">
+                <Landmark className="size-4" />
+                Economy
+              </TabsTrigger>
+              <TabsTrigger value="ai" className="gap-1.5">
+                <Bot className="size-4" />
+                AI Engine
+              </TabsTrigger>
+            </>
+          ) : null}
+          {isOwner ? (
+            <TabsTrigger value="analytics" className="gap-1.5">
+              <BarChart3 className="size-4" />
+              Analytics
+            </TabsTrigger>
+          ) : null}
         </TabsList>
 
         <TabsContent value="reports" className="mt-3 space-y-3">
@@ -574,9 +617,25 @@ export function AdminView() {
           )}
         </TabsContent>
 
-        <TabsContent value="analytics" className="mt-3">
-          <AnalyticsTab />
-        </TabsContent>
+        {isOwner ? (
+          <>
+            <TabsContent value="payments" className="mt-3">
+              <PaymentsTab />
+            </TabsContent>
+            <TabsContent value="kyc" className="mt-3">
+              <KycTab />
+            </TabsContent>
+            <TabsContent value="economy" className="mt-3">
+              <EconomyTab />
+            </TabsContent>
+            <TabsContent value="ai" className="mt-3">
+              <AiEngineTab />
+            </TabsContent>
+            <TabsContent value="analytics" className="mt-3">
+              <AnalyticsTab />
+            </TabsContent>
+          </>
+        ) : null}
       </Tabs>
     </div>
   )

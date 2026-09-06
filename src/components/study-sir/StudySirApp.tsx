@@ -6,6 +6,7 @@ import { api } from '@/lib/api'
 import { getSocket, onConnect, onEvent, RT } from '@/lib/socket'
 import { useAppStore } from '@/store/useAppStore'
 import type { ViewName } from '@/store/useAppStore'
+import { useCurrencyStore } from '@/store/useCurrencyStore'
 import { Header } from './layout/Header'
 import { MainNav } from './layout/MainNav'
 import { SideNav } from './layout/SideNav'
@@ -148,6 +149,12 @@ export default function StudySirApp() {
       clearInterval(timer)
     }
   }, [me, setNotifCount])
+
+  // Currency rates (requirement D): load once per session on login
+  useEffect(() => {
+    if (!me) return
+    if (!useCurrencyStore.getState().loaded) void useCurrencyStore.getState().load(me)
+  }, [me])
 
   // Unread chats badge: fetch on login + on socket reconnect; live events below
   const unreadRef = useRef(refreshUnreadChats)

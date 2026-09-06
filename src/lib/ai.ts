@@ -419,15 +419,22 @@ export async function aiStats() {
     db.user.findMany({ where: { isAI: true }, select: { id: true, name: true, role: true, coins: true } }),
     db.message.count({ where: { sender: { isAI: true } } }),
   ])
-  // coins real teachers "wasted" on AI students (accepted chats with an AI student)
+  // coins real teachers "wasted" on AI students (accepted chats with an AI student),
+  // per teacher so the admin panel can rank them (milestone refund candidates)
   const wasted = await db.connection.findMany({
     where: { coinsSpent: { gt: 0 }, student: { isAI: true }, teacher: { isAI: false } },
-    select: { coinsSpent: true },
+    select: { coinsSpent: true, teacherId: true, teacher: { select: { name: true } } },
   })
+  const perTeacher = new Map<string, { teacherId: string; teacherName: string; coins: number }>()
+  for (const c of wasted) {
+    const row = perTeacher.get(c.teacherId) ?? { teacherId: c.teacherId, teacherName: c.teacher.name, coins: 0 }
+    row.coins += c.coinsSpent
+    perTeacher.set(c.teacherId, row)
+  }
   return {
     agents: aiUsers,
     aiMessages,
-    wastedCoinsByRealTeachers: wasted.reduce((a, c) => a + c.coinsSpent, 0),
+    wastedCoinsByRealTeachers: [...perTeacher.values()].sort((a, b) => b.coins - a.coins),
     llmProvider: lastLLMProvider(),
   }
 }

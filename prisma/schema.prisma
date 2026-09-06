@@ -29,9 +29,15 @@ model User {
   coins         Int      @default(0)
   money         Float    @default(0)
   isVerified    Boolean  @default(false)
+  kycStatus     String   @default("NONE") // teacher KYC: NONE | PENDING | APPROVED | REJECTED
   isAdmin       Boolean  @default(false) // platform-admin access (separate login entry)
+  subRole       String? // admin sub-role: OWNER (full) | STAFF (reports+users only)
   isAI          Boolean  @default(false) // AI-powered demo agent (teacher or student)
   aiPersona     String? // JSON: { style, activeFrom, activeTo, minDelaySec, maxDelaySec, replyChance, ... }
+  currency      String? // preferred display currency code (USD/EUR/INR/PKR)
+  bankName          String? // withdrawal destination (saved bank details)
+  bankAccountTitle  String?
+  bankAccountNumber String?
   status        String   @default("ACTIVE") // ACTIVE | BANNED (moderation)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -40,6 +46,9 @@ model User {
   courses         Course[]
   digitalGoods    DigitalGood[]
   transactions    CoinTransaction[]
+  withdrawRequests WithdrawRequest[]
+  kycSubmission   KycSubmission?
+  topUpRequests   TopUpRequest[]
   teacherLinks    Connection[] @relation("teacherLink")
   studentLinks    Connection[] @relation("studentLink")
   payerLinks      Connection[] @relation("payerLink")
@@ -233,7 +242,90 @@ model Purchase {
   goodId     String
   good       DigitalGood @relation(fields: [goodId], references: [id])
   amount     Float
+  commission Float       @default(0) // platform cut (PKR) kept at purchase time
   createdAt  DateTime    @default(now())
+}
+
+// Student/teacher request to withdraw money wallet balance (min 1000 PKR, manual bank transfer)
+// status: PENDING | APPROVED | REJECTED
+model WithdrawRequest {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  amount        Float
+  bankName      String
+  accountTitle  String
+  accountNumber String
+  status        String    @default("PENDING")
+  adminNote     String?
+  decidedAt     DateTime?
+  createdAt     DateTime  @default(now())
+}
+
+// Teacher KYC verification (CNIC / document upload, admin-approved)
+// status: PENDING | APPROVED | REJECTED
+model KycSubmission {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  user          User      @relation(fields: [userId], references: [id])
+  fullName      String
+  cnic          String
+  phone         String
+  city          String
+  documentImage String // data URL of CNIC / id document
+  selfieImage   String?
+  status        String    @default("PENDING")
+  adminNote     String?
+  decidedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// Payment proof uploaded by users.
+// kind: TEACHER_COINS (teacher buys coins — credited INSTANTLY, clawed back if admin rejects)
+//     | STUDENT_MONEY (student tops up wallet — credited ONLY after admin verifies)
+// status: PENDING | APPROVED | REJECTED
+model TopUpRequest {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  kind         String
+  amount       Float // PKR sent to the platform account
+  method       String // which platform bank account / wallet was used
+  reference    String? // transaction id / sender reference typed by user
+  screenshot   String // data URL of the payment proof
+  coinsGranted Int       @default(0) // set for TEACHER_COINS (clawback amount on rejection)
+  status       String    @default("PENDING")
+  adminNote    String?
+  decidedAt    DateTime?
+  createdAt    DateTime  @default(now())
+}
+
+// Platform bank / wallet accounts shown to users for manual payments (admin-managed)
+model PlatformBankAccount {
+  id            String   @id @default(cuid())
+  bankName      String
+  accountTitle  String
+  accountNumber String
+  instructions  String?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+}
+
+// Admin-editable currency rates. `code` PKR is the base (pkrPer = 1).
+model ExchangeRate {
+  code     String   @id // USD | EUR | INR | PKR
+  label    String
+  symbol   String
+  pkrPer   Float // how many PKR one unit of this currency is worth
+  updatedAt DateTime @updatedAt
+}
+
+// Simple key/value platform settings (commissionRate, milestonePaid, ...)
+model PlatformSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
 }
 
 // Bookmarked tuition posts ("Saved" list)

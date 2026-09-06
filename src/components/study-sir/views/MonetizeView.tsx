@@ -54,7 +54,7 @@ export function MonetizeView() {
   const hires = (transactions ?? []).filter((t) => t.type.startsWith('HIRE'))
   const hireBonus = hires.reduce((sum, t) => sum + Math.abs(t.amount), 0)
 
-  const exampleCost = clientCoinCost(5, 100, 'ONLINE')
+  const exampleCost = clientCoinCost(2500, 6000, 'ONLINE')
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-4">
@@ -95,10 +95,12 @@ export function MonetizeView() {
           How the coin cost is computed
         </p>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          base = 5 + average fee ÷ 10 · +5 for home tuition · +2 for center tuition · clamped between 5 and 50 coins.
+          base = 5 + average fee (PKR) ÷ 500 · +5 for home tuition · +2 for center tuition · clamped between 5 and 50
+          coins.
         </p>
         <p className="mt-1 text-sm text-muted-foreground">
-          Example: a ${'$'}5–${'$'}100 online tuition costs about <b className="text-foreground">{exampleCost} coins</b> to contact.
+          Example: a PKR 2,500–6,000 online tuition costs about{' '}
+          <b className="text-foreground">{exampleCost} coins</b> to accept.
         </p>
       </FbCard>
 

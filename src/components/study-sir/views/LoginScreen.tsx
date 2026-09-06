@@ -25,6 +25,7 @@ import type { UserDTO } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/useAppStore'
+import { useMoney } from '@/store/useCurrencyStore'
 import { ROLE_CHIP, ROLE_LABEL } from '../shared/constants'
 import { UserAvatar } from '../shared/UserAvatar'
 
@@ -51,6 +52,7 @@ const ROLE_OPTIONS = [
 export function LoginScreen() {
   const setMe = useAppStore((s) => s.setMe)
   const resetNav = useAppStore((s) => s.resetNav)
+  const { fmt } = useMoney(null)
 
   const [users, setUsers] = useState<UserDTO[] | null>(null)
   const [loggingIn, setLoggingIn] = useState<string | null>(null)
@@ -273,8 +275,8 @@ export function LoginScreen() {
                         </span>
                       ) : (
                         <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Wallet className="size-3 text-emerald-600" />$
-                          {user.money}
+                          <Wallet className="size-3 text-emerald-600" />
+                          {fmt(user.money)}
                         </span>
                       )}
                     </span>

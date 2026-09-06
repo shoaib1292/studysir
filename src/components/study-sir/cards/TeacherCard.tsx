@@ -2,13 +2,14 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { BadgeCheck, Clock, Handshake, MessageSquareText, Send, ThumbsUp, Users } from 'lucide-react'
+import { BadgeCheck, Clock, Handshake, MessageSquareText, Send, Share2, ThumbsUp, Users } from 'lucide-react'
 import { api, errorMessage } from '@/lib/api'
 import type { TeacherCardDTO } from '@/lib/types'
 import { useAppStore } from '@/store/useAppStore'
 import { cn } from '@/lib/utils'
 import { ConnectConfirmDialog } from '../dialogs/ConnectConfirmDialog'
 import { ReviewDialog } from '../dialogs/ReviewDialog'
+import { ShareDialog, type ShareContent } from '../dialogs/ShareDialog'
 import { TimingDialog } from '../dialogs/TimingDialog'
 import { ActionGrid, CardAction, FbCard, StatText } from '../shared/bits'
 import { RichText } from '../shared/RichText'
@@ -27,6 +28,18 @@ export function TeacherCard({ teacher, onChanged }: { teacher: TeacherCardDTO; o
   const [timingOpen, setTimingOpen] = useState(false)
   const [hireOpen, setHireOpen] = useState(false)
   const [connecting, setConnecting] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
+
+  const shareContent: ShareContent = {
+    emoji: '👩‍🏫',
+    title: `${teacher.name}${teacher.headline ? ` — ${teacher.headline}` : ' is teaching on StudySir'}`,
+    byline: teacher.city ? `📍 ${teacher.city}` : undefined,
+    details: [
+      ['Rating', teacher.reviewCount ? `★ ${teacher.avgRating.toFixed(1)} (${teacher.reviewCount} reviews)` : ''],
+      ['Students', teacher.hireCount ? `${teacher.hireCount} connections` : ''],
+    ],
+    description: teacher.bio,
+  }
 
   async function toggleLike() {
     const next = !liked
@@ -119,9 +132,10 @@ export function TeacherCard({ teacher, onChanged }: { teacher: TeacherCardDTO; o
         <StatText>
           {likeCount} Likes · {teacher.reviewCount} Reviews
         </StatText>
-        <ActionGrid count={4}>
+        <ActionGrid count={5}>
           <CardAction icon={ThumbsUp} label="Like" active={liked} onClick={toggleLike} />
           <CardAction icon={MessageSquareText} label="Review" onClick={() => setReviewOpen(true)} />
+          <CardAction icon={Share2} label="Share" onClick={() => setShareOpen(true)} />
           <CardAction icon={Clock} label="Timing" onClick={() => setTimingOpen(true)} />
           <CardAction icon={Handshake} label="Hire Teacher" primary onClick={() => setHireOpen(true)} />
         </ActionGrid>
@@ -151,6 +165,7 @@ export function TeacherCard({ teacher, onChanged }: { teacher: TeacherCardDTO; o
         loading={connecting}
         onConfirm={hire}
       />
+      <ShareDialog open={shareOpen} onOpenChange={setShareOpen} content={shareContent} />
     </FbCard>
   )
 }

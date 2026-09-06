@@ -12,9 +12,11 @@ import {
 import { api, errorMessage } from '@/lib/api'
 import type { GoodDTO } from '@/lib/types'
 import { useAppStore } from '@/store/useAppStore'
+import { useMoney } from '@/store/useCurrencyStore'
 import { BuyGoodDialog } from '../dialogs/BuyGoodDialog'
 import { ReportDialog } from '../dialogs/ReportDialog'
 import { ReviewDialog } from '../dialogs/ReviewDialog'
+import { ShareDialog, type ShareContent } from '../dialogs/ShareDialog'
 import { ActionGrid, CardAction, FbCard, StatText } from '../shared/bits'
 import { RichText } from '../shared/RichText'
 import { SafeImage } from '../shared/SafeImage'
@@ -23,6 +25,7 @@ export function GoodCard({ good, onChanged }: { good: GoodDTO; onChanged?: () =>
   const me = useAppStore((s) => s.me)!
   const go = useAppStore((s) => s.go)
   const refreshMe = useAppStore((s) => s.refreshMe)
+  const { fmt } = useMoney(me)
 
   const [liked, setLiked] = useState(good.myLike)
   const [likeCount, setLikeCount] = useState(good.likeCount)
@@ -30,6 +33,15 @@ export function GoodCard({ good, onChanged }: { good: GoodDTO; onChanged?: () =>
   const [buyOpen, setBuyOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
+
+  const shareContent: ShareContent = {
+    emoji: '🛍️',
+    title: good.title,
+    byline: `— digital product by ${good.seller.name}`,
+    description: good.description,
+    price: `💰 Price: ${fmt(good.price)}`,
+  }
 
   const sellerIsTeacher = good.seller.role === 'TEACHER'
   const isMine = good.sellerId === me.id
@@ -49,21 +61,6 @@ export function GoodCard({ good, onChanged }: { good: GoodDTO; onChanged?: () =>
     }
   }
 
-  async function share() {
-    const url = typeof window !== 'undefined' ? window.location.origin : ''
-    try {
-      const shareApi = navigator as Navigator & { share?: (data: ShareData) => Promise<void> }
-      if (typeof shareApi.share === 'function') {
-        await shareApi.share({ title: good.title, text: good.description ?? good.title, url })
-        return
-      }
-      await navigator.clipboard.writeText(url)
-      toast.success('Link copied to clipboard')
-    } catch {
-      // user cancelled the share sheet — nothing to do
-    }
-  }
-
   function download() {
     if (!purchased) {
       setBuyOpen(true)
@@ -77,7 +74,7 @@ export function GoodCard({ good, onChanged }: { good: GoodDTO; onChanged?: () =>
       '',
       `Item:     ${good.title}`,
       `Seller:   ${good.seller.name}`,
-      `Price:    Rs ${good.price}`,
+      `Price:    PKR ${good.price}`,
       `Purchased by: ${me.name} (${me.email})`,
       `Date:     ${new Date().toLocaleString()}`,
       '',
@@ -138,7 +135,7 @@ export function GoodCard({ good, onChanged }: { good: GoodDTO; onChanged?: () =>
         </div>
         <RichText text={good.description} clamp={3} />
         <div className="mt-auto space-y-1 pt-2">
-          <p className="text-xl font-extrabold">Rs {good.price}</p>
+          <p className="text-xl font-extrabold">{fmt(good.price)}</p>
           <p className="text-sm text-muted-foreground">
             Seller:{' '}
             <button
@@ -162,7 +159,7 @@ export function GoodCard({ good, onChanged }: { good: GoodDTO; onChanged?: () =>
             disabled={!sellerIsTeacher}
             onClick={() => setReviewOpen(true)}
           />
-          <CardAction icon={Share2} label="Share" onClick={share} />
+          <CardAction icon={Share2} label="Share" onClick={() => setShareOpen(true)} />
           <CardAction icon={Download} label="Download" active={purchased} onClick={download} />
         </ActionGrid>
       </div>
@@ -196,6 +193,7 @@ export function GoodCard({ good, onChanged }: { good: GoodDTO; onChanged?: () =>
           label: good.title,
         }}
       />
+      <ShareDialog open={shareOpen} onOpenChange={setShareOpen} content={shareContent} />
     </FbCard>
   )
 }

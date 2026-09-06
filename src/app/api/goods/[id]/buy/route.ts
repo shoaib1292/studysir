@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { requireSessionUser, HttpError } from '@/lib/session'
 import { notify } from '@/lib/coins'
 import { rtWalletChanged } from '@/lib/realtime'
+import { getCommissionRate } from '@/lib/settings'
 
 export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
@@ -18,18 +19,29 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: strin
 
     if (me.money < good.price) {
       return NextResponse.json(
-        { error: `Insufficient money — you need Rs ${good.price.toFixed(0)} but have Rs ${me.money.toFixed(0)}` },
+        { error: `Insufficient money — you need PKR ${good.price.toFixed(0)} but have PKR ${me.money.toFixed(0)}` },
         { status: 402 }
       )
     }
 
+    // Platform commission (requirement B): seller receives price minus the commission cut.
+    const commissionRate = await getCommissionRate()
+    const commission = Math.round(good.price * commissionRate)
+    const payout = good.price - commission
+
     await db.$transaction([
       db.user.update({ where: { id: me.id }, data: { money: { decrement: good.price } } }),
-      db.user.update({ where: { id: good.sellerId }, data: { money: { increment: good.price } } }),
-      db.purchase.create({ data: { userId: me.id, goodId: good.id, amount: good.price } }),
+      db.user.update({ where: { id: good.sellerId }, data: { money: { increment: payout } } }),
+      db.purchase.create({ data: { userId: me.id, goodId: good.id, amount: good.price, commission } }),
+      db.coinTransaction.create({
+        data: { userId: good.sellerId, amount: 0, type: 'GOOD_SALE', description: `Sold "${good.title}" — PKR ${payout} credited (PKR ${commission} platform commission)` },
+      }),
+      db.coinTransaction.create({
+        data: { userId: me.id, amount: 0, type: 'GOOD_PURCHASE', description: `Bought "${good.title}" — PKR ${good.price}` },
+      }),
     ])
 
-    await notify(good.sellerId, 'SYSTEM', 'Item sold!', `${me.name} purchased "${good.title}" for Rs ${good.price}.`)
+    await notify(good.sellerId, 'SYSTEM', 'Item sold!', `${me.name} purchased "${good.title}" — PKR ${payout} added after ${Math.round(commissionRate * 100)}% commission.`)
     rtWalletChanged([me.id, good.sellerId])
 
     const meUpdated = await db.user.findUnique({ where: { id: me.id } })

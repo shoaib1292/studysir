@@ -21,6 +21,7 @@ import { api, ApiError, errorMessage, type ProfileResponse } from '@/lib/api'
 import type { ReviewDTO } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store/useAppStore'
+import { useMoney } from '@/store/useCurrencyStore'
 import { ConnectConfirmDialog } from '../dialogs/ConnectConfirmDialog'
 import { NotEnoughCoinsDialog } from '../dialogs/NotEnoughCoinsDialog'
 import { ReviewDialog } from '../dialogs/ReviewDialog'
@@ -84,6 +85,7 @@ export function ProfileView() {
   const me = useAppStore((s) => s.me)!
   const params = useAppStore((s) => s.params)
   const go = useAppStore((s) => s.go)
+  const { fmt } = useMoney(me)
   const refreshMe = useAppStore((s) => s.refreshMe)
   const onlineIds = useAppStore((s) => s.onlineIds)
 
@@ -185,7 +187,7 @@ export function ProfileView() {
                 </span>
                 {isTeacher && user.feeMin !== null && user.feeMax !== null ? (
                   <span className="rounded bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
-                    Fee ${user.feeMin}–${user.feeMax}
+                    Fee {fmt(user.feeMin)}–{fmt(user.feeMax)}
                   </span>
                 ) : null}
               </div>

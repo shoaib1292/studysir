@@ -6,6 +6,12 @@ const db = new PrismaClient()
 async function main() {
   console.log('🌱 Seeding Study Sir...')
 
+  await db.withdrawRequest.deleteMany()
+  await db.kycSubmission.deleteMany()
+  await db.topUpRequest.deleteMany()
+  await db.platformBankAccount.deleteMany()
+  await db.exchangeRate.deleteMany()
+  await db.platformSetting.deleteMany()
   await db.availability.deleteMany()
   await db.notification.deleteMany()
   await db.like.deleteMany()
@@ -33,10 +39,29 @@ async function main() {
     role: 'STUDENT',
     password: hashPassword('admin123'),
     isAdmin: true,
+    subRole: 'OWNER',
     status: 'ACTIVE',
     avatar: '/images/avatar-admin.png',
     headline: 'StudySir Platform Administration',
     bio: 'Keeps StudySir safe: reviews reports, verifies payments, manages coin pricing and AI agents.',
+    city: 'Lahore',
+    country: 'Pakistan',
+    coins: 0,
+    money: 0,
+  })
+
+  // Staff sub-account — limited admin access (reports + users only)
+  await mkUser({
+    email: 'staff@studysir.app',
+    name: 'Support Staff',
+    role: 'STUDENT',
+    password: hashPassword('staff123'),
+    isAdmin: true,
+    subRole: 'STAFF',
+    status: 'ACTIVE',
+    avatar: '/images/avatar-student.png',
+    headline: 'StudySir Moderation Staff',
+    bio: 'Reviews reports and keeps the community safe.',
     city: 'Lahore',
     country: 'Pakistan',
     coins: 0,
@@ -59,8 +84,8 @@ async function main() {
     qualification: 'MSc Mathematics (PU)',
     subjects: 'Math, Physics',
     languages: 'Urdu, English',
-    feeMin: 30,
-    feeMax: 80,
+    feeMin: 2000,
+    feeMax: 6000,
     coins: 500, // admin-funded so the agent can accept requests
     money: 0,
     aiPersona: JSON.stringify({
@@ -126,7 +151,7 @@ async function main() {
     gender: 'Male',
     languages: 'English',
     coins: 0,
-    money: 25,
+    money: 2500,
   })
 
   const ahmed = await mkUser({
@@ -142,7 +167,7 @@ async function main() {
     gender: 'Male',
     languages: 'English, Urdu, Hindi',
     coins: 0,
-    money: 10,
+    money: 800,
   })
 
   const fatima = await mkUser({
@@ -158,7 +183,7 @@ async function main() {
     gender: 'Female',
     languages: 'English, Hindi, Urdu',
     coins: 0,
-    money: 40,
+    money: 3000,
   })
 
   const mukesh = await mkUser({
@@ -175,11 +200,12 @@ async function main() {
     qualification: 'Bachelor in Finance',
     subjects: 'Business, Finance, Economics',
     languages: 'English, Hindi',
-    feeMin: 15,
-    feeMax: 100,
+    feeMin: 1500,
+    feeMax: 8000,
     coins: 184,
-    money: 120,
+    money: 4500,
     isVerified: true,
+    kycStatus: 'APPROVED',
   })
 
   const adani = await mkUser({
@@ -196,11 +222,12 @@ async function main() {
     qualification: 'Bachelor in Commerce',
     subjects: 'Business, Commerce, Economics',
     languages: 'English, Hindi, Gujarati',
-    feeMin: 20,
-    feeMax: 120,
+    feeMin: 2000,
+    feeMax: 9000,
     coins: 182,
-    money: 90,
+    money: 3500,
     isVerified: true,
+    kycStatus: 'APPROVED',
   })
 
   const elon = await mkUser({
@@ -217,11 +244,12 @@ async function main() {
     qualification: 'Masters in Physics',
     subjects: 'Physics, Math',
     languages: 'English',
-    feeMin: 25,
-    feeMax: 150,
+    feeMin: 2500,
+    feeMax: 12000,
     coins: 140,
-    money: 200,
+    money: 5000,
     isVerified: true,
+    kycStatus: 'APPROVED',
   })
 
   const alina = await mkUser({
@@ -238,11 +266,12 @@ async function main() {
     qualification: 'CELTA Certified',
     subjects: 'Spoken English, Grammar',
     languages: 'English, Hindi',
-    feeMin: 10,
-    feeMax: 60,
+    feeMin: 800,
+    feeMax: 4000,
     coins: 82,
-    money: 75,
+    money: 2500,
     isVerified: true,
+    kycStatus: 'APPROVED',
   })
 
   const noman = await mkUser({
@@ -260,10 +289,10 @@ async function main() {
     qualification: 'Masters in Education',
     subjects: 'Study Skills, Economics',
     languages: 'English, Urdu',
-    feeMin: 5,
-    feeMax: 40,
+    feeMin: 500,
+    feeMax: 3000,
     coins: 50,
-    money: 300,
+    money: 8000,
   })
 
   // ---------- Tuition posts (students post FREE — coinCost = what the ACCEPTING teacher pays) ----------
@@ -278,10 +307,10 @@ async function main() {
       subjects: 'Math, Urdu',
       languages: 'English, Urdu, Hindi',
       qualification: 'Bachelors',
-      feeMin: 5,
-      feeMax: 100,
+      feeMin: 3000,
+      feeMax: 6000,
       timing: '6 pm to 9 pm',
-      coinCost: 10,
+      coinCost: 14,
     },
   })
 
@@ -296,10 +325,10 @@ async function main() {
       subjects: 'Spoken English, Phonics',
       languages: 'English, Hindi',
       qualification: 'Bachelors',
-      feeMin: 30,
-      feeMax: 80,
+      feeMin: 2000,
+      feeMax: 5000,
       timing: '5 pm to 7 pm',
-      coinCost: 16,
+      coinCost: 17,
     },
   })
 
@@ -314,10 +343,10 @@ async function main() {
       subjects: 'Finance, Economics',
       languages: 'English',
       qualification: 'Masters preferred',
-      feeMin: 50,
-      feeMax: 200,
+      feeMin: 5000,
+      feeMax: 15000,
       timing: 'Weekends 10 am to 12 pm',
-      coinCost: 18,
+      coinCost: 25,
     },
   })
 
@@ -333,10 +362,10 @@ async function main() {
       subjects: 'Biology, Chemistry',
       languages: 'Urdu, English',
       qualification: 'Masters preferred',
-      feeMin: 20,
-      feeMax: 60,
+      feeMin: 2500,
+      feeMax: 7000,
       timing: '5 pm to 8 pm',
-      coinCost: 12,
+      coinCost: 15,
     },
   })
 
@@ -355,7 +384,7 @@ async function main() {
       classDuration: '60:00 mins',
       classesPerWeek: '3 Days',
       format: 'Group classes via Google Meet',
-      fee: 15,
+      fee: 1200,
     },
   })
 
@@ -373,7 +402,7 @@ async function main() {
       classDuration: '90:00 mins',
       classesPerWeek: '2 Days',
       format: 'Live online via Google Meet',
-      fee: 25,
+      fee: 2000,
     },
   })
 
@@ -391,7 +420,7 @@ async function main() {
       classDuration: '90:00 mins',
       classesPerWeek: '3 Days',
       format: 'Interactive online sessions',
-      fee: 40,
+      fee: 3000,
     },
   })
 
@@ -410,7 +439,7 @@ async function main() {
       classDuration: '75:00 mins',
       classesPerWeek: '4 Days',
       format: 'Live online via Zoom',
-      fee: 35,
+      fee: 2500,
     },
   })
 
@@ -422,7 +451,7 @@ async function main() {
       description:
         'Rich Dad Poor Dad is Robert’s story of growing up with two dads — and explains the difference between assets and liabilities. Instant PDF + EPUB download.',
       image: '/images/book-finance.png',
-      price: 300,
+      price: 2500,
       fileUrl: '/downloads/rich-dad.pdf',
     },
   })
@@ -432,7 +461,7 @@ async function main() {
       title: 'Class 10 Math Formula Sheet (PDF)',
       description: 'All algebra, geometry and trigonometry formulas on 4 clean pages. Perfect for board exam revision.',
       image: '/images/cover-classroom.png',
-      price: 50,
+      price: 300,
     },
   })
   await db.digitalGood.create({
@@ -441,7 +470,7 @@ async function main() {
       title: 'English Grammar Workbook — 80 Exercises',
       description: 'Tenses, articles, prepositions and sentence-building drills with answer key. Printable A4 PDF.',
       image: '/images/course-english.png',
-      price: 120,
+      price: 900,
     },
   })
 
@@ -463,7 +492,7 @@ async function main() {
       { connectionId: connActive.id, senderId: elon.id, content: 'Hello Ahmed! I saw your post for Class 10th Math. I can cover algebra, geometry and trigonometry with weekly tests.', createdAt: new Date(Date.now() - 2 * 24 * 3600 * 1000 + 60000) },
       { connectionId: connActive.id, senderId: ahmed.id, content: 'Have a great working week!! 😄', createdAt: new Date(Date.now() - 2 * 24 * 3600 * 1000 + 120000) },
       { connectionId: connActive.id, senderId: ahmed.id, content: 'Yes sure, what is your fee for the full term?', createdAt: new Date(Date.now() - 1 * 24 * 3600 * 1000) },
-      { connectionId: connActive.id, senderId: elon.id, content: 'For the full term (6 months, 4 classes/week) it is $80 total. First demo class is free.', createdAt: new Date(Date.now() - 1 * 24 * 3600 * 1000 + 300000) },
+      { connectionId: connActive.id, senderId: elon.id, content: 'For the full term (6 months, 4 classes/week) it is 9,000 PKR total. First demo class is free.', createdAt: new Date(Date.now() - 1 * 24 * 3600 * 1000 + 300000) },
     ],
   })
 
@@ -588,6 +617,104 @@ async function main() {
     ],
   })
 
+  // ---------- Multi-currency rates (PKR base — admin editable) ----------
+  await db.exchangeRate.createMany({
+    data: [
+      { code: 'PKR', label: 'Pakistani Rupee', symbol: 'Rs', pkrPer: 1 },
+      { code: 'USD', label: 'US Dollar', symbol: '$', pkrPer: 280 },
+      { code: 'EUR', label: 'Euro', symbol: '€', pkrPer: 305 },
+      { code: 'INR', label: 'Indian Rupee', symbol: '₹', pkrPer: 3.35 },
+    ],
+  })
+
+  // ---------- Platform settings ----------
+  await db.platformSetting.createMany({
+    data: [
+      { key: 'commissionRate', value: '0.1' },
+      { key: 'milestonePaid', value: '0' },
+    ],
+  })
+
+  // ---------- Platform bank accounts (shown on payment dialogs) ----------
+  await db.platformBankAccount.createMany({
+    data: [
+      {
+        bankName: 'HBL — StudySir Pvt Ltd',
+        accountTitle: 'StudySir (Pvt) Ltd',
+        accountNumber: '1234-5678-9012-3456',
+        instructions: 'Branch transfer or IBAN. Use your email as the reference.',
+      },
+      {
+        bankName: 'JazzCash',
+        accountTitle: 'StudySir Payments',
+        accountNumber: '0300-1234567',
+        instructions: 'Send via JazzCash app, then upload the receipt screenshot.',
+      },
+      {
+        bankName: 'Easypaisa',
+        accountTitle: 'StudySir Payments',
+        accountNumber: '0345-7654321',
+        instructions: 'Send via Easypaisa app, then upload the receipt screenshot.',
+      },
+    ],
+  })
+
+  // ---------- Demo KYC queue: Noman pending verification ----------
+  await db.kycSubmission.create({
+    data: {
+      userId: noman.id,
+      fullName: 'Noman Ali',
+      cnic: '42201-1234567-8',
+      phone: '+92 301 2345678',
+      city: 'Karachi',
+      documentImage: '/images/avatar-noman.png',
+      status: 'PENDING',
+    },
+  })
+  await db.user.update({ where: { id: noman.id }, data: { kycStatus: 'PENDING' } })
+
+  // ---------- Demo payment proofs ----------
+  await db.topUpRequest.create({
+    data: {
+      userId: mukesh.id,
+      kind: 'TEACHER_COINS',
+      amount: 280,
+      method: 'JazzCash · 0300-1234567',
+      reference: 'JC-881234',
+      screenshot: '/images/cover-meeting.png',
+      coinsGranted: 100,
+      status: 'APPROVED',
+      decidedAt: new Date(Date.now() - 1 * 24 * 3600 * 1000),
+    },
+  })
+  await db.topUpRequest.create({
+    data: {
+      userId: fatima.id,
+      kind: 'STUDENT_MONEY',
+      amount: 1500,
+      method: 'Easypaisa · 0345-7654321',
+      reference: 'EP-556677',
+      screenshot: '/images/cover-classroom.png',
+      status: 'PENDING',
+    },
+  })
+
+  // ---------- Demo withdrawal request (Noman, pending) ----------
+  await db.withdrawRequest.create({
+    data: {
+      userId: noman.id,
+      amount: 1000,
+      bankName: 'HBL',
+      accountTitle: 'Noman Ali',
+      accountNumber: 'PK36SCBL0000001123456702',
+      status: 'PENDING',
+    },
+  })
+  await db.user.update({
+    where: { id: noman.id },
+    data: { bankName: 'HBL', bankAccountTitle: 'Noman Ali', bankAccountNumber: 'PK36SCBL0000001123456702' },
+  })
+
   console.log('✅ Seed complete:', {
     users: await db.user.count(),
     aiAgents: await db.user.count({ where: { isAI: true } }),
@@ -597,6 +724,11 @@ async function main() {
     goods: await db.digitalGood.count(),
     connections: await db.connection.count(),
     messages: await db.message.count(),
+    bankAccounts: await db.platformBankAccount.count(),
+    rates: await db.exchangeRate.count(),
+    pendingKyc: await db.kycSubmission.count({ where: { status: 'PENDING' } }),
+    pendingTopups: await db.topUpRequest.count({ where: { status: 'PENDING' } }),
+    pendingWithdrawals: await db.withdrawRequest.count({ where: { status: 'PENDING' } }),
   })
 }
 

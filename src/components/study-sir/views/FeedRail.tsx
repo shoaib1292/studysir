@@ -5,6 +5,7 @@ import { Radio, UserRoundCheck, UsersRound } from 'lucide-react'
 import { api } from '@/lib/api'
 import type { TeacherCardDTO, UserDTO } from '@/lib/types'
 import { useAppStore } from '@/store/useAppStore'
+import { useMoney } from '@/store/useCurrencyStore'
 import { Stars } from '../shared/Stars'
 import { UserAvatar } from '../shared/UserAvatar'
 
@@ -17,6 +18,7 @@ export function FeedRail() {
   const go = useAppStore((s) => s.go)
   const onlineIds = useAppStore((s) => s.onlineIds)
   const me = useAppStore((s) => s.me)!
+  const { fmt } = useMoney(me)
 
   const [teachers, setTeachers] = useState<TeacherCardDTO[] | null>(null)
   const [users, setUsers] = useState<UserDTO[] | null>(null)
@@ -95,7 +97,7 @@ export function FeedRail() {
                     <span className="block truncate text-sm font-semibold hover:underline">{t.name}</span>
                     <span className="block truncate text-[11px] text-muted-foreground">
                       {t.city ?? 'Online'}
-                      {t.feeMin ? ` · from $${t.feeMin}` : ''}
+                      {t.feeMin ? ` · from ${fmt(t.feeMin)}` : ''}
                     </span>
                   </span>
                   <Stars value={t.avgRating} size="size-3" showValue />

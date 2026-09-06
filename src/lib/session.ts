@@ -40,6 +40,16 @@ export async function requireSessionUser() {
   return user
 }
 
+/** Platform-admin guard. Staff accounts pass unless ownerOnly (requirement J + sub-roles). */
+export async function requireAdminUser(opts?: { ownerOnly?: boolean }) {
+  const user = await requireSessionUser()
+  if (!user.isAdmin) throw new HttpError(403, 'Admin access required')
+  if (opts?.ownerOnly && user.subRole === 'STAFF') {
+    throw new HttpError(403, 'Owner access required — staff cannot perform this action')
+  }
+  return user
+}
+
 export class HttpError extends Error {
   status: number
   constructor(status: number, message: string) {

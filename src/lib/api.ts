@@ -2,24 +2,33 @@
 // Always sends cookies (credentials: 'include'), always relative URLs.
 import type {
   AdminAnalytics,
+  AdminSettingsDTO,
   AdminStats,
   AdminUserDTO,
+  AiAgentDTO,
   AvailabilityDTO,
+  BankAccountDTO,
   CoinTransactionDTO,
   ConnectionDTO,
   CourseDTO,
   FeedItem,
   GoodDTO,
+  KycDTO,
   MessageDTO,
   MessageReactionGroup,
   NotificationDTO,
   ProfileStats,
+  RateDTO,
   ReportDTO,
   ReviewDTO,
   StudentDTO,
   ThreadResponse,
+  TopUpDTO,
+  TopUpKind,
   TuitionPostDTO,
   UserDTO,
+  WalletResponse,
+  WithdrawalDTO,
 } from '@/lib/types'
 
 export class ApiError extends Error {
@@ -116,6 +125,10 @@ export interface GoodInput {
 
 export interface ProfilePatch {
   name?: string
+  currency?: string
+  bankName?: string
+  bankAccountTitle?: string
+  bankAccountNumber?: string
   headline?: string
   bio?: string
   city?: string
@@ -202,18 +215,21 @@ export const api = {
     }),
 
   // wallet
-  getWallet: () =>
-    request<{ coins: number; money: number; transactions: CoinTransactionDTO[] }>('/api/wallet'),
-  buyCoins: (packageId: string) =>
-    request<{ coins: number; transaction: CoinTransactionDTO }>('/api/wallet/buy-coins', {
-      method: 'POST',
-      body: { packageId },
-    }),
-  addMoney: (amount: number) =>
-    request<{ money: number; transaction: CoinTransactionDTO }>('/api/wallet/add-money', {
-      method: 'POST',
-      body: { amount },
-    }),
+  getWallet: () => request<WalletResponse>('/api/wallet'),
+  /** Payment-screenshot top-up (teacher coins = instant credit; student money = after verification). */
+  topUp: (body: { kind: TopUpKind; packageId?: string; amount?: number; method: string; reference?: string; screenshot: string }) =>
+    request<{ topup: TopUpDTO }>('/api/wallet/topup', { method: 'POST', body }),
+  /** Withdrawal request — min 1,000 PKR, bank details required. */
+  withdraw: (body: { amount: number; bankName: string; accountTitle: string; accountNumber: string }) =>
+    request<{ withdrawal: WithdrawalDTO }>('/api/wallet/withdraw', { method: 'POST', body }),
+  /** Public platform bank accounts shown on payment dialogs. */
+  getBankAccounts: () => request<{ accounts: BankAccountDTO[] }>('/api/platform/bank-accounts'),
+  /** Public exchange rates. */
+  getRates: () => request<{ rates: RateDTO[] }>('/api/currency'),
+  /** Teacher KYC: read mine / submit documents. */
+  getMyKyc: () => request<{ kyc: { id: string; status: string; fullName: string; city: string; adminNote: string | null; decidedAt: string | null; createdAt: string } | null }>('/api/kyc'),
+  submitKyc: (body: { fullName: string; cnic: string; phone: string; city: string; documentImage: string; selfieImage?: string }) =>
+    request<{ kyc: { id: string; status: string } }>('/api/kyc', { method: 'POST', body }),
 
   // notifications
   getNotifications: () =>
@@ -263,6 +279,48 @@ export const api = {
   adminSetUserStatus: (id: string, status: 'BANNED' | 'ACTIVE') =>
     request<{ user: UserDTO }>(`/api/admin/users/${id}`, { method: 'PATCH', body: { status } }),
   getAdminAnalytics: () => request<{ analytics: AdminAnalytics }>('/api/admin/analytics'),
+
+  // admin — payments / kyc / withdrawals (requirements B, E, G)
+  adminTopUps: (status?: string) =>
+    request<{ topups: TopUpDTO[] }>(`/api/admin/topups${status ? `?status=${encodeURIComponent(status)}` : ''}`),
+  adminTopUpAction: (id: string, action: 'APPROVE' | 'REJECT', note?: string) =>
+    request<{ ok: true; status: string }>(`/api/admin/topups/${id}`, { method: 'POST', body: { action, note } }),
+  adminWithdrawals: (status?: string) =>
+    request<{ withdrawals: WithdrawalDTO[] }>(`/api/admin/withdrawals${status ? `?status=${encodeURIComponent(status)}` : ''}`),
+  adminWithdrawalAction: (id: string, action: 'APPROVE' | 'REJECT', note?: string) =>
+    request<{ ok: true; status: string }>(`/api/admin/withdrawals/${id}`, { method: 'POST', body: { action, note } }),
+  adminKyc: (status?: string) =>
+    request<{ submissions: KycDTO[] }>(`/api/admin/kyc${status ? `?status=${encodeURIComponent(status)}` : ''}`),
+  adminKycAction: (id: string, action: 'APPROVE' | 'REJECT', note?: string) =>
+    request<{ ok: true; status: string }>(`/api/admin/kyc/${id}`, { method: 'POST', body: { action, note } }),
+
+  // admin — economy: rates / bank accounts / commission / milestone (requirements D, B)
+  adminRates: () => request<{ rates: RateDTO[] }>('/api/admin/rates'),
+  adminUpdateRate: (code: string, pkrPer: number) =>
+    request<{ rate: RateDTO }>('/api/admin/rates', { method: 'PUT', body: { code, pkrPer } }),
+  adminBankAccounts: () => request<{ accounts: BankAccountDTO[] }>('/api/admin/bank-accounts'),
+  adminCreateBankAccount: (body: Omit<BankAccountDTO, 'id' | 'active'>) =>
+    request<{ account: BankAccountDTO }>('/api/admin/bank-accounts', { method: 'POST', body }),
+  adminUpdateBankAccount: (id: string, body: Partial<Omit<BankAccountDTO, 'id'>>) =>
+    request<{ account: BankAccountDTO }>(`/api/admin/bank-accounts/${id}`, { method: 'PATCH', body }),
+  adminDeleteBankAccount: (id: string) =>
+    request<{ ok: true }>(`/api/admin/bank-accounts/${id}`, { method: 'DELETE' }),
+  adminSettings: () => request<AdminSettingsDTO>('/api/admin/settings'),
+  adminUpdateSettings: (body: { commissionRate?: number }) =>
+    request<{ commissionRate: number }>('/api/admin/settings', { method: 'PUT', body }),
+  adminMilestone: () => request<{ paidTeachers: number; target: number; milestonePaid: boolean }>('/api/admin/milestone'),
+  adminPayMilestone: () =>
+    request<{ ok: true; teachers: number }>('/api/admin/milestone', { method: 'POST' }),
+
+  // admin — AI engine agents (requirement K/A)
+  adminAiAgents: () => request<{ agents: AiAgentDTO[] }>('/api/admin/ai/agents'),
+  adminCreateAiAgent: (body: Record<string, unknown>) =>
+    request<{ agent: { id: string } }>('/api/admin/ai/agents', { method: 'POST', body }),
+  adminUpdateAiAgent: (id: string, body: Record<string, unknown>) =>
+    request<{ agent: AiAgentDTO }>(`/api/admin/ai/agents/${id}`, { method: 'PATCH', body }),
+  adminDeleteAiAgent: (id: string) =>
+    request<{ ok: true }>(`/api/admin/ai/agents/${id}`, { method: 'DELETE' }),
+  adminAiStats: () => request<{ agents: AiAgentDTO[]; llmProvider: string; wastedCoinsByRealTeachers: { teacherId: string; teacherName: string; coins: number }[]; aiMessages: number }>('/api/admin/ai'),
 }
 
 export function errorMessage(e: unknown): string {

@@ -130,6 +130,12 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   if (typeof body.coverImage === 'string' || body.coverImage === null) data.coverImage = body.coverImage
   if (body.feeMin !== undefined) data.feeMin = body.feeMin === null ? null : Number(body.feeMin)
   if (body.feeMax !== undefined) data.feeMax = body.feeMax === null ? null : Number(body.feeMax)
+  // multi-currency: preferred display currency (requirement D)
+  if (typeof body.currency === 'string' && ['PKR', 'USD', 'EUR', 'INR'].includes(body.currency)) data.currency = body.currency
+  // withdrawal bank details (requirement B)
+  if (typeof body.bankName === 'string') data.bankName = body.bankName.trim().slice(0, 120)
+  if (typeof body.bankAccountTitle === 'string') data.bankAccountTitle = body.bankAccountTitle.trim().slice(0, 120)
+  if (typeof body.bankAccountNumber === 'string') data.bankAccountNumber = body.bankAccountNumber.trim().slice(0, 60)
 
   // Availability: replace-all strategy. Accepts [{ day, slots }]
   let availabilityRows: { day: string; slots: string }[] | null = null

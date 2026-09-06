@@ -11,10 +11,10 @@ import {
   GraduationCap,
   Handshake,
   Languages,
-  MessageSquareText,
   MessagesSquare,
   MoreHorizontal,
   Pencil,
+  Share2,
   ThumbsUp,
   XCircle,
 } from 'lucide-react'
@@ -33,13 +33,12 @@ import { ConnectConfirmDialog } from '../dialogs/ConnectConfirmDialog'
 import { NotEnoughCoinsDialog } from '../dialogs/NotEnoughCoinsDialog'
 import { PostTuitionDialog } from '../dialogs/PostTuitionDialog'
 import { ReportDialog } from '../dialogs/ReportDialog'
+import { ShareDialog, type ShareContent } from '../dialogs/ShareDialog'
 import { ActionGrid, CardAction, DetailRow, FbCard, StatText, TuitionStatusBadge } from '../shared/bits'
 import { RichText } from '../shared/RichText'
-import { Stars } from '../shared/Stars'
 import { UserAvatar } from '../shared/UserAvatar'
 import { timeAgo } from '../shared/format'
-
-type TuitionWithRating = TuitionPostDTO & { authorAvgRating?: number }
+import { useMoney } from '@/store/useCurrencyStore'
 
 export function TuitionCard({
   tuition,
@@ -53,6 +52,7 @@ export function TuitionCard({
   const me = useAppStore((s) => s.me)!
   const go = useAppStore((s) => s.go)
   const refreshMe = useAppStore((s) => s.refreshMe)
+  const { fmt } = useMoney(me)
 
   const isMine = tuition.authorId === me.id
   const isTeacherViewer = me.role === 'TEACHER'
@@ -66,8 +66,22 @@ export function TuitionCard({
   const [notEnough, setNotEnough] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
 
-  const authorRating = (tuition as TuitionWithRating).authorAvgRating
+  const shareContent: ShareContent = {
+    emoji: '📚',
+    title: tuition.title,
+    byline: `— ${tuition.mode === 'ONLINE' ? 'Online tuition' : tuition.mode === 'HOME' ? 'Home tuition' : 'Center tuition'} request by ${tuition.author.name}`,
+    details: [
+      ['Subjects', tuition.subjects ?? ''],
+      ['Languages', tuition.languages ?? ''],
+      ['Qualification', tuition.qualification ?? ''],
+      ['Timing', tuition.timing ?? ''],
+      ['City', tuition.city ?? ''],
+    ],
+    description: tuition.description,
+    price: `💰 Fee range: ${fmt(tuition.feeMin)} – ${fmt(tuition.feeMax)}`,
+  }
 
   async function toggleLike() {
     const next = !liked
@@ -237,14 +251,13 @@ export function TuitionCard({
 
       {/* Body */}
       <div className="space-y-3 px-4 pb-4">
-        {typeof authorRating === 'number' ? <Stars value={authorRating} showValue /> : null}
         <h3 className="text-[17px] font-bold leading-snug">{tuition.title}</h3>
         <RichText text={tuition.description} keywords={[tuition.subjects, tuition.city]} clamp={4} />
         <div className="space-y-1.5 rounded-lg bg-muted/60 p-3">
           <DetailRow icon={Languages} label="Languages" value={tuition.languages} />
           <DetailRow icon={BookOpen} label="Subjects" value={tuition.subjects} />
           <DetailRow icon={GraduationCap} label="Required Qualification" value={tuition.qualification} />
-          <DetailRow icon={Banknote} label="Fee Range" value={`$${tuition.feeMin} – $${tuition.feeMax}`} bold />
+          <DetailRow icon={Banknote} label="Fee Range" value={`${fmt(tuition.feeMin)} – ${fmt(tuition.feeMax)}`} bold />
           <DetailRow icon={Clock} label="Timing" value={tuition.timing} />
         </div>
       </div>
@@ -260,7 +273,7 @@ export function TuitionCard({
           }
         >
           <CardAction icon={ThumbsUp} label="Like" active={liked} onClick={toggleLike} />
-          <CardAction icon={MessageSquareText} label="Review" disabled />
+          <CardAction icon={Share2} label="Share" onClick={() => setShareOpen(true)} />
           {isTeacherViewer && !isMine ? (
             <CardAction icon={Handshake} label={`Accept · ${tuition.coinCost}`} onClick={startContact} />
           ) : null}
@@ -327,6 +340,7 @@ export function TuitionCard({
           label: tuition.title,
         }}
       />
+      <ShareDialog open={shareOpen} onOpenChange={setShareOpen} content={shareContent} />
     </FbCard>
   )
 }
