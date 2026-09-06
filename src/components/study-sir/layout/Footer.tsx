@@ -6,7 +6,9 @@ export function Footer() {
   return (
     <footer className="mt-auto border-t bg-card py-4">
       <div className="flex flex-col items-center gap-1.5 px-4 text-center">
-        <p className="text-xs text-muted-foreground">StudySir © 2025 · Connecting Students &amp; Teachers</p>
+        <p className="text-xs text-muted-foreground">
+          <span className="font-logo">StudySir</span> © 2025 · Connecting Students &amp; Teachers
+        </p>
         <div className="flex items-center gap-4">
           {['About', 'Help', 'Privacy'].map((label) => (
             <button

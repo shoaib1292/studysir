@@ -5,10 +5,11 @@ import { requireSessionUser, HttpError } from '@/lib/session'
 export async function GET() {
   try {
     const me = await requireSessionUser()
-    const [transactions, topups, withdrawals] = await Promise.all([
+    const [transactions, topups, withdrawals, planPurchases] = await Promise.all([
       db.coinTransaction.findMany({ where: { userId: me.id }, orderBy: { createdAt: 'desc' }, take: 100 }),
       db.topUpRequest.findMany({ where: { userId: me.id }, orderBy: { createdAt: 'desc' }, take: 10 }),
       db.withdrawRequest.findMany({ where: { userId: me.id }, orderBy: { createdAt: 'desc' }, take: 10 }),
+      db.planPurchase.findMany({ where: { userId: me.id }, orderBy: { createdAt: 'desc' }, take: 10 }),
     ])
     return NextResponse.json({
       coins: me.coins,
@@ -24,6 +25,15 @@ export async function GET() {
         type: t.type,
         description: t.description,
         createdAt: t.createdAt.toISOString(),
+      })),
+      planPurchases: planPurchases.map((p) => ({
+        id: p.id,
+        tier: p.tier,
+        price: p.price,
+        coinsGranted: p.coinsGranted,
+        status: p.status,
+        adminNote: p.adminNote,
+        createdAt: p.createdAt.toISOString(),
       })),
       topups: topups.map((t) => ({
         id: t.id,

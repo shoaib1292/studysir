@@ -1,12 +1,15 @@
 'use client'
 
-// Payment-screenshot flow (requirements B + G).
-// TEACHER_COINS: coins credited INSTANTLY on submit; clawed back if admin rejects.
-// STUDENT_MONEY: money credited only after the platform admin verifies the proof.
+// Add-money flow (requirements B + G): pay a platform bank account, upload the
+// payment screenshot, and the money wallet is credited after admin verification.
+//
+// NOTE (UX fix): the submit button is ALWAYS clickable — validation runs on tap
+// with a precise toast telling the user exactly what is still missing. A silently
+// disabled button after uploading the screenshot was reported as a bug.
 import { useEffect, useState } from 'react'
 import {
   Banknote,
-  Coins,
+  Clock3,
   Copy,
   Check,
   ImagePlus,
@@ -14,7 +17,6 @@ import {
   Loader2,
   ShieldCheck,
   Trash2,
-  Clock3,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -29,24 +31,22 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { api, errorMessage } from '@/lib/api'
-import { COIN_PACKAGES } from '@/lib/coins'
-import type { BankAccountDTO, TopUpKind } from '@/lib/types'
+import type { BankAccountDTO } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { fileToCompactDataUrl } from '@/lib/image'
 import { useMoney } from '@/store/useCurrencyStore'
 import { useAppStore } from '@/store/useAppStore'
 
 const STUDENT_QUICK = [500, 1000, 2500, 5000]
+export const MIN_TOPUP = 100
 
 export function PaymentDialog({
   open,
   onOpenChange,
-  kind,
   onDone,
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
-  kind: TopUpKind
   onDone?: () => void
 }) {
   const me = useAppStore((s) => s.me)!
@@ -55,7 +55,6 @@ export function PaymentDialog({
 
   const [accounts, setAccounts] = useState<BankAccountDTO[]>([])
   const [method, setMethod] = useState('')
-  const [packageId, setPackageId] = useState(COIN_PACKAGES[0]?.id ?? '')
   const [amount, setAmount] = useState('')
   const [reference, setReference] = useState('')
   const [screenshot, setScreenshot] = useState('')
@@ -63,9 +62,8 @@ export function PaymentDialog({
   const [copied, setCopied] = useState('')
   const [loadingAccounts, setLoadingAccounts] = useState(false)
 
-  const isTeacherCoins = kind === 'TEACHER_COINS'
-  const pkg = COIN_PACKAGES.find((p) => p.id === packageId)
-  const payAmount = isTeacherCoins ? (pkg?.price ?? 0) : Number(amount) || 0
+  const payAmount = Number(amount) || 0
+  const ready = !!method && !!screenshot && payAmount >= MIN_TOPUP
 
   useEffect(() => {
     if (!open || accounts.length) return
@@ -79,7 +77,6 @@ export function PaymentDialog({
 
   function reset() {
     setMethod('')
-    setPackageId(COIN_PACKAGES[0]?.id ?? '')
     setAmount('')
     setReference('')
     setScreenshot('')
@@ -91,6 +88,7 @@ export function PaymentDialog({
     try {
       const dataUrl = await fileToCompactDataUrl(file)
       setScreenshot(dataUrl)
+      toast.success('Screenshot attached')
     } catch (e) {
       toast.error('Could not read screenshot', { description: errorMessage(e) })
     }
@@ -107,29 +105,34 @@ export function PaymentDialog({
   }
 
   async function submit() {
-    if (!method) return toast.error('Select the account you paid from')
-    if (!screenshot) return toast.error('Upload the payment screenshot')
-    if (isTeacherCoins && !pkg) return
-    if (!isTeacherCoins && payAmount < 100) return toast.error('Minimum top-up is PKR 100')
+    // Precise, ordered validation — the button is never silently dead.
+    if (payAmount < MIN_TOPUP) {
+      return toast.error(`Minimum top-up is PKR ${MIN_TOPUP.toLocaleString()}`, {
+        description: 'Enter the amount you transferred (at least PKR 100).',
+      })
+    }
+    if (!method) {
+      return toast.error('Select the account you paid from', {
+        description: 'Tap one of the platform bank accounts in step 2.',
+      })
+    }
+    if (!screenshot) {
+      return toast.error('Upload the payment screenshot', {
+        description: 'Attach the transfer receipt in step 3 so we can verify your payment.',
+      })
+    }
     setBusy(true)
     try {
-      const res = await api.topUp({
-        kind,
-        packageId: isTeacherCoins ? packageId : undefined,
-        amount: isTeacherCoins ? undefined : payAmount,
+      await api.topUp({
+        kind: 'STUDENT_MONEY',
+        amount: payAmount,
         method,
         reference: reference.trim() || undefined,
         screenshot,
       })
-      if (isTeacherCoins) {
-        toast.success(`+${res.topup.coinsGranted} coins added!`, {
-          description: 'Coins are ready to use — the platform is verifying your payment proof.',
-        })
-      } else {
-        toast.success('Payment proof submitted', {
-          description: 'Your money is added after the platform verifies the screenshot.',
-        })
-      }
+      toast.success('Payment proof submitted', {
+        description: 'Your money is added after the platform verifies the screenshot.',
+      })
       await refreshMe()
       onDone?.()
       onOpenChange(false)
@@ -151,71 +154,47 @@ export function PaymentDialog({
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {isTeacherCoins ? <Coins className="size-5 text-amber-500" /> : <Banknote className="size-5 text-green-600" />}
-            {isTeacherCoins ? 'Buy Coins — Bank Transfer' : 'Add Money — Bank Transfer'}
+            <Banknote className="size-5 text-green-600" />
+            Add Money — Bank Transfer
           </DialogTitle>
           <DialogDescription>
-            {isTeacherCoins
-              ? 'Pay to a platform account, upload the screenshot — coins are added instantly and confirmed after verification.'
-              : 'Pay to a platform account and upload the screenshot — your wallet is credited after verification.'}
+            Pay to a platform account and upload the screenshot — your wallet is credited after verification.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Step 1 — package or amount */}
-          {isTeacherCoins ? (
-            <div className="grid grid-cols-2 gap-2">
-              {COIN_PACKAGES.map((p) => (
+          {/* Step 1 — amount */}
+          <div className="space-y-2">
+            <Label htmlFor="topup-amount">1 · Amount paid (PKR)</Label>
+            <Input
+              id="topup-amount"
+              type="number"
+              min={MIN_TOPUP}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="e.g. 1000"
+              aria-label="Amount paid in PKR"
+            />
+            <div className="flex flex-wrap gap-1.5">
+              {STUDENT_QUICK.map((v) => (
                 <button
-                  key={p.id}
+                  key={v}
                   type="button"
-                  onClick={() => setPackageId(p.id)}
+                  onClick={() => setAmount(String(v))}
                   className={cn(
-                    'rounded-xl border p-2.5 text-left transition-colors',
-                    packageId === p.id ? 'border-[#1877F2] bg-blue-500/5 ring-1 ring-[#1877F2]' : 'hover:bg-muted'
+                    'rounded-full border px-3 py-1 text-xs font-medium transition-colors hover:bg-muted',
+                    payAmount === v ? 'border-[#1877F2] bg-blue-500/10 text-[#1877F2]' : 'text-muted-foreground'
                   )}
                 >
-                  <p className="flex items-center gap-1 text-sm font-bold">
-                    <Coins className="size-3.5 text-amber-500" />
-                    {p.coins}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{p.label}</p>
-                  <p className="mt-0.5 text-sm font-semibold">{fmt(p.price)}</p>
+                  PKR {v.toLocaleString()}
                 </button>
               ))}
             </div>
-          ) : (
-            <div className="space-y-2">
-              <Label htmlFor="topup-amount">Amount paid (PKR)</Label>
-              <Input
-                id="topup-amount"
-                type="number"
-                min={100}
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="e.g. 1000"
-              />
-              <div className="flex flex-wrap gap-1.5">
-                {STUDENT_QUICK.map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={() => setAmount(String(v))}
-                    className={cn(
-                      'rounded-full border px-3 py-1 text-xs font-medium transition-colors hover:bg-muted',
-                      Number(amount) === v ? 'border-[#1877F2] text-[#1877F2]' : 'text-muted-foreground'
-                    )}
-                  >
-                    PKR {v.toLocaleString()}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          </div>
 
           {/* Step 2 — platform accounts */}
           <div className="space-y-2">
-            <p className="text-sm font-semibold">1 · Pay to a platform account</p>
+            <p className="text-sm font-semibold">2 · Pay to a platform account</p>
             {loadingAccounts ? (
               <p className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="size-3.5 animate-spin" /> Loading accounts…
@@ -273,7 +252,7 @@ export function PaymentDialog({
 
           {/* Step 3 — screenshot */}
           <div className="space-y-2">
-            <p className="text-sm font-semibold">2 · Upload payment screenshot</p>
+            <p className="text-sm font-semibold">3 · Upload payment screenshot</p>
             {screenshot ? (
               <div className="relative overflow-hidden rounded-xl border">
                 <img src={screenshot} alt="Payment screenshot preview" className="max-h-44 w-full object-cover" />
@@ -310,17 +289,10 @@ export function PaymentDialog({
 
           <p className="flex items-start gap-2 rounded-lg bg-blue-500/5 p-3 text-xs text-muted-foreground">
             <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-[#1877F2]" />
-            {isTeacherCoins ? (
-              <span>
-                You pay <b>{fmt(payAmount)}</b> · <b>{pkg?.coins ?? 0} coins</b> are added to your wallet right away. If
-                the proof fails verification, the coins are deducted again.
-              </span>
-            ) : (
-              <span>
-                You pay <b>{fmt(payAmount)}</b> — your wallet is credited once an admin verifies the screenshot
-                (usually within 24h).
-              </span>
-            )}
+            <span>
+              You pay <b>{fmt(payAmount)}</b> — your wallet is credited once an admin verifies the screenshot (usually
+              within 24h). Coins are never bought here — teachers get coins through Premium Plans.
+            </span>
           </p>
         </div>
 
@@ -328,14 +300,14 @@ export function PaymentDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
             Cancel
           </Button>
-          <Button onClick={() => void submit()} disabled={busy || !method || !screenshot || payAmount <= 0}>
+          <Button
+            onClick={() => void submit()}
+            disabled={busy}
+            className={cn(!ready && !busy && 'bg-amber-500 hover:bg-amber-600 text-white')}
+          >
             {busy ? (
               <>
                 <Loader2 className="mr-1.5 size-4 animate-spin" /> Submitting…
-              </>
-            ) : isTeacherCoins ? (
-              <>
-                <Coins className="mr-1.5 size-4" /> Pay {fmt(payAmount)} · Get {pkg?.coins ?? 0} coins
               </>
             ) : (
               <>

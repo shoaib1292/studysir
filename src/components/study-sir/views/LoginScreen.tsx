@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import {
+  ArrowLeft,
   Coins,
   Eye,
   EyeOff,
@@ -49,7 +50,15 @@ const ROLE_OPTIONS = [
   { value: 'TEACHER', label: 'Teacher', icon: Coins, hint: 'Accept requests, earn money' },
 ]
 
-export function LoginScreen() {
+export function LoginScreen({
+  initialMode,
+  onBack,
+}: {
+  /** Pre-select the Log in / Sign up tab (e.g. arriving from a landing CTA). */
+  initialMode?: 'login' | 'signup'
+  /** When provided, shows a back button returning to the public landing page. */
+  onBack?: () => void
+}) {
   const setMe = useAppStore((s) => s.setMe)
   const resetNav = useAppStore((s) => s.resetNav)
   const { fmt } = useMoney(null)
@@ -57,7 +66,7 @@ export function LoginScreen() {
   const [users, setUsers] = useState<UserDTO[] | null>(null)
   const [loggingIn, setLoggingIn] = useState<string | null>(null)
 
-  const [mode, setMode] = useState<Mode>('login')
+  const [mode, setMode] = useState<Mode>(initialMode ?? 'login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPw, setShowPw] = useState(false)
@@ -145,10 +154,18 @@ export function LoginScreen() {
   return (
     <div className="grid min-h-screen place-items-center bg-background p-4">
       <div className="card-shadow w-full max-w-md rounded-xl bg-card p-6 sm:p-8">
+        {onBack ? (
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Back to home"
+            className="mb-2 flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="size-4" /> Back
+          </button>
+        ) : null}
         <div className="text-center">
-          <p className="text-4xl font-extrabold tracking-tight text-[#1877F2]">
-            Study<span className="font-black">Sir</span>
-          </p>
+          <p className="font-logo text-4xl tracking-tight text-[#1877F2]">StudySir</p>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
             Connect Students &amp; Teachers — post tuition free, hire teachers, buy digital goods
           </p>

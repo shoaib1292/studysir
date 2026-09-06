@@ -48,7 +48,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(
+export async function request<T>(
   path: string,
   options: { method?: string; body?: unknown } = {}
 ): Promise<T> {
@@ -232,8 +232,8 @@ export const api = {
 
   // wallet
   getWallet: () => request<WalletResponse>('/api/wallet'),
-  /** Payment-screenshot top-up (teacher coins = instant credit; student money = after verification). */
-  topUp: (body: { kind: TopUpKind; packageId?: string; amount?: number; method: string; reference?: string; screenshot: string }) =>
+  /** Add-money payment-screenshot proof — money credited after admin verification. */
+  topUp: (body: { kind?: TopUpKind; amount: number; method: string; reference?: string; screenshot: string }) =>
     request<{ topup: TopUpDTO }>('/api/wallet/topup', { method: 'POST', body }),
   /** Withdrawal request — min 1,000 PKR, bank details required. */
   withdraw: (body: { amount: number; bankName: string; accountTitle: string; accountNumber: string }) =>

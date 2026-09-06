@@ -342,8 +342,8 @@ export interface AdminAnalytics {
 // POST /api/admin/reports/:id { action: 'RESOLVE'|'DISMISS', note? } -> { report }               (admin only)
 // GET  /api/admin/users                 -> { users: AdminUserDTO[] }                             (admin only)
 // PATCH /api/admin/users/:id { status: 'BANNED'|'ACTIVE' } -> { user }                          (admin only)
-// GET  /api/wallet                       -> { coins, money, transactions: CoinTransactionDTO[] }
-// POST /api/wallet/buy-coins { packageId } -> { coins, transaction }
+// GET  /api/wallet                       -> { coins, money, transactions, planPurchases, topups, withdrawals }
+// POST /api/wallet/topup { amount }       -> money top-up proof (credit after verification)
 // POST /api/wallet/add-money { amount }   -> { money, transaction }
 // GET  /api/notifications                -> { notifications: NotificationDTO[], unread: number }
 // POST /api/notifications/read           -> { ok: true }
@@ -463,11 +463,22 @@ export interface RateDTO {
   pkrPer: number
 }
 
+export interface WalletPlanPurchaseDTO {
+  id: string
+  tier: string
+  price: number
+  coinsGranted: number
+  status: 'PENDING' | 'ACTIVE' | 'REJECTED'
+  adminNote: string | null
+  createdAt: string
+}
+
 export interface WalletResponse {
   coins: number
   money: number
   bankDetails: { bankName: string | null; accountTitle: string | null; accountNumber: string | null }
   transactions: CoinTransactionDTO[]
+  planPurchases: WalletPlanPurchaseDTO[]
   topups: TopUpDTO[]
   withdrawals: WithdrawalDTO[]
 }

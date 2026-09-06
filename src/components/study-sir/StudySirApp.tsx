@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { WifiOff } from 'lucide-react'
-import { api } from '@/lib/api'
+import { toast } from 'sonner'
+import { api, request } from '@/lib/api'
 import { getSocket, onConnect, onEvent, RT } from '@/lib/socket'
 import { useAppStore } from '@/store/useAppStore'
 import type { ViewName } from '@/store/useAppStore'
@@ -11,7 +12,7 @@ import { Header } from './layout/Header'
 import { MainNav } from './layout/MainNav'
 import { SideNav } from './layout/SideNav'
 import { Footer } from './layout/Footer'
-import { LoginScreen } from './views/LoginScreen'
+import { LoggedOutExperience } from './views/LoggedOutExperience'
 import { FeedView } from './views/FeedView'
 import { TuitionView } from './views/TuitionView'
 import { CoursesView } from './views/CoursesView'
@@ -162,6 +163,37 @@ export default function StudySirApp() {
     if (!useCurrencyStore.getState().loaded) void useCurrencyStore.getState().load(me)
   }, [me])
 
+  // A logged-in user opening an affiliate link (?ref=CODE): validate the code,
+  // remember the referral, tell them, and clean the URL (single-route SPA).
+  useEffect(() => {
+    if (!me) return
+    const ref = new URLSearchParams(window.location.search).get('ref')
+    if (!ref || !/^[A-Za-z0-9-]{2,20}$/.test(ref)) return
+    const code = ref.toUpperCase()
+    // Strip the query immediately so refresh/back never re-triggers this.
+    window.history.replaceState({}, '', window.location.pathname)
+    if (code === me.affiliateCode) return // own link — nothing to attribute
+    // Validate against the public resolver so stale/invalid codes never toast.
+    request<{ valid: boolean; referrer?: { name: string } }>(`/api/ref/${encodeURIComponent(code)}`)
+      .then((d) => {
+        if (!d.valid) {
+          toast.error('This invite link is not valid', {
+            description: 'The referral code does not belong to an active StudySir member.',
+          })
+          return
+        }
+        try {
+          localStorage.setItem('ss_ref', code)
+        } catch {
+          // private mode — attribution is best-effort
+        }
+        toast.info(`Referral from ${d.referrer?.name ?? 'a friend'} applied`, {
+          description: 'Basic Plan is Rs 500 cheaper through this link — see Premium Plans.',
+        })
+      })
+      .catch(() => null)
+  }, [me])
+
   // Unread chats badge: fetch on login + on socket reconnect; live events below
   const unreadRef = useRef(refreshUnreadChats)
   useEffect(() => {
@@ -236,9 +268,7 @@ export default function StudySirApp() {
   if (loading) {
     return (
       <div className="grid min-h-screen place-items-center bg-background">
-        <p className="animate-pulse text-4xl font-extrabold tracking-tight text-[#1877F2]">
-          Study<span className="font-black">Sir</span>
-        </p>
+        <p className="animate-pulse font-logo text-4xl tracking-tight text-[#1877F2]">StudySir</p>
       </div>
     )
   }
@@ -246,7 +276,7 @@ export default function StudySirApp() {
   if (!me) {
     return (
       <>
-        <LoginScreen />
+        <LoggedOutExperience />
         <OfflineBanner online={online} />
       </>
     )

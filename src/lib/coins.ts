@@ -25,14 +25,6 @@ export function computeCoinCost(feeMin: number, feeMax: number, mode: string): n
 /** Direct-contact accept cost (teacher accepts a student's profile request). */
 export const DIRECT_ACCEPT_COST = 10
 
-/** Coin packages — prices in PKR (display converts to the user's currency). */
-export const COIN_PACKAGES = [
-  { id: 'pack_100', coins: 100, price: 280, label: 'Starter' },
-  { id: 'pack_500', coins: 500, price: 1260, label: 'Value' },
-  { id: 'pack_1000', coins: 1000, price: 2240, label: 'Pro' },
-  { id: 'pack_5000', coins: 5000, price: 9800, label: 'Academy' },
-]
-
 export async function notify(userId: string, type: string, title: string, body?: string, link?: string) {
   try {
     await db.notification.create({

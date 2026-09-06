@@ -167,6 +167,7 @@ function PurchaseDialog({
   const [copied, setCopied] = useState('')
 
   const finalPrice = refCode ? plan.affiliatePrice : plan.price
+  const ready = !!method && !!screenshot
 
   useEffect(() => {
     let cancelled = false
@@ -207,8 +208,18 @@ function PurchaseDialog({
   }
 
   async function submit() {
-    if (!method) return toast.error('Select the account you paid from')
-    if (!screenshot) return toast.error('Upload the payment screenshot')
+    // Always-clickable submit — precise validation toasts (a silently disabled
+    // Pay button after uploading the screenshot was reported as a bug).
+    if (!method) {
+      return toast.error('Select the account you paid from', {
+        description: 'Tap one of the platform bank accounts in step 1.',
+      })
+    }
+    if (!screenshot) {
+      return toast.error('Upload the payment screenshot', {
+        description: 'Attach the transfer receipt in step 2 so we can verify your payment.',
+      })
+    }
     setBusy(true)
     try {
       const res = await api.purchasePlan({
@@ -384,9 +395,9 @@ function PurchaseDialog({
             Cancel
           </Button>
           <Button
-            className="bg-[#1877F2] text-white hover:bg-[#166fe5]"
+            className={cn('text-white', ready || busy ? 'bg-[#1877F2] hover:bg-[#166fe5]' : 'bg-amber-500 hover:bg-amber-600')}
             onClick={() => void submit()}
-            disabled={busy || !method || !screenshot}
+            disabled={busy}
           >
             {busy ? (
               <>

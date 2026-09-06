@@ -103,10 +103,10 @@ export function ConnectConfirmDialog({
               size="sm"
               onClick={() => {
                 onOpenChange(false)
-                go('wallet', { tab: 'buy' })
+                go('plans')
               }}
             >
-              Buy Coins
+              Get Premium Plan
             </Button>
           </div>
         ) : null}

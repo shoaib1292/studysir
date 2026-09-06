@@ -1,6 +1,6 @@
 'use client'
 
-import { Coins, Wallet } from 'lucide-react'
+import { Coins, Crown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -33,8 +33,8 @@ export function NotEnoughCoinsDialog({
           </div>
           <DialogTitle className="text-center">Not enough coins</DialogTitle>
           <DialogDescription className="text-center">
-            You need <b>{needed} coins</b> for this action but your balance is <b>{balance} coins</b>. Buy a coin
-            pack to continue contacting teachers.
+            You need <b>{needed} coins</b> for this action but your balance is <b>{balance} coins</b>. Coins come only
+            with a Premium Plan — pick a plan to top up and unlock every coin action.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="justify-center gap-2 sm:justify-center">
@@ -44,14 +44,15 @@ export function NotEnoughCoinsDialog({
           <Button
             onClick={() => {
               onOpenChange(false)
-              go('wallet', { tab: 'buy' })
+              go('plans')
             }}
           >
-            <Wallet className="size-4" />
-            Buy Coins
+            <Crown className="size-4" />
+            View Premium Plans
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   )
 }
+

@@ -117,11 +117,10 @@ export function Header() {
         <button
           type="button"
           onClick={resetNav}
-          className="shrink-0 text-[22px] font-extrabold tracking-tight text-[#1877F2]"
+          className="shrink-0 font-logo text-[22px] tracking-tight text-[#1877F2]"
           aria-label="StudySir home"
         >
-          <span className="font-bold">Study</span>
-          <span className="font-black">Sir</span>
+          StudySir
         </button>
 
         {/* Desktop search */}

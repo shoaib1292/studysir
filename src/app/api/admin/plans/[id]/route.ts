@@ -56,6 +56,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
               amount: purchase.affiliateCommission,
             },
           })
+          // Money-wallet ledger row so the affiliate's money history shows the commission.
+          await tx.coinTransaction.create({
+            data: {
+              userId: purchase.affiliateId,
+              amount: purchase.affiliateCommission,
+              type: 'AFFILIATE_EARNING',
+              description: `Affiliate commission — ${planByTier(purchase.tier)?.name ?? purchase.tier} sold to ${purchase.user.name}`,
+            },
+          })
         }
       })
 

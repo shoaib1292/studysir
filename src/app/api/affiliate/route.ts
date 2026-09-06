@@ -33,7 +33,9 @@ export async function GET() {
     return NextResponse.json({
       joined: !!me.affiliateCode,
       code: me.affiliateCode,
-      link: me.affiliateCode ? `/login?ref=${me.affiliateCode}` : null,
+      // Root link — the SPA landing page reads ?ref= and shows the referral page.
+      // (/login does not exist in this single-route app — that link 404'd.)
+      link: me.affiliateCode ? `/?ref=${me.affiliateCode}` : null,
       lifetimeEarnings: me.affiliateEarnings,
       sales: salesCount,
       earnings: earnings.map((e) => ({
