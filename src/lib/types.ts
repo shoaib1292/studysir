@@ -30,6 +30,12 @@ export interface UserDTO {
   currency?: string | null
   /** admin sub-role: OWNER | STAFF */
   subRole?: string | null
+  /** affiliate program referral code (null = not joined) */
+  affiliateCode?: string | null
+  /** lifetime affiliate commission credited to the money wallet (PKR) */
+  affiliateEarnings?: number
+  /** highest ACTIVE premium plan tier (paid teacher badge) */
+  planTier?: string | null
   /** moderation access (does not change the STUDENT/PARENT/TEACHER role) */
   isAdmin: boolean
   /** moderation state: ACTIVE | BANNED */
@@ -344,6 +350,56 @@ export interface AdminAnalytics {
 // POST /api/likes { targetType, targetId } -> { liked, likeCount }
 // POST /api/reviews { targetId, rating, comment } -> { review }
 // POST /api/cron/process-refunds         -> { processed }
+
+// ===== Premium plans + affiliate program =====
+
+export type PlanTier = 'BASIC' | 'PRO' | 'ACADEMY'
+export type PlanStatus = 'PENDING' | 'ACTIVE' | 'REJECTED'
+
+export interface PlanDTO {
+  tier: PlanTier
+  name: string
+  price: number // regular PKR price
+  coins: number
+  affiliatePrice: number // buyer pays this when purchasing via an affiliate link
+  affiliateCommission: number // PKR the affiliate earns on approval
+  discountPct: number | null
+  popular: boolean
+  features: string[]
+}
+
+export interface PlanPurchaseDTO {
+  id: string
+  tier: PlanTier
+  price: number
+  coinsGranted: number
+  method: string
+  reference?: string | null
+  screenshot?: string
+  affiliateCommission: number
+  affiliate?: { id: string; name: string; avatar: string | null } | null
+  status: PlanStatus
+  adminNote?: string | null
+  createdAt: string
+  user?: { id: string; name: string; avatar: string | null; role: string; coins: number }
+}
+
+export interface AffiliateEarningDTO {
+  id: string
+  amount: number
+  tier?: string | null
+  createdAt: string
+  buyer?: { id: string; name: string; avatar: string | null; role: string } | null
+}
+
+export interface AffiliateDTO {
+  joined: boolean
+  code: string | null
+  link: string | null
+  lifetimeEarnings: number
+  sales: number
+  earnings: AffiliateEarningDTO[]
+}
 
 // ===== Payments / wallet / currency (requirements B, D, G) =====
 

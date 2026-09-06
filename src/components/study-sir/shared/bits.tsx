@@ -101,7 +101,7 @@ export function CardAction({
       <button
         type="button"
         onClick={onClick}
-        className="mx-auto h-8 rounded-md bg-[#1877F2] px-4 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-[#166FE5] disabled:opacity-50"
+        className="mx-auto h-8 max-w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-md bg-[#1877F2] px-4 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-[#166FE5] disabled:opacity-50"
       >
         {label}
       </button>

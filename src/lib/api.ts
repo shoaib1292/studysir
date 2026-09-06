@@ -18,7 +18,11 @@ import type {
   MessageDTO,
   MessageReactionGroup,
   NotificationDTO,
+  PlanDTO,
+  PlanPurchaseDTO,
+  PlanTier,
   ProfileStats,
+  AffiliateDTO,
   RateDTO,
   ReportDTO,
   ReviewDTO,
@@ -242,6 +246,23 @@ export const api = {
   getMyKyc: () => request<{ kyc: { id: string; status: string; fullName: string; city: string; adminNote: string | null; decidedAt: string | null; createdAt: string } | null }>('/api/kyc'),
   submitKyc: (body: { fullName: string; cnic: string; phone: string; city: string; documentImage: string; selfieImage?: string }) =>
     request<{ kyc: { id: string; status: string } }>('/api/kyc', { method: 'POST', body }),
+
+  // premium plans + affiliate program
+  getPlans: () =>
+    request<{ plans: PlanDTO[]; myPlanTier: string | null; affiliateCode: string | null; role: string }>('/api/plans'),
+  /** Payment-screenshot plan purchase — coins credited instantly, clawed back if rejected. */
+  purchasePlan: (body: { tier: PlanTier; method: string; reference?: string; screenshot: string; refCode?: string }) =>
+    request<{ purchase: { id: string; tier: PlanTier; price: number; coinsGranted: number; status: string }; coins: number }>(
+      '/api/plans/purchase',
+      { method: 'POST', body }
+    ),
+  getAffiliate: () => request<AffiliateDTO>('/api/affiliate'),
+  joinAffiliate: () =>
+    request<{ joined: boolean; code: string }>('/api/affiliate/join', { method: 'POST' }),
+  adminPlanPurchases: (status?: string) =>
+    request<{ purchases: PlanPurchaseDTO[] }>(`/api/admin/plans${status ? `?status=${encodeURIComponent(status)}` : ''}`),
+  adminPlanAction: (id: string, action: 'APPROVE' | 'REJECT', note?: string) =>
+    request<{ ok: true; status: string }>(`/api/admin/plans/${id}`, { method: 'POST', body: { action, note } }),
 
   // notifications
   getNotifications: () =>

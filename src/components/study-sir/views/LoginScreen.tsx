@@ -77,6 +77,19 @@ export function LoginScreen() {
       .catch(() => setUsers([]))
   }, [])
 
+  // Affiliate attribution: remember ?ref=CODE across login/signup so the
+  // Pricing screen can attach the referral when the user later buys a plan.
+  useEffect(() => {
+    const ref = new URLSearchParams(window.location.search).get('ref')
+    if (ref && /^[A-Za-z0-9-]{2,20}$/.test(ref)) {
+      try {
+        localStorage.setItem('ss_ref', ref.toUpperCase())
+      } catch {
+        // private mode — ignore
+      }
+    }
+  }, [])
+
   function done(user: UserDTO) {
     setMe(user)
     resetNav()

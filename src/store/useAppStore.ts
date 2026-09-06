@@ -13,6 +13,8 @@ export type ViewName =
   | 'monetize'
   | 'reviews'
   | 'settings'
+  | 'plans'
+  | 'affiliate'
   | 'admin'
 
 export type ViewParams = Record<string, string>

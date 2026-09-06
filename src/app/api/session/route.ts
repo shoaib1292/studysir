@@ -3,9 +3,25 @@ import { db } from '@/lib/db'
 import { clearSessionUser, setSessionUser, getSessionUser } from '@/lib/session'
 import { toUserDTO } from '@/lib/dto'
 
+const TIER_RANK: Record<string, number> = { BASIC: 1, PRO: 2, ACADEMY: 3 }
+
+/** Attach the highest ACTIVE plan tier to a user DTO (paid-teacher badge). */
+async function withPlanTier<T extends { id: string }>(dto: T): Promise<T & { planTier: string | null }> {
+  const active = await db.planPurchase.findMany({
+    where: { userId: dto.id, status: 'ACTIVE' },
+    select: { tier: true },
+  })
+  const planTier = active.reduce<string | null>(
+    (best, p) => ((TIER_RANK[p.tier] ?? 0) > (TIER_RANK[best ?? ''] ?? 0) ? p.tier : best),
+    null
+  )
+  return { ...dto, planTier }
+}
+
 export async function GET() {
   const user = await getSessionUser()
-  return NextResponse.json({ user: toUserDTO(user) })
+  const dto = toUserDTO(user)
+  return NextResponse.json({ user: dto ? await withPlanTier(dto) : null })
 }
 
 export async function POST(req: NextRequest) {
@@ -23,7 +39,8 @@ export async function POST(req: NextRequest) {
   }
 
   await setSessionUser(user.id)
-  return NextResponse.json({ user: toUserDTO(user) })
+  const dto = toUserDTO(user)
+  return NextResponse.json({ user: dto ? await withPlanTier(dto) : null })
 }
 
 export async function DELETE() {

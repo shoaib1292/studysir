@@ -96,8 +96,19 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     }
   }
 
+  // Highest ACTIVE premium plan tier (paid-teacher badge on the profile)
+  const activePlans = await db.planPurchase.findMany({
+    where: { userId: id, status: 'ACTIVE' },
+    select: { tier: true },
+  })
+  const planRank: Record<string, number> = { BASIC: 1, PRO: 2, ACADEMY: 3 }
+  const planTier = activePlans.reduce<string | null>(
+    (best, p) => ((planRank[p.tier] ?? 0) > (planRank[best ?? ''] ?? 0) ? p.tier : best),
+    null
+  )
+
   return NextResponse.json({
-    user: toUserDTO(user),
+    user: { ...toUserDTO(user), planTier },
     stats: {
       likeCount: likeInfoT.likeCount,
       reviewCount: reviews.length,

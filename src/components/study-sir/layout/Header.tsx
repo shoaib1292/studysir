@@ -141,31 +141,33 @@ export function Header() {
         <div className="flex-1" />
 
         {/* Right cluster */}
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           {/* Teachers spend coins to accept requests; students/parents are coin-free (money wallet only) */}
           {me.role === 'TEACHER' ? (
             <Button
               variant="ghost"
               onClick={() => go('wallet')}
-              className="h-10 rounded-full bg-muted px-3 hover:bg-secondary"
+              className="h-10 rounded-full bg-muted px-2.5 hover:bg-secondary sm:px-3"
               aria-label={`Coins: ${me.coins}`}
             >
-              <Coins className="size-5 text-amber-500" />
-              <span className="text-sm font-semibold">{me.coins}</span>
+              <Coins className="size-5 shrink-0 text-amber-500" />
+              <span className="max-w-[64px] truncate text-sm font-semibold tabular-nums sm:max-w-none">{me.coins}</span>
             </Button>
           ) : (
             <Button
               variant="ghost"
               onClick={() => go('wallet')}
-              className="h-10 rounded-full bg-muted px-3 hover:bg-secondary"
+              className="h-10 rounded-full bg-muted px-2.5 hover:bg-secondary sm:px-3"
               aria-label={`Money wallet: ${fmt(me.money)}`}
             >
-              <Wallet className="size-5 text-emerald-600" />
-              <span className="text-sm font-semibold">{fmt(me.money)}</span>
+              <Wallet className="size-5 shrink-0 text-emerald-600" />
+              <span className="max-w-[64px] truncate text-sm font-semibold tabular-nums sm:max-w-none">{fmt(me.money)}</span>
             </Button>
           )}
 
-          <ThemeToggle />
+          <div className="hidden sm:block">
+            <ThemeToggle />
+          </div>
 
           <NotificationsPopover />
 

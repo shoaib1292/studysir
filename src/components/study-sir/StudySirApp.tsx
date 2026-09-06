@@ -22,6 +22,8 @@ import { WalletView } from './views/WalletView'
 import { MonetizeView } from './views/MonetizeView'
 import { ReviewsView } from './views/ReviewsView'
 import { SettingsView } from './views/SettingsView'
+import { PricingView } from './views/PricingView'
+import { AffiliateView } from './views/AffiliateView'
 import { AdminView } from './views/AdminView'
 import { ShieldOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -48,6 +50,10 @@ function renderView(view: ViewName) {
       return <ReviewsView />
     case 'settings':
       return <SettingsView />
+    case 'plans':
+      return <PricingView />
+    case 'affiliate':
+      return <AffiliateView />
     case 'admin':
       return <AdminView />
     default:

@@ -7,6 +7,8 @@ async function main() {
   console.log('🌱 Seeding Study Sir...')
 
   await db.withdrawRequest.deleteMany()
+  await db.affiliateEarning.deleteMany()
+  await db.planPurchase.deleteMany()
   await db.kycSubmission.deleteMany()
   await db.topUpRequest.deleteMany()
   await db.platformBankAccount.deleteMany()
@@ -20,6 +22,7 @@ async function main() {
   await db.block.deleteMany()
   await db.coinTransaction.deleteMany()
   await db.report.deleteMany()
+  await db.sharedPost.deleteMany()
   await db.message.deleteMany()
   await db.save.deleteMany()
   await db.purchase.deleteMany()
@@ -713,6 +716,60 @@ async function main() {
   await db.user.update({
     where: { id: noman.id },
     data: { bankName: 'HBL', bankAccountTitle: 'Noman Ali', bankAccountNumber: 'PK36SCBL0000001123456702' },
+  })
+
+  // ---------- Premium plans + affiliate program (demo) ----------
+  // Warren (student) joined the affiliate program — shares his link, earns commission.
+  await db.user.update({ where: { id: warren.id }, data: { affiliateCode: 'SS-WARREN' } })
+  // Mukesh is an ACTIVE PRO subscriber → he is a "paid teacher" for the milestone.
+  await db.planPurchase.create({
+    data: {
+      userId: mukesh.id,
+      tier: 'PRO',
+      price: 5699,
+      coinsGranted: 6000,
+      method: 'HBL · PK36SCBL0000001123456789',
+      reference: 'HBL-778899',
+      screenshot: '/images/cover-meeting.png',
+      status: 'ACTIVE',
+      decidedAt: new Date(Date.now() - 2 * 24 * 3600 * 1000),
+      createdAt: new Date(Date.now() - 2 * 24 * 3600 * 1000),
+    },
+  })
+  await db.user.update({ where: { id: mukesh.id }, data: { coins: { increment: 6000 } } })
+  await db.coinTransaction.create({
+    data: {
+      userId: mukesh.id,
+      amount: 6000,
+      type: 'PLAN_COINS',
+      description: 'Pro Plan — 6,000 coins credited (verified ✅)',
+      createdAt: new Date(Date.now() - 2 * 24 * 3600 * 1000),
+    },
+  })
+  // Noman submitted a BASIC purchase via Warren's affiliate link — awaiting admin verification.
+  await db.planPurchase.create({
+    data: {
+      userId: noman.id,
+      tier: 'BASIC',
+      price: 2500,
+      coinsGranted: 3000,
+      method: 'Easypaisa · 0345-7654321',
+      reference: 'EP-991122',
+      screenshot: '/images/cover-classroom.png',
+      affiliateId: warren.id,
+      affiliateCommission: 500,
+      status: 'PENDING',
+    },
+  })
+  // Coins were credited instantly at submission (clawed back if the admin rejects).
+  await db.user.update({ where: { id: noman.id }, data: { coins: { increment: 3000 } } })
+  await db.coinTransaction.create({
+    data: {
+      userId: noman.id,
+      amount: 3000,
+      type: 'PLAN_COINS',
+      description: 'Basic Plan — 3,000 coins credited (verification pending)',
+    },
   })
 
   console.log('✅ Seed complete:', {

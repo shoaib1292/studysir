@@ -1,0 +1,754 @@
+     1→'use client'
+     2→
+     3→import { useCallback, useEffect, useState } from 'react'
+     4→import {
+     5→  Banknote,
+     6→  Check,
+     7→  CheckCircle2,
+     8→  Coins,
+     9→  Copy,
+    10→  Landmark,
+    11→  RefreshCw,
+    12→  Wallet,
+    13→  XCircle,
+    14→} from 'lucide-react'
+    15→import { toast } from 'sonner'
+    16→import { Button } from '@/components/ui/button'
+    17→import {
+    18→  Dialog,
+    19→  DialogContent,
+    20→  DialogDescription,
+    21→  DialogHeader,
+    22→  DialogTitle,
+    23→} from '@/components/ui/dialog'
+    24→import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+    25→import { Skeleton } from '@/components/ui/skeleton'
+    26→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+    27→import { Textarea } from '@/components/ui/textarea'
+    28→import { api, errorMessage } from '@/lib/api'
+    29→import type { TopUpDTO, TopUpKind, TopUpStatus, WithdrawalDTO } from '@/lib/types'
+    30→import { useAppStore } from '@/store/useAppStore'
+    31→import { cn } from '@/lib/utils'
+    32→import { ROLE_CHIP, ROLE_LABEL } from '../../shared/constants'
+    33→import { EmptyState } from '../../shared/EmptyState'
+    34→import { timeAgo } from '../../shared/format'
+    35→import { UserAvatar } from '../../shared/UserAvatar'
+    36→
+    37→type PayFilter = TopUpStatus | 'ALL'
+    38→type PayAction = 'APPROVE' | 'REJECT'
+    39→
+    40→const FILTERS: PayFilter[] = ['PENDING', 'APPROVED', 'REJECTED', 'ALL']
+    41→
+    42→const STATUS_CHIP: Record<TopUpStatus, string> = {
+    43→  PENDING: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
+    44→  APPROVED: 'bg-green-500/15 text-green-700 dark:text-green-300',
+    45→  REJECTED: 'bg-red-500/15 text-red-600 dark:text-red-400',
+    46→}
+    47→
+    48→const KIND_META: Record<TopUpKind, { label: string; chip: string; icon: typeof Coins }> = {
+    49→  TEACHER_COINS: {
+    50→    label: 'Teacher · coins',
+    51→    chip: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
+    52→    icon: Coins,
+    53→  },
+    54→  STUDENT_MONEY: {
+    55→    label: 'Student · money',
+    56→    chip: 'bg-green-500/15 text-green-700 dark:text-green-300',
+    57→    icon: Banknote,
+    58→  },
+    59→}
+    60→
+    61→function pkr(n: number): string {
+    62→  return `PKR ${n.toLocaleString()}`
+    63→}
+    64→
+    65→function StatusChip({ status }: { status: TopUpStatus }) {
+    66→  return (
+    67→    <span className={cn('rounded px-2 py-0.5 text-[11px] font-semibold', STATUS_CHIP[status])}>
+    68→      {status}
+    69→    </span>
+    70→  )
+    71→}
+    72→
+    73→function RoleChip({ role }: { role?: string | null }) {
+    74→  if (!role) return null
+    75→  return (
+    76→    <span
+    77→      className={cn(
+    78→        'rounded px-1.5 py-0.5 text-[10px] font-bold',
+    79→        ROLE_CHIP[role] ?? 'bg-muted text-muted-foreground'
+    80→      )}
+    81→    >
+    82→      {(ROLE_LABEL[role] ?? role).toUpperCase()}
+    83→    </span>
+    84→  )
+    85→}
+    86→
+    87→function FilterPills({ value, onChange }: { value: PayFilter; onChange: (f: PayFilter) => void }) {
+    88→  return (
+    89→    <div className="flex flex-wrap gap-2">
+    90→      {FILTERS.map((f) => (
+    91→        <button
+    92→          key={f}
+    93→          type="button"
+    94→          aria-pressed={value === f}
+    95→          onClick={() => onChange(f)}
+    96→          className={cn(
+    97→            'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors',
+    98→            value === f ? 'bg-[#1877F2] text-white' : 'bg-muted text-muted-foreground hover:bg-secondary'
+    99→          )}
+   100→        >
+   101→          {f.toLowerCase()}
+   102→        </button>
+   103→      ))}
+   104→    </div>
+   105→  )
+   106→}
+   107→
+   108→function CopyButton({ value, label }: { value: string; label: string }) {
+   109→  const [copied, setCopied] = useState(false)
+   110→
+   111→  async function copy() {
+   112→    try {
+   113→      await navigator.clipboard.writeText(value)
+   114→      setCopied(true)
+   115→      toast.success(`${label} copied`)
+   116→      window.setTimeout(() => setCopied(false), 1600)
+   117→    } catch {
+   118→      toast.error('Could not copy', { description: 'Clipboard is unavailable in this browser.' })
+   119→    }
+   120→  }
+   121→
+   122→  return (
+   123→    <button
+   124→      type="button"
+   125→      aria-label={`Copy ${label.toLowerCase()}`}
+   126→      title={`Copy ${label.toLowerCase()}`}
+   127→      onClick={() => void copy()}
+   128→      className="inline-flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+   129→    >
+   130→      {copied ? <Check className="size-3.5 text-green-600 dark:text-green-400" /> : <Copy className="size-3.5" />}
+   131→    </button>
+   132→  )
+   133→}
+   134→
+   135→/** Outcome caption shown on resolved top-ups (per product spec). */
+   136→function outcomeOf(topup: TopUpDTO): string | null {
+   137→  if (topup.status === 'APPROVED') {
+   138→    return topup.kind === 'TEACHER_COINS' ? 'Coins were credited instantly.' : 'Money added to wallet.'
+   139→  }
+   140→  if (topup.status === 'REJECTED' && topup.kind === 'TEACHER_COINS') {
+   141→    return 'Coins were clawed back.'
+   142→  }
+   143→  return null
+   144→}
+   145→
+   146→function TopUpCard({ topup, onChanged }: { topup: TopUpDTO; onChanged: () => void }) {
+   147→  const go = useAppStore((s) => s.go)
+   148→  const [busy, setBusy] = useState(false)
+   149→  /** which confirm popover is open (APPROVE / REJECT) */
+   150→  const [confirming, setConfirming] = useState<PayAction | null>(null)
+   151→  const [note, setNote] = useState('')
+   152→  const [proofOpen, setProofOpen] = useState(false)
+   153→
+   154→  const kind = KIND_META[topup.kind]
+   155→  const KindIcon = kind.icon
+   156→  const pending = topup.status === 'PENDING'
+   157→  const user = topup.user
+   158→  const userName = user?.name ?? 'Unknown user'
+   159→  const isTeacherCoins = topup.kind === 'TEACHER_COINS'
+   160→  const outcome = outcomeOf(topup)
+   161→
+   162→  function closePopover() {
+   163→    setConfirming(null)
+   164→    setNote('')
+   165→  }
+   166→
+   167→  async function act(action: PayAction) {
+   168→    setBusy(true)
+   169→    try {
+   170→      await api.adminTopUpAction(topup.id, action, note.trim() || undefined)
+   171→      if (action === 'APPROVE') {
+   172→        toast.success('Payment proof approved', {
+   173→          description: isTeacherCoins ? 'Coins were credited instantly.' : 'Money added to wallet.',
+   174→        })
+   175→      } else {
+   176→        toast.success('Payment proof rejected', {
+   177→          description: isTeacherCoins ? 'Coins were clawed back.' : 'No money was added to the wallet.',
+   178→        })
+   179→      }
+   180→      closePopover()
+   181→      onChanged()
+   182→    } catch (e) {
+   183→      toast.error('Action failed', { description: errorMessage(e) })
+   184→    } finally {
+   185→      setBusy(false)
+   186→    }
+   187→  }
+   188→
+   189→  return (
+   190→    <div className="rounded-xl border bg-card p-4">
+   191→      <div className="flex flex-wrap items-center gap-2">
+   192→        <span className={cn('inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-semibold', kind.chip)}>
+   193→          <KindIcon className="size-3" />
+   194→          {kind.label}
+   195→        </span>
+   196→        <StatusChip status={topup.status} />
+   197→        <span className="text-xs text-muted-foreground">· {timeAgo(topup.createdAt)}</span>
+   198→        <span className="ml-auto text-xs font-semibold text-muted-foreground">#{topup.id.slice(-6)}</span>
+   199→      </div>
+   200→
+   201→      <div className="mt-2.5 flex items-center gap-2.5">
+   202→        <UserAvatar src={user?.avatar} name={userName} className="size-9" />
+   203→        <div className="min-w-0 flex-1">
+   204→          <p className="flex items-center gap-1.5 truncate text-sm font-bold">
+   205→            <button
+   206→              type="button"
+   207→              className="hover:underline"
+   208→              onClick={() => user && go('profile', { userId: user.id })}
+   209→            >
+   210→              {userName}
+   211→            </button>
+   212→            <RoleChip role={user?.role} />
+   213→          </p>
+   214→          {isTeacherCoins ? (
+   215→            <p className="truncate text-[11px] text-muted-foreground">
+   216→              → {topup.coinsGranted.toLocaleString()} coins to credit
+   217→            </p>
+   218→          ) : null}
+   219→        </div>
+   220→        <p className="shrink-0 text-base font-extrabold tabular-nums">{pkr(topup.amount)}</p>
+   221→      </div>
+   222→
+   223→      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+   224→        <span>
+   225→          Method <span className="font-medium text-foreground">{topup.method}</span>
+   226→        </span>
+   227→        {topup.reference ? (
+   228→          <span className="min-w-0">
+   229→            Reference <span className="font-mono text-foreground">{topup.reference}</span>
+   230→          </span>
+   231→        ) : null}
+   232→      </div>
+   233→
+   234→      {topup.screenshot ? (
+   235→        <button
+   236→          type="button"
+   237→          className="mt-2.5 block cursor-pointer"
+   238→          onClick={() => setProofOpen(true)}
+   239→          aria-label="View payment proof full size"
+   240→        >
+   241→          <img
+   242→            src={topup.screenshot}
+   243→            alt={`Payment screenshot — ${userName}`}
+   244→            className="h-16 rounded object-cover transition-opacity hover:opacity-90"
+   245→          />
+   246→        </button>
+   247→      ) : null}
+   248→
+   249→      {outcome ? (
+   250→        <p
+   251→          className={cn(
+   252→            'mt-2 flex items-center gap-1.5 text-xs font-medium',
+   253→            topup.status === 'APPROVED' ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+   254→          )}
+   255→        >
+   256→          {topup.status === 'APPROVED' ? <CheckCircle2 className="size-3.5" /> : <XCircle className="size-3.5" />}
+   257→          {outcome}
+   258→        </p>
+   259→      ) : null}
+   260→
+   261→      {topup.adminNote ? (
+   262→        <p className="mt-2 text-xs text-muted-foreground">
+   263→          <span className="font-semibold">Admin note:</span> {topup.adminNote}
+   264→        </p>
+   265→      ) : null}
+   266→
+   267→      {pending ? (
+   268→        <div className="mt-3 flex flex-wrap gap-2 border-t pt-3">
+   269→          {/* Approve with optional note */}
+   270→          <Popover
+   271→            open={confirming === 'APPROVE'}
+   272→            onOpenChange={(o) => {
+   273→              if (o) {
+   274→                setConfirming('APPROVE')
+   275→                setNote('')
+   276→              } else if (confirming === 'APPROVE') closePopover()
+   277→            }}
+   278→          >
+   279→            <PopoverTrigger asChild>
+   280→              <Button
+   281→                size="sm"
+   282→                disabled={busy}
+   283→                className="bg-green-600 text-white hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-700"
+   284→              >
+   285→                <CheckCircle2 className="mr-1.5 size-4" />
+   286→                Approve
+   287→              </Button>
+   288→            </PopoverTrigger>
+   289→            <PopoverContent align="start" className="w-72 space-y-3">
+   290→              <p className="text-sm font-semibold">Approve payment</p>
+   291→              <p className="text-xs text-muted-foreground">
+   292→                {isTeacherCoins
+   293→                  ? `Credits ${topup.coinsGranted.toLocaleString()} coins to ${userName}'s wallet instantly.`
+   294→                  : `Adds ${pkr(topup.amount)} to ${userName}'s money wallet.`}
+   295→              </p>
+   296→              <Textarea
+   297→                value={note}
+   298→                onChange={(e) => setNote(e.target.value)}
+   299→                placeholder="Admin note (optional) — saved with the request"
+   300→                rows={2}
+   301→                maxLength={500}
+   302→              />
+   303→              <div className="flex justify-end gap-2">
+   304→                <Button size="sm" variant="ghost" onClick={closePopover}>
+   305→                  Cancel
+   306→                </Button>
+   307→                <Button
+   308→                  size="sm"
+   309→                  disabled={busy}
+   310→                  onClick={() => void act('APPROVE')}
+   311→                  className="bg-green-600 text-white hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-700"
+   312→                >
+   313→                  Confirm
+   314→                </Button>
+   315→              </div>
+   316→            </PopoverContent>
+   317→          </Popover>
+   318→
+   319→          {/* Reject with optional note */}
+   320→          <Popover
+   321→            open={confirming === 'REJECT'}
+   322→            onOpenChange={(o) => {
+   323→              if (o) {
+   324→                setConfirming('REJECT')
+   325→                setNote('')
+   326→              } else if (confirming === 'REJECT') closePopover()
+   327→            }}
+   328→          >
+   329→            <PopoverTrigger asChild>
+   330→              <Button size="sm" variant="outline" disabled={busy}>
+   331→                <XCircle className="mr-1.5 size-4" />
+   332→                Reject
+   333→              </Button>
+   334→            </PopoverTrigger>
+   335→            <PopoverContent align="start" className="w-72 space-y-3">
+   336→              <p className="text-sm font-semibold">Reject payment</p>
+   337→              <p className="text-xs text-muted-foreground">
+   338→                No credit is issued. The user is notified and can submit a new proof.
+   339→              </p>
+   340→              <Textarea
+   341→                value={note}
+   342→                onChange={(e) => setNote(e.target.value)}
+   343→                placeholder="Admin note (optional) — saved with the request"
+   344→                rows={2}
+   345→                maxLength={500}
+   346→              />
+   347→              <div className="flex justify-end gap-2">
+   348→                <Button size="sm" variant="ghost" onClick={closePopover}>
+   349→                  Cancel
+   350→                </Button>
+   351→                <Button
+   352→                  size="sm"
+   353→                  variant="outline"
+   354→                  disabled={busy}
+   355→                  onClick={() => void act('REJECT')}
+   356→                  className="text-red-600 hover:bg-red-500/10 hover:text-red-700 dark:text-red-400"
+   357→                >
+   358→                  Confirm
+   359→                </Button>
+   360→              </div>
+   361→            </PopoverContent>
+   362→          </Popover>
+   363→        </div>
+   364→      ) : null}
+   365→
+   366→      {/* Full-size proof dialog */}
+   367→      <Dialog open={proofOpen} onOpenChange={setProofOpen}>
+   368→        <DialogContent className="sm:max-w-lg">
+   369→          <DialogHeader>
+   370→            <DialogTitle className="flex items-center gap-2">
+   371→              <KindIcon className="size-4 text-[#1877F2]" />
+   372→              Payment proof · #{topup.id.slice(-6)}
+   373→            </DialogTitle>
+   374→            <DialogDescription>
+   375→              Submitted {new Date(topup.createdAt).toLocaleString()} · {timeAgo(topup.createdAt)} ago
+   376→            </DialogDescription>
+   377→          </DialogHeader>
+   378→          {topup.screenshot ? (
+   379→            <img
+   380→              src={topup.screenshot}
+   381→              alt={`Payment screenshot — ${userName}`}
+   382→              className="max-h-[70vh] w-full rounded-lg border object-contain"
+   383→            />
+   384→          ) : null}
+   385→          <div className="space-y-1.5 rounded-lg bg-muted/60 p-3 text-xs">
+   386→            <div className="flex items-center justify-between gap-3">
+   387→              <span className="text-muted-foreground">From</span>
+   388→              <span className="flex min-w-0 items-center gap-1.5 font-semibold">
+   389→                {userName} <RoleChip role={user?.role} />
+   390→              </span>
+   391→            </div>
+   392→            <div className="flex items-center justify-between gap-3">
+   393→              <span className="text-muted-foreground">Type</span>
+   394→              <span className="font-semibold">{kind.label}</span>
+   395→            </div>
+   396→            <div className="flex items-center justify-between gap-3">
+   397→              <span className="text-muted-foreground">Amount</span>
+   398→              <span className="font-extrabold tabular-nums">
+   399→                {pkr(topup.amount)}
+   400→                {isTeacherCoins ? <span className="ml-1 font-medium text-muted-foreground">→ {topup.coinsGranted.toLocaleString()} coins</span> : null}
+   401→              </span>
+   402→            </div>
+   403→            <div className="flex items-center justify-between gap-3">
+   404→              <span className="text-muted-foreground">Method</span>
+   405→              <span className="font-semibold">{topup.method}</span>
+   406→            </div>
+   407→            {topup.reference ? (
+   408→              <div className="flex items-center justify-between gap-3">
+   409→                <span className="text-muted-foreground">Reference</span>
+   410→                <span className="truncate font-mono font-semibold">{topup.reference}</span>
+   411→              </div>
+   412→            ) : null}
+   413→            <div className="flex items-center justify-between gap-3">
+   414→              <span className="text-muted-foreground">Status</span>
+   415→              <StatusChip status={topup.status} />
+   416→            </div>
+   417→            {user ? (
+   418→              <div className="flex items-center justify-between gap-3 border-t pt-1.5">
+   419→                <span className="text-muted-foreground">Wallet now</span>
+   420→                <span className="font-semibold tabular-nums">
+   421→                  {isTeacherCoins ? `${user.coins.toLocaleString()} coins` : pkr(user.money)}
+   422→                </span>
+   423→              </div>
+   424→            ) : null}
+   425→            {topup.adminNote ? (
+   426→              <p className="border-t pt-1.5 text-muted-foreground">
+   427→                <span className="font-semibold">Admin note:</span> {topup.adminNote}
+   428→              </p>
+   429→            ) : null}
+   430→          </div>
+   431→        </DialogContent>
+   432→      </Dialog>
+   433→    </div>
+   434→  )
+   435→}
+   436→
+   437→function WithdrawalCard({ withdrawal, onChanged }: { withdrawal: WithdrawalDTO; onChanged: () => void }) {
+   438→  const go = useAppStore((s) => s.go)
+   439→  const [busy, setBusy] = useState(false)
+   440→  const [confirming, setConfirming] = useState<PayAction | null>(null)
+   441→  const [note, setNote] = useState('')
+   442→
+   443→  const pending = withdrawal.status === 'PENDING'
+   444→  const user = withdrawal.user
+   445→  const userName = user?.name ?? 'Unknown user'
+   446→
+   447→  function closePopover() {
+   448→    setConfirming(null)
+   449→    setNote('')
+   450→  }
+   451→
+   452→  async function act(action: PayAction) {
+   453→    setBusy(true)
+   454→    try {
+   455→      await api.adminWithdrawalAction(withdrawal.id, action, note.trim() || undefined)
+   456→      if (action === 'APPROVE') {
+   457→        toast.success('Withdrawal marked as paid', {
+   458→          description: `${pkr(withdrawal.amount)} is on its way to ${userName}'s bank account.`,
+   459→        })
+   460→      } else {
+   461→        toast.success('Withdrawal rejected', {
+   462→          description: `${pkr(withdrawal.amount)} was returned to ${userName}'s wallet.`,
+   463→        })
+   464→      }
+   465→      closePopover()
+   466→      onChanged()
+   467→    } catch (e) {
+   468→      toast.error('Action failed', { description: errorMessage(e) })
+   469→    } finally {
+   470→      setBusy(false)
+   471→    }
+   472→  }
+   473→
+   474→  return (
+   475→    <div className="rounded-xl border bg-card p-4">
+   476→      <div className="flex flex-wrap items-center gap-2">
+   477→        <StatusChip status={withdrawal.status} />
+   478→        <span className="text-xs text-muted-foreground">· {timeAgo(withdrawal.createdAt)}</span>
+   479→        <span className="ml-auto text-xs font-semibold text-muted-foreground">#{withdrawal.id.slice(-6)}</span>
+   480→      </div>
+   481→
+   482→      <div className="mt-2.5 flex items-center gap-2.5">
+   483→        <UserAvatar src={user?.avatar} name={userName} className="size-9" />
+   484→        <div className="min-w-0 flex-1">
+   485→          <p className="flex items-center gap-1.5 truncate text-sm font-bold">
+   486→            <button
+   487→              type="button"
+   488→              className="hover:underline"
+   489→              onClick={() => user && go('profile', { userId: user.id })}
+   490→            >
+   491→              {userName}
+   492→            </button>
+   493→            <RoleChip role={user?.role} />
+   494→          </p>
+   495→          <p className="truncate text-[11px] text-muted-foreground">Withdrawal request</p>
+   496→        </div>
+   497→        <p className="shrink-0 text-base font-extrabold tabular-nums">{pkr(withdrawal.amount)}</p>
+   498→      </div>
+   499→
+   500→      <div className="mt-2.5 rounded-lg bg-muted/60 p-2.5">
+   501→        <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Bank details</p>
+   502→        <div className="mt-1.5 space-y-1 text-xs">
+   503→          <div className="flex items-center gap-2">
+   504→            <span className="w-24 shrink-0 text-muted-foreground">Bank</span>
+   505→            <span className="min-w-0 truncate font-mono font-medium">{withdrawal.bankName}</span>
+   506→          </div>
+   507→          <div className="flex items-center gap-2">
+   508→            <span className="w-24 shrink-0 text-muted-foreground">Account title</span>
+   509→            <span className="min-w-0 truncate font-mono font-medium">{withdrawal.accountTitle}</span>
+   510→          </div>
+   511→          <div className="flex items-center gap-2">
+   512→            <span className="w-24 shrink-0 text-muted-foreground">Account no.</span>
+   513→            <span className="min-w-0 truncate font-mono font-medium">{withdrawal.accountNumber}</span>
+   514→            <CopyButton value={withdrawal.accountNumber} label="Account number" />
+   515→          </div>
+   516→        </div>
+   517→      </div>
+   518→
+   519→      {withdrawal.adminNote ? (
+   520→        <p className="mt-2 text-xs text-muted-foreground">
+   521→          <span className="font-semibold">Admin note:</span> {withdrawal.adminNote}
+   522→        </p>
+   523→      ) : null}
+   524→
+   525→      {pending ? (
+   526→        <div className="mt-3 flex flex-wrap gap-2 border-t pt-3">
+   527→          {/* Mark as paid with optional note */}
+   528→          <Popover
+   529→            open={confirming === 'APPROVE'}
+   530→            onOpenChange={(o) => {
+   531→              if (o) {
+   532→                setConfirming('APPROVE')
+   533→                setNote('')
+   534→              } else if (confirming === 'APPROVE') closePopover()
+   535→            }}
+   536→          >
+   537→            <PopoverTrigger asChild>
+   538→              <Button
+   539→                size="sm"
+   540→                disabled={busy}
+   541→                className="bg-green-600 text-white hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-700"
+   542→              >
+   543→                <CheckCircle2 className="mr-1.5 size-4" />
+   544→                Mark as Paid
+   545→              </Button>
+   546→            </PopoverTrigger>
+   547→            <PopoverContent align="start" className="w-72 space-y-3">
+   548→              <p className="text-sm font-semibold">Mark as paid</p>
+   549→              <p className="text-xs text-muted-foreground">
+   550→                Transfers {pkr(withdrawal.amount)} to the bank account above. Confirm only after the transfer is sent.
+   551→              </p>
+   552→              <Textarea
+   553→                value={note}
+   554→                onChange={(e) => setNote(e.target.value)}
+   555→                placeholder="Admin note (optional) — saved with the request"
+   556→                rows={2}
+   557→                maxLength={500}
+   558→              />
+   559→              <div className="flex justify-end gap-2">
+   560→                <Button size="sm" variant="ghost" onClick={closePopover}>
+   561→                  Cancel
+   562→                </Button>
+   563→                <Button
+   564→                  size="sm"
+   565→                  disabled={busy}
+   566→                  onClick={() => void act('APPROVE')}
+   567→                  className="bg-green-600 text-white hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-700"
+   568→                >
+   569→                  Confirm
+   570→                </Button>
+   571→              </div>
+   572→            </PopoverContent>
+   573→          </Popover>
+   574→
+   575→          {/* Reject (refunds money) with optional note */}
+   576→          <Popover
+   577→            open={confirming === 'REJECT'}
+   578→            onOpenChange={(o) => {
+   579→              if (o) {
+   580→                setConfirming('REJECT')
+   581→                setNote('')
+   582→              } else if (confirming === 'REJECT') closePopover()
+   583→            }}
+   584→          >
+   585→            <PopoverTrigger asChild>
+   586→              <Button size="sm" variant="outline" disabled={busy}>
+   587→                <XCircle className="mr-1.5 size-4" />
+   588→                Reject
+   589→              </Button>
+   590→            </PopoverTrigger>
+   591→            <PopoverContent align="start" className="w-72 space-y-3">
+   592→              <p className="text-sm font-semibold">Reject withdrawal</p>
+   593→              <p className="text-xs text-muted-foreground">
+   594→                Rejecting returns the money to the user&apos;s wallet.
+   595→              </p>
+   596→              <Textarea
+   597→                value={note}
+   598→                onChange={(e) => setNote(e.target.value)}
+   599→                placeholder="Admin note (optional) — saved with the request"
+   600→                rows={2}
+   601→                maxLength={500}
+   602→              />
+   603→              <div className="flex justify-end gap-2">
+   604→                <Button size="sm" variant="ghost" onClick={closePopover}>
+   605→                  Cancel
+   606→                </Button>
+   607→                <Button
+   608→                  size="sm"
+   609→                  variant="outline"
+   610→                  disabled={busy}
+   611→                  onClick={() => void act('REJECT')}
+   612→                  className="text-red-600 hover:bg-red-500/10 hover:text-red-700 dark:text-red-400"
+   613→                >
+   614→                  Confirm
+   615→                </Button>
+   616→              </div>
+   617→            </PopoverContent>
+   618→          </Popover>
+   619→        </div>
+   620→      ) : null}
+   621→    </div>
+   622→  )
+   623→}
+   624→
+   625→export default function PaymentsTab() {
+   626→  const [tab, setTab] = useState<'proofs' | 'withdrawals'>('proofs')
+   627→
+   628→  // Payment proofs (top-up queue)
+   629→  const [topFilter, setTopFilter] = useState<PayFilter>('PENDING')
+   630→  const [topups, setTopups] = useState<TopUpDTO[] | null>(null)
+   631→
+   632→  // Withdrawals queue
+   633→  const [wdFilter, setWdFilter] = useState<PayFilter>('PENDING')
+   634→  const [withdrawals, setWithdrawals] = useState<WithdrawalDTO[] | null>(null)
+   635→
+   636→  const loadTopups = useCallback(async () => {
+   637→    try {
+   638→      const d = await api.adminTopUps(topFilter === 'ALL' ? undefined : topFilter)
+   639→      setTopups(d.topups)
+   640→    } catch (e) {
+   641→      setTopups([])
+   642→      toast.error('Could not load payment proofs', { description: errorMessage(e) })
+   643→    }
+   644→  }, [topFilter])
+   645→
+   646→  const loadWithdrawals = useCallback(async () => {
+   647→    try {
+   648→      const d = await api.adminWithdrawals(wdFilter === 'ALL' ? undefined : wdFilter)
+   649→      setWithdrawals(d.withdrawals)
+   650→    } catch (e) {
+   651→      setWithdrawals([])
+   652→      toast.error('Could not load withdrawals', { description: errorMessage(e) })
+   653→    }
+   654→  }, [wdFilter])
+   655→
+   656→  useEffect(() => {
+   657→    // eslint-disable-next-line react-hooks/set-state-in-effect
+   658→    void loadTopups()
+   659→  }, [loadTopups])
+   660→
+   661→  useEffect(() => {
+   662→    if (tab !== 'withdrawals') return
+   663→    // eslint-disable-next-line react-hooks/set-state-in-effect
+   664→    void loadWithdrawals()
+   665→  }, [tab, loadWithdrawals])
+   666→
+   667→  return (
+   668→    <div className="space-y-3">
+   669→      <Tabs value={tab} onValueChange={(v) => setTab(v as 'proofs' | 'withdrawals')}>
+   670→        <TabsList className="w-full sm:w-auto">
+   671→          <TabsTrigger value="proofs" className="gap-1.5">
+   672→            <Wallet className="size-4" />
+   673→            Payment Proofs
+   674→          </TabsTrigger>
+   675→          <TabsTrigger value="withdrawals" className="gap-1.5">
+   676→            <Landmark className="size-4" />
+   677→            Withdrawals
+   678→          </TabsTrigger>
+   679→        </TabsList>
+   680→
+   681→        {/* ===== Payment proofs (top-up requests) ===== */}
+   682→        <TabsContent value="proofs" className="mt-3 space-y-3">
+   683→          <div className="flex flex-wrap items-center gap-2">
+   684→            <FilterPills value={topFilter} onChange={setTopFilter} />
+   685→            <Button size="sm" variant="ghost" className="ml-auto gap-1.5" onClick={() => void loadTopups()}>
+   686→              <RefreshCw className="size-3.5" />
+   687→              Refresh
+   688→            </Button>
+   689→          </div>
+   690→
+   691→          {topups === null ? (
+   692→            <div className="space-y-3">
+   693→              {[0, 1, 2].map((i) => (
+   694→                <Skeleton key={i} className="h-40 rounded-xl" />
+   695→              ))}
+   696→            </div>
+   697→          ) : topups.length === 0 ? (
+   698→            <EmptyState
+   699→              icon={Wallet}
+   700→              title={topFilter === 'PENDING' ? 'Queue is clear' : 'Nothing here'}
+   701→              hint={
+   702→                topFilter === 'PENDING'
+   703→                  ? 'No payment screenshots waiting for review — nice work!'
+   704→                  : 'No payment proofs match this filter.'
+   705→              }
+   706→            />
+   707→          ) : (
+   708→            <div className="space-y-3">
+   709→              {topups.map((t) => (
+   710→                <TopUpCard key={t.id} topup={t} onChanged={() => void loadTopups()} />
+   711→              ))}
+   712→            </div>
+   713→          )}
+   714→        </TabsContent>
+   715→
+   716→        {/* ===== Withdrawals ===== */}
+   717→        <TabsContent value="withdrawals" className="mt-3 space-y-3">
+   718→          <div className="flex flex-wrap items-center gap-2">
+   719→            <FilterPills value={wdFilter} onChange={setWdFilter} />
+   720→            <Button size="sm" variant="ghost" className="ml-auto gap-1.5" onClick={() => void loadWithdrawals()}>
+   721→              <RefreshCw className="size-3.5" />
+   722→              Refresh
+   723→            </Button>
+   724→          </div>
+   725→
+   726→          {withdrawals === null ? (
+   727→            <div className="space-y-3">
+   728→              {[0, 1, 2].map((i) => (
+   729→                <Skeleton key={i} className="h-44 rounded-xl" />
+   730→              ))}
+   731→            </div>
+   732→          ) : withdrawals.length === 0 ? (
+   733→            <EmptyState
+   734→              icon={Landmark}
+   735→              title={wdFilter === 'PENDING' ? 'No pending withdrawals' : 'Nothing here'}
+   736→              hint={
+   737→                wdFilter === 'PENDING'
+   738→                  ? 'No withdrawal requests waiting for payout.'
+   739→                  : 'No withdrawals match this filter.'
+   740→              }
+   741→            />
+   742→          ) : (
+   743→            <div className="space-y-3">
+   744→              {withdrawals.map((w) => (
+   745→                <WithdrawalCard key={w.id} withdrawal={w} onChanged={() => void loadWithdrawals()} />
+   746→              ))}
+   747→            </div>
+   748→          )}
+   749→        </TabsContent>
+   750→      </Tabs>
+   751→    </div>
+   752→  )
+   753→}
+   754→

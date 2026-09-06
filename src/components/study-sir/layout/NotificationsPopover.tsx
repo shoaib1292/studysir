@@ -73,6 +73,8 @@ export function NotificationsPopover() {
     if (n.link === 'chats') go('chats')
     else if (n.link === 'wallet') go('wallet')
     else if (n.link === 'admin') go('admin')
+    else if (n.link === 'affiliate') go('affiliate')
+    else if (n.link === 'plans') go('plans')
   }
 
   return (

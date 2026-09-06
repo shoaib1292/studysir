@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Coins,
   Copy,
+  Crown,
   Landmark,
   RefreshCw,
   Wallet,
@@ -33,6 +34,7 @@ import { ROLE_CHIP, ROLE_LABEL } from '../../shared/constants'
 import { EmptyState } from '../../shared/EmptyState'
 import { timeAgo } from '../../shared/format'
 import { UserAvatar } from '../../shared/UserAvatar'
+import { PlansQueue } from './PlansQueue'
 
 type PayFilter = TopUpStatus | 'ALL'
 type PayAction = 'APPROVE' | 'REJECT'
@@ -623,7 +625,7 @@ function WithdrawalCard({ withdrawal, onChanged }: { withdrawal: WithdrawalDTO; 
 }
 
 export default function PaymentsTab() {
-  const [tab, setTab] = useState<'proofs' | 'withdrawals'>('proofs')
+  const [tab, setTab] = useState<'proofs' | 'withdrawals' | 'plans'>('proofs')
 
   // Payment proofs (top-up queue)
   const [topFilter, setTopFilter] = useState<PayFilter>('PENDING')
@@ -666,11 +668,15 @@ export default function PaymentsTab() {
 
   return (
     <div className="space-y-3">
-      <Tabs value={tab} onValueChange={(v) => setTab(v as 'proofs' | 'withdrawals')}>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as 'proofs' | 'withdrawals' | 'plans')}>
         <TabsList className="w-full sm:w-auto">
           <TabsTrigger value="proofs" className="gap-1.5">
             <Wallet className="size-4" />
             Payment Proofs
+          </TabsTrigger>
+          <TabsTrigger value="plans" className="gap-1.5">
+            <Crown className="size-4" />
+            Plans
           </TabsTrigger>
           <TabsTrigger value="withdrawals" className="gap-1.5">
             <Landmark className="size-4" />
@@ -711,6 +717,11 @@ export default function PaymentsTab() {
               ))}
             </div>
           )}
+        </TabsContent>
+
+        {/* ===== Plans (premium purchase proofs) ===== */}
+        <TabsContent value="plans" className="mt-3">
+          <PlansQueue />
         </TabsContent>
 
         {/* ===== Withdrawals ===== */}

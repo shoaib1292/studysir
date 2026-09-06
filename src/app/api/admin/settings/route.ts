@@ -43,11 +43,11 @@ async function getSettingOrNull(key: string): Promise<string | null> {
   return getSetting(key)
 }
 
-/** Distinct teachers who ever bought coins. */
+/** Paid teachers = teachers with an ACTIVE premium plan (Basic / Pro / Academy). */
 async function countPaidTeachers(): Promise<number> {
-  const rows = await db.coinTransaction.groupBy({
-    by: ['userId'],
-    where: { type: 'PURCHASE', amount: { gt: 0 } },
-  })
-  return rows.length
+  return db.planPurchase.findMany({
+    where: { status: 'ACTIVE' },
+    select: { userId: true },
+    distinct: ['userId'],
+  }).then((rows) => rows.length)
 }

@@ -72,10 +72,12 @@ export async function POST() {
   }
 }
 
+/** Paid teachers = teachers with an ACTIVE premium plan purchase (Basic / Pro / Academy). */
 async function paidTeacherIds(): Promise<string[]> {
-  const rows = await db.coinTransaction.groupBy({
-    by: ['userId'],
-    where: { type: 'PURCHASE', amount: { gt: 0 } },
+  const rows = await db.planPurchase.findMany({
+    where: { status: 'ACTIVE' },
+    select: { userId: true },
+    distinct: ['userId'],
   })
   return rows.map((r) => r.userId)
 }

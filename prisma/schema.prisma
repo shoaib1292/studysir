@@ -35,6 +35,8 @@ model User {
   isAI          Boolean  @default(false) // AI-powered demo agent (teacher or student)
   aiPersona     String? // JSON: { style, activeFrom, activeTo, minDelaySec, maxDelaySec, replyChance, ... }
   currency      String? // preferred display currency code (USD/EUR/INR/PKR)
+  affiliateCode     String? @unique // affiliate program referral code ("SS-XXXXXX")
+  affiliateEarnings Float   @default(0) // lifetime affiliate commission credited to the money wallet (PKR)
   bankName          String? // withdrawal destination (saved bank details)
   bankAccountTitle  String?
   bankAccountNumber String?
@@ -65,6 +67,9 @@ model User {
   reportsAgainst  Report[]     @relation("reportedUser")
   reactions       Reaction[]
   shares          SharedPost[]
+  planPurchases   PlanPurchase[] @relation("planBuyer")
+  affiliateSales  PlanPurchase[] @relation("planAffiliate")
+  affiliateEarns  AffiliateEarning[]
 }
 
 // mode: ONLINE | HOME | CENTER  | status: OPEN | HIRED | CLOSED
@@ -390,5 +395,40 @@ model SharedPost {
   goodId      String?
   teacherId   String?
   hidden      Boolean  @default(false) // moderation: soft-hidden from feeds
+  createdAt   DateTime @default(now())
+}
+
+// Premium teacher plan purchase (Basic / Pro / Academy).
+// Payment proof flow: coins are credited INSTANTLY at submit and clawed back if admin rejects.
+// A teacher with an ACTIVE purchase is a "paid teacher" (counts toward the 1,000 milestone).
+// status: PENDING | ACTIVE | REJECTED
+model PlanPurchase {
+  id                  String    @id @default(cuid())
+  userId              String
+  user                User      @relation("planBuyer", fields: [userId], references: [id])
+  tier                String // BASIC | PRO | ACADEMY
+  price               Float // PKR paid by the buyer (affiliate-discounted for Basic via a referral)
+  coinsGranted        Int // credited instantly, clawed back on rejection
+  method              String // which platform bank account / wallet was used
+  reference           String?
+  screenshot          String // data URL of the payment proof
+  affiliateId         String? // affiliate who referred this purchase (commission on approve)
+  affiliate           User?     @relation("planAffiliate", fields: [affiliateId], references: [id])
+  affiliateCommission Float     @default(0) // PKR paid to the affiliate when approved
+  status              String    @default("PENDING")
+  adminNote           String?
+  decidedAt           DateTime?
+  createdAt           DateTime  @default(now())
+}
+
+// Affiliate commission ledger — one row per approved plan sale (money wallet credit).
+model AffiliateEarning {
+  id          String   @id @default(cuid())
+  affiliateId String
+  affiliate   User     @relation(fields: [affiliateId], references: [id])
+  purchaseId  String?
+  buyerId     String?
+  tier        String? // BASIC | PRO | ACADEMY
+  amount      Float // PKR credited to the affiliate's money wallet
   createdAt   DateTime @default(now())
 }
