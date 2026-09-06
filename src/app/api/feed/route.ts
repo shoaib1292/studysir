@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getSessionUserId } from '@/lib/session'
-import { toTuitionDTO, toCourseDTO, toGoodDTO, toTeacherCardDTO } from '@/lib/dto'
+import { toTuitionDTO, toCourseDTO, toGoodDTO, toTeacherCardDTO, toSharedPostDTO } from '@/lib/dto'
 import { processExpiredConnections } from '@/lib/coins'
 import type { FeedItem } from '@/lib/types'
 
@@ -57,6 +57,17 @@ export async function GET(req: NextRequest) {
         createdAt: u.createdAt.toISOString(),
         teacher: await toTeacherCardDTO(u, viewerId),
       })
+    }
+  }
+
+  // Facebook-style shares ("<user> shared a post" with the original embedded).
+  // Shown in the "all" feed and in a dedicated "shared" filter.
+  if (type === 'all' || type === 'shared') {
+    const shares = await db.sharedPost.findMany({ where: { hidden: false }, orderBy: { createdAt: 'desc' }, take: 50, include: { author: true } })
+    for (const s of shares) {
+      if (!matchQ(s.text, s.author.name)) continue
+      const dto = await toSharedPostDTO(s, viewerId)
+      if (dto) items.push({ kind: 'shared', createdAt: dto.createdAt, shared: dto })
     }
   }
 

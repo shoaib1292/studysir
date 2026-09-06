@@ -2,6 +2,7 @@
 // Always sends cookies (credentials: 'include'), always relative URLs.
 import type {
   AdminAnalytics,
+  AdminOverview,
   AdminSettingsDTO,
   AdminStats,
   AdminUserDTO,
@@ -143,7 +144,10 @@ export interface ProfilePatch {
   availabilities?: { day: string; slots: string }[]
 }
 
-export type LikeTargetType = 'TUITION' | 'COURSE' | 'GOOD' | 'TEACHER'
+export type LikeTargetType = 'TUITION' | 'COURSE' | 'GOOD' | 'TEACHER' | 'SHARED'
+
+/** Target of a Facebook-style share (requirement M). */
+export type ShareTargetType = Exclude<LikeTargetType, 'SHARED'>
 
 export const api = {
   // session
@@ -169,6 +173,14 @@ export const api = {
   // feed
   getFeed: (type: string, q?: string) =>
     request<{ items: FeedItem[] }>(`/api/feed?type=${encodeURIComponent(type)}${q ? `&q=${encodeURIComponent(q)}` : ''}`),
+
+  // shares (Facebook-style share-to-feed — the post content is embedded, not a link)
+  shareToFeed: (targetType: ShareTargetType, targetId: string, text?: string) =>
+    request<{ shared: { id: string }; notified: boolean }>('/api/shares', {
+      method: 'POST',
+      body: { targetType, targetId, text: text ?? '' },
+    }),
+  deleteShare: (id: string) => request<{ ok: true }>(`/api/shares/${id}`, { method: 'DELETE' }),
 
   // tuition
   createTuition: (body: TuitionInput) =>
@@ -321,6 +333,7 @@ export const api = {
   adminDeleteAiAgent: (id: string) =>
     request<{ ok: true }>(`/api/admin/ai/agents/${id}`, { method: 'DELETE' }),
   adminAiStats: () => request<{ agents: AiAgentDTO[]; llmProvider: string; wastedCoinsByRealTeachers: { teacherId: string; teacherName: string; coins: number }[]; aiMessages: number }>('/api/admin/ai'),
+  adminOverview: () => request<{ overview: AdminOverview }>('/api/admin/overview'),
 }
 
 export function errorMessage(e: unknown): string {

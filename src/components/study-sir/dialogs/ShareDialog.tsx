@@ -1,11 +1,11 @@
 'use client'
 
-// Facebook-style sharing (requirement M): the POST CONTENT itself is shared —
-// title + details + description as rich text — never a bare website link.
-// Uses the native share sheet when available; falls back to a copy-text dialog
-// with a live preview of exactly what gets shared.
-import { useMemo, useState } from 'react'
-import { Check, Copy, MessageCircle, Share2 } from 'lucide-react'
+// Facebook-style sharing (requirement M, v2): sharing creates a REAL post on the
+// feed via api.shareToFeed — the feed renders "<user> shared a post" with the
+// original post embedded inside the wrapper card, exactly like Facebook.
+// This composer still offers copy-text / WhatsApp of the rich post content.
+import { useEffect, useMemo, useState } from 'react'
+import { Check, Copy, Loader2, MessageCircle, Share2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -16,7 +16,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
+import { api, errorMessage, type ShareTargetType } from '@/lib/api'
+import type { FeedItem } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store/useAppStore'
+import { ROLE_CHIP, ROLE_LABEL } from '../shared/constants'
+import { SafeImage } from '../shared/SafeImage'
+import { UserAvatar } from '../shared/UserAvatar'
 
 export interface ShareContent {
   /** headline line, e.g. "Math Tuition Needed — Class 9" */
@@ -31,6 +38,17 @@ export interface ShareContent {
   price?: string
   /** emoji shown above the text */
   emoji?: string
+  /** feed target type — required to post the share to the feed */
+  targetType: ShareTargetType
+  /** id of the post being shared */
+  targetId: string
+  /** original author, shown on the embedded preview card */
+  authorName: string
+  authorAvatar: string | null
+  /** optional role chip on the embedded preview (STUDENT/PARENT/TEACHER) */
+  authorRole?: string | null
+  /** optional image (good/course photo, teacher cover) on the embedded preview */
+  image?: string | null
 }
 
 export function composeShareText(c: ShareContent): string {
@@ -57,33 +75,124 @@ export function composeShareText(c: ShareContent): string {
   return lines.join('\n')
 }
 
+/**
+ * Builds ShareContent from any feed item (used by SharedPostCard for re-share).
+ * `fmtMoney` formats PKR-base amounts in the viewer's currency — pass `fmt`
+ * from useMoney(me); plain functions can't call hooks themselves.
+ */
+export function shareContentForFeedItem(item: FeedItem, fmtMoney: (n: number) => string): ShareContent | null {
+  switch (item.kind) {
+    case 'tuition': {
+      const t = item.tuition
+      return {
+        targetType: 'TUITION',
+        targetId: t.id,
+        authorName: t.author.name,
+        authorAvatar: t.author.avatar,
+        authorRole: t.author.role,
+        emoji: '📚',
+        title: t.title,
+        byline: `— ${t.mode === 'ONLINE' ? 'Online tuition' : t.mode === 'HOME' ? 'Home tuition' : 'Center tuition'} request by ${t.author.name}`,
+        details: [
+          ['Subjects', t.subjects ?? ''],
+          ['Languages', t.languages ?? ''],
+          ['Qualification', t.qualification ?? ''],
+          ['Timing', t.timing ?? ''],
+          ['City', t.city ?? ''],
+        ],
+        description: t.description,
+        price: `💰 Fee range: ${fmtMoney(t.feeMin)} – ${fmtMoney(t.feeMax)}`,
+      }
+    }
+    case 'course': {
+      const c = item.course
+      return {
+        targetType: 'COURSE',
+        targetId: c.id,
+        authorName: c.teacher.name,
+        authorAvatar: c.teacher.avatar,
+        authorRole: c.teacher.role,
+        emoji: '🎓',
+        title: c.title,
+        byline: `— course by ${c.teacher.name}`,
+        details: [
+          ['Subject', c.subject ?? ''],
+          ['Language', c.language ?? ''],
+          ['Duration', c.duration ?? ''],
+          ['Timing', c.timing ?? ''],
+          ['Format', c.format ?? ''],
+        ],
+        description: c.description,
+        price: `💰 Price: ${fmtMoney(c.fee)}`,
+        image: c.cover,
+      }
+    }
+    case 'good': {
+      const g = item.good
+      return {
+        targetType: 'GOOD',
+        targetId: g.id,
+        authorName: g.seller.name,
+        authorAvatar: g.seller.avatar,
+        authorRole: g.seller.role,
+        emoji: '🛍️',
+        title: g.title,
+        byline: `— digital item by ${g.seller.name}`,
+        description: g.description,
+        price: `💰 ${fmtMoney(g.price)}`,
+        image: g.image,
+      }
+    }
+    case 'teacher': {
+      const t = item.teacher
+      return {
+        targetType: 'TEACHER',
+        targetId: t.id,
+        authorName: t.name,
+        authorAvatar: t.avatar,
+        authorRole: 'TEACHER',
+        emoji: '👨‍🏫',
+        title: `${t.name} — ${t.headline ?? 'Teacher'}`,
+        byline: t.city ? `— ${t.city} teacher on StudySir` : '— teacher on StudySir',
+        price:
+          t.feeMin !== null && t.feeMax !== null
+            ? `💰 Fee range: ${fmtMoney(t.feeMin)} – ${fmtMoney(t.feeMax)}`
+            : undefined,
+        image: t.avatar,
+      }
+    }
+    default:
+      // shares are never nested (backend contract)
+      return null
+  }
+}
+
 export function ShareDialog({
   open,
   onOpenChange,
   content,
+  onShared,
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
   content: ShareContent | null
+  onShared?: () => void
 }) {
+  const me = useAppStore((s) => s.me)!
+  const [caption, setCaption] = useState('')
   const [copied, setCopied] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const text = useMemo(() => (content ? composeShareText(content) : ''), [content])
+
+  // fresh composer each time it opens (like Facebook)
+  useEffect(() => {
+    if (open) setCaption('')
+  }, [open])
 
   if (!content) return null
 
-  async function nativeShare() {
-    const nav = navigator as Navigator & { share?: (data: { title?: string; text: string }) => Promise<void> }
-    if (typeof nav.share === 'function') {
-      try {
-        await nav.share({ title: content!.title, text })
-        onOpenChange(false)
-        return true
-      } catch {
-        return false // user cancelled or share failed — fall through to copy
-      }
-    }
-    return false
-  }
+  const roleChip = content.authorRole ? (ROLE_CHIP[content.authorRole] ?? null) : null
+  const roleLabel = content.authorRole ? (ROLE_LABEL[content.authorRole] ?? content.authorRole) : null
 
   async function copyText() {
     try {
@@ -94,42 +203,114 @@ export function ShareDialog({
       })
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      toast.error('Could not copy — long-press the text below to copy manually')
+      toast.error('Could not copy the post text')
     }
   }
 
-  async function shareOrCopy() {
-    const shared = await nativeShare()
-    if (!shared) await copyText()
+  function openWhatsApp() {
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
+  }
+
+  async function postToFeed() {
+    if (!content || submitting) return
+    setSubmitting(true)
+    try {
+      const d = await api.shareToFeed(content.targetType, content.targetId, caption.trim())
+      toast.success('Shared to your feed', {
+        description: d.notified ? 'The author was notified.' : 'Everyone on StudySir can see it now.',
+      })
+      onOpenChange(false)
+      onShared?.()
+    } catch (e) {
+      toast.error('Could not share to feed', { description: errorMessage(e) })
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="rounded-2xl sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Share2 className="size-5 text-[#1877F2]" />
-            Share this post
+            Share to feed
           </DialogTitle>
-          <DialogDescription>The post content is shared — not just a link.</DialogDescription>
+          <DialogDescription>Your share appears on the feed with the original post attached.</DialogDescription>
         </DialogHeader>
 
-        {/* live preview of the shared text */}
-        <div className="max-h-64 overflow-y-auto rounded-xl border bg-muted/50 p-4">
-          <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed">{text}</pre>
+        {/* identity row */}
+        <div className="flex items-center gap-2.5">
+          <UserAvatar src={me.avatar} name={me.name} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-bold leading-tight">{me.name}</p>
+            <span className="mt-0.5 inline-block rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+              Anyone on StudySir 🌐
+            </span>
+          </div>
         </div>
 
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => void copyText()}>
-            {copied ? <Check className="mr-1.5 size-4 text-green-600" /> : <Copy className="mr-1.5 size-4" />}
-            {copied ? 'Copied!' : 'Copy text'}
-          </Button>
+        {/* caption — borderless like the FB composer */}
+        <Textarea
+          value={caption}
+          onChange={(e) => setCaption(e.target.value)}
+          placeholder="Say something about this…"
+          maxLength={2000}
+          className="min-h-20 resize-none border-0 px-1 shadow-none focus-visible:border-transparent focus-visible:ring-0 dark:bg-transparent"
+        />
+
+        {/* embedded original post (static preview of what gets attached) */}
+        <div className="overflow-hidden rounded-xl border bg-muted/40">
+          <div className="flex items-center gap-2.5 p-3">
+            <UserAvatar src={content.authorAvatar} name={content.authorName} className="size-9" />
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                <p className="truncate text-sm font-bold leading-tight">{content.authorName}</p>
+                {roleChip && roleLabel ? (
+                  <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-semibold', roleChip)}>{roleLabel}</span>
+                ) : null}
+              </div>
+            </div>
+          </div>
+          {content.image ? <SafeImage src={content.image} alt={content.title} className="h-28 w-full object-cover" /> : null}
+          <div className="space-y-1 p-3">
+            {content.emoji ? <span className="text-sm">{content.emoji}</span> : null}
+            <p className="text-sm font-bold leading-snug">{content.title}</p>
+            {content.description ? (
+              <p className="line-clamp-2 text-sm text-foreground/80">{content.description}</p>
+            ) : null}
+            {content.byline ? <p className="text-xs text-muted-foreground">{content.byline}</p> : null}
+            {content.price ? <p className="text-sm font-semibold">{content.price}</p> : null}
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2 sm:justify-between">
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" onClick={() => void copyText()}>
+              {copied ? <Check className="mr-1.5 size-4 text-green-600" /> : <Copy className="mr-1.5 size-4" />}
+              Copy post text
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+              onClick={openWhatsApp}
+            >
+              <MessageCircle className="mr-1.5 size-4" />
+              WhatsApp
+            </Button>
+          </div>
           <Button
-            onClick={() => void shareOrCopy()}
-            className={cn('bg-[#1877F2] hover:bg-[#166fe5]', 'text-white')}
+            onClick={() => void postToFeed()}
+            disabled={submitting}
+            className="bg-[#1877F2] text-white hover:bg-[#166fe5]"
           >
-            <MessageCircle className="mr-1.5 size-4" />
-            Share post
+            {submitting ? (
+              <Loader2 className="mr-1.5 size-4 animate-spin" />
+            ) : (
+              <Share2 className="mr-1.5 size-4" />
+            )}
+            Post to StudySir
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -44,7 +44,16 @@ import { timeAgo } from '../shared/format'
 
 type CourseWithRating = CourseDTO & { teacherAvgRating?: number }
 
-export function CourseCard({ course, onChanged }: { course: CourseDTO; onChanged?: () => void }) {
+export function CourseCard({
+  course,
+  onChanged,
+  embedded = false,
+}: {
+  course: CourseDTO
+  onChanged?: () => void
+  /** rendered inside a SharedPostCard wrapper — the Share action is hidden */
+  embedded?: boolean
+}) {
   const me = useAppStore((s) => s.me)!
   const go = useAppStore((s) => s.go)
   const refreshMe = useAppStore((s) => s.refreshMe)
@@ -62,6 +71,11 @@ export function CourseCard({ course, onChanged }: { course: CourseDTO; onChanged
   const [shareOpen, setShareOpen] = useState(false)
 
   const shareContent: ShareContent = {
+    targetType: 'COURSE',
+    targetId: course.id,
+    authorName: course.teacher.name,
+    authorAvatar: course.teacher.avatar,
+    authorRole: course.teacher.role,
     emoji: '🎓',
     title: course.title,
     byline: `— course by ${course.teacher.name}`,
@@ -74,6 +88,7 @@ export function CourseCard({ course, onChanged }: { course: CourseDTO; onChanged
     ],
     description: course.description,
     price: `💰 Course fee: ${fmt(course.fee)}`,
+    image: course.cover,
   }
 
   const teacherRating = (course as CourseWithRating).teacherAvgRating
@@ -202,10 +217,10 @@ export function CourseCard({ course, onChanged }: { course: CourseDTO; onChanged
       {/* Footer */}
       <div className="border-t px-3 pb-2 pt-1.5">
         <StatText>{likeCount} Likes</StatText>
-        <ActionGrid count={5}>
+        <ActionGrid count={embedded ? 4 : 5}>
           <CardAction icon={ThumbsUp} label="Like" active={liked} onClick={toggleLike} />
           <CardAction icon={MessageSquareText} label="Review" onClick={() => setReviewOpen(true)} />
-          <CardAction icon={Share2} label="Share" onClick={() => setShareOpen(true)} />
+          {!embedded ? <CardAction icon={Share2} label="Share" onClick={() => setShareOpen(true)} /> : null}
           <CardAction icon={HelpCircle} label="Question" disabled={alreadyJoined} onClick={() => setQuestionOpen(true)} />
           {alreadyJoined ? (
             <CardAction
@@ -265,7 +280,9 @@ export function CourseCard({ course, onChanged }: { course: CourseDTO; onChanged
           label: course.title,
         }}
       />
-      <ShareDialog open={shareOpen} onOpenChange={setShareOpen} content={shareContent} />
+      {!embedded ? (
+        <ShareDialog open={shareOpen} onOpenChange={setShareOpen} content={shareContent} onShared={onChanged} />
+      ) : null}
     </FbCard>
   )
 }

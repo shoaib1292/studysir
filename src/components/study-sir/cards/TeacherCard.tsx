@@ -17,7 +17,16 @@ import { Stars } from '../shared/Stars'
 import { SafeImage } from '../shared/SafeImage'
 import { UserAvatar } from '../shared/UserAvatar'
 
-export function TeacherCard({ teacher, onChanged }: { teacher: TeacherCardDTO; onChanged?: () => void }) {
+export function TeacherCard({
+  teacher,
+  onChanged,
+  embedded = false,
+}: {
+  teacher: TeacherCardDTO
+  onChanged?: () => void
+  /** rendered inside a SharedPostCard wrapper — the Share action is hidden */
+  embedded?: boolean
+}) {
   const me = useAppStore((s) => s.me)!
   const go = useAppStore((s) => s.go)
   const refreshMe = useAppStore((s) => s.refreshMe)
@@ -31,6 +40,11 @@ export function TeacherCard({ teacher, onChanged }: { teacher: TeacherCardDTO; o
   const [shareOpen, setShareOpen] = useState(false)
 
   const shareContent: ShareContent = {
+    targetType: 'TEACHER',
+    targetId: teacher.id,
+    authorName: teacher.name,
+    authorAvatar: teacher.avatar,
+    authorRole: 'TEACHER',
     emoji: '👩‍🏫',
     title: `${teacher.name}${teacher.headline ? ` — ${teacher.headline}` : ' is teaching on StudySir'}`,
     byline: teacher.city ? `📍 ${teacher.city}` : undefined,
@@ -39,6 +53,7 @@ export function TeacherCard({ teacher, onChanged }: { teacher: TeacherCardDTO; o
       ['Students', teacher.hireCount ? `${teacher.hireCount} connections` : ''],
     ],
     description: teacher.bio,
+    image: teacher.coverImage ?? teacher.avatar,
   }
 
   async function toggleLike() {
@@ -132,10 +147,10 @@ export function TeacherCard({ teacher, onChanged }: { teacher: TeacherCardDTO; o
         <StatText>
           {likeCount} Likes · {teacher.reviewCount} Reviews
         </StatText>
-        <ActionGrid count={5}>
+        <ActionGrid count={embedded ? 4 : 5}>
           <CardAction icon={ThumbsUp} label="Like" active={liked} onClick={toggleLike} />
           <CardAction icon={MessageSquareText} label="Review" onClick={() => setReviewOpen(true)} />
-          <CardAction icon={Share2} label="Share" onClick={() => setShareOpen(true)} />
+          {!embedded ? <CardAction icon={Share2} label="Share" onClick={() => setShareOpen(true)} /> : null}
           <CardAction icon={Clock} label="Timing" onClick={() => setTimingOpen(true)} />
           <CardAction icon={Handshake} label="Hire Teacher" primary onClick={() => setHireOpen(true)} />
         </ActionGrid>
@@ -165,7 +180,9 @@ export function TeacherCard({ teacher, onChanged }: { teacher: TeacherCardDTO; o
         loading={connecting}
         onConfirm={hire}
       />
-      <ShareDialog open={shareOpen} onOpenChange={setShareOpen} content={shareContent} />
+      {!embedded ? (
+        <ShareDialog open={shareOpen} onOpenChange={setShareOpen} content={shareContent} onShared={onChanged} />
+      ) : null}
     </FbCard>
   )
 }

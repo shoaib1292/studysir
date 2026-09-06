@@ -27,7 +27,7 @@ import { NotEnoughCoinsDialog } from '../dialogs/NotEnoughCoinsDialog'
 import { ReviewDialog } from '../dialogs/ReviewDialog'
 import { FeedItemCard } from '../cards/FeedItemCard'
 import { DIRECT_CONTACT_COST, ROLE_CHIP, ROLE_LABEL } from '../shared/constants'
-import { FbCard } from '../shared/bits'
+import { FbCard, feedItemKey } from '../shared/bits'
 import { timeAgo } from '../shared/format'
 import { EmptyState } from '../shared/EmptyState'
 import { ReviewRow } from '../shared/bits'
@@ -254,7 +254,7 @@ export function ProfileView() {
             />
           ) : (
             data.posts.map((item) => (
-              <FeedItemCard key={`${item.kind}-${item.kind === "tuition" ? item.tuition.id : item.kind === "course" ? item.course.id : item.kind === "good" ? item.good.id : item.teacher.id}`} item={item} onChanged={load} />
+              <FeedItemCard key={feedItemKey(item)} item={item} onChanged={load} />
             ))
           )}
         </TabsContent>

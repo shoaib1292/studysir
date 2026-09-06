@@ -8,6 +8,7 @@ import type {
   GoodDTO,
   MessageDTO,
   ReportDTO,
+  SharedPostDTO,
   TeacherCardDTO,
   TuitionPostDTO,
   UserDTO,
@@ -308,5 +309,46 @@ export function toAdminUserDTO(u: AnyRecord, extra: { hireCount: number; postCou
     hireCount: extra.hireCount,
     postCount: extra.postCount,
     openReports: extra.openReports,
+  }
+}
+
+/** Build the embedded FeedItem for a SharedPost target (never a nested share). */
+async function sharedTargetItem(s: AnyRecord, viewerId?: string | null): Promise<FeedItem | null> {
+  const type = s.targetType as string
+  if (type === 'TUITION' && s.tuitionId) {
+    const t = await db.tuitionPost.findFirst({ where: { id: s.tuitionId as string, hidden: false }, include: { author: true } })
+    if (!t) return null
+    return { kind: 'tuition', createdAt: t.createdAt.toISOString(), tuition: await toTuitionDTO(t, viewerId) }
+  }
+  if (type === 'COURSE' && s.courseId) {
+    const c = await db.course.findFirst({ where: { id: s.courseId as string, hidden: false }, include: { teacher: true } })
+    if (!c) return null
+    return { kind: 'course', createdAt: c.createdAt.toISOString(), course: await toCourseDTO(c, viewerId) }
+  }
+  if (type === 'GOOD' && s.goodId) {
+    const g = await db.digitalGood.findFirst({ where: { id: s.goodId as string, hidden: false }, include: { seller: true } })
+    if (!g) return null
+    return { kind: 'good', createdAt: g.createdAt.toISOString(), good: await toGoodDTO(g, viewerId) }
+  }
+  if (type === 'TEACHER' && s.teacherId) {
+    const u = await db.user.findFirst({ where: { id: s.teacherId as string, role: 'TEACHER' } })
+    if (!u) return null
+    return { kind: 'teacher', createdAt: u.createdAt.toISOString(), teacher: await toTeacherCardDTO(u, viewerId) }
+  }
+  return null
+}
+
+export async function toSharedPostDTO(s: AnyRecord, viewerId?: string | null): Promise<SharedPostDTO | null> {
+  const target = await sharedTargetItem(s, viewerId)
+  if (!target) return null // original deleted/hidden — share disappears from feed too
+  const like = await likeInfo('SHARED', s.id as string, viewerId)
+  return {
+    id: s.id as string,
+    author: pickUser(s.author as AnyRecord),
+    text: (s.text as string) ?? '',
+    createdAt: (s.createdAt as Date).toISOString(),
+    target,
+    likeCount: like.likeCount,
+    myLike: like.myLike,
   }
 }

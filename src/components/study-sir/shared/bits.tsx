@@ -5,7 +5,7 @@ import type { LucideIcon } from 'lucide-react'
 import { Star } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import type { ConnectionDTO } from '@/lib/types'
+import type { ConnectionDTO, FeedItem } from '@/lib/types'
 import { CONNECTION_CHIP, TUITION_STATUS } from './constants'
 import { Stars } from './Stars'
 import { UserAvatar } from './UserAvatar'
@@ -185,4 +185,20 @@ export function ReviewRow({
       <Star className="mt-1 size-4 shrink-0 fill-amber-400 text-amber-400" />
     </div>
   )
+}
+
+/** Stable React key for any feed item kind (incl. Facebook-style shares). */
+export function feedItemKey(item: FeedItem): string {
+  switch (item.kind) {
+    case 'tuition':
+      return `tuition-${item.tuition.id}`
+    case 'course':
+      return `course-${item.course.id}`
+    case 'good':
+      return `good-${item.good.id}`
+    case 'teacher':
+      return `teacher-${item.teacher.id}`
+    case 'shared':
+      return `shared-${item.shared.id}`
+  }
 }

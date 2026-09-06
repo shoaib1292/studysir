@@ -124,6 +124,31 @@ export type FeedItem =
   | { kind: 'course'; createdAt: string; course: CourseDTO }
   | { kind: 'good'; createdAt: string; good: GoodDTO }
   | { kind: 'teacher'; createdAt: string; teacher: TeacherCardDTO }
+  | { kind: 'shared'; createdAt: string; shared: SharedPostDTO }
+
+/** Facebook-style re-share wrapper around any feed item. */
+export interface SharedPostDTO {
+  id: string
+  author: Pick<UserDTO, 'id' | 'name' | 'avatar' | 'role' | 'headline' | 'city'>
+  /** optional caption written by the sharer */
+  text: string
+  createdAt: string
+  /** the embedded original feed item (never itself a share — no nesting) */
+  target: FeedItem
+  likeCount: number
+  myLike: boolean
+}
+
+// ===== Admin overview (dashboard) =====
+export interface AdminOverview {
+  users: { total: number; teachers: number; students: number; parents: number; banned: number; admins: number }
+  content: { tuitions: number; courses: number; goods: number; shares: number; hidden: number }
+  queues: { openReports: number; pendingPayments: number; pendingWithdrawals: number; pendingKyc: number; pendingCoinRequests: number }
+  money: { coinsInCirculation: number; moneyInWallets: number; commissionEarned: number; paidTeachers: number; milestoneTarget: number; milestonePaid: boolean }
+  signups: { date: string; count: number }[] // last 14 days
+  recentUsers: Pick<UserDTO, 'id' | 'name' | 'avatar' | 'role' | 'createdAt' | 'status' | 'isAdmin'>[]
+  recentTx: { id: string; userId: string; userName: string; userAvatar: string | null; kind: string; amount: number; status: string; createdAt: string }[]
+}
 
 export interface MessageDTO {
   id: string

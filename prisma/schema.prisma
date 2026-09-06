@@ -64,6 +64,7 @@ model User {
   reportsMade     Report[]     @relation("reporter")
   reportsAgainst  Report[]     @relation("reportedUser")
   reactions       Reaction[]
+  shares          SharedPost[]
 }
 
 // mode: ONLINE | HOME | CENTER  | status: OPEN | HIRED | CLOSED
@@ -374,4 +375,20 @@ model Report {
   note         String?     // moderator note on resolve/dismiss
   resolvedAt   DateTime?
   createdAt    DateTime    @default(now())
+}
+
+// Facebook-style re-share: a user posts a feed item (tuition/course/good/teacher)
+// to their own feed with an optional caption. targetType: TUITION | COURSE | GOOD | TEACHER
+model SharedPost {
+  id          String   @id @default(cuid())
+  authorId    String
+  author      User     @relation(fields: [authorId], references: [id])
+  text        String   @default("") // caption ("Write something...")
+  targetType  String
+  tuitionId   String?
+  courseId    String?
+  goodId      String?
+  teacherId   String?
+  hidden      Boolean  @default(false) // moderation: soft-hidden from feeds
+  createdAt   DateTime @default(now())
 }

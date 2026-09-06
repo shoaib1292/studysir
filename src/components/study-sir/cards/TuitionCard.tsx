@@ -44,10 +44,13 @@ export function TuitionCard({
   tuition,
   onChanged,
   showOwnerActions = false,
+  embedded = false,
 }: {
   tuition: TuitionPostDTO
   onChanged?: () => void
   showOwnerActions?: boolean
+  /** rendered inside a SharedPostCard wrapper — the Share action is hidden */
+  embedded?: boolean
 }) {
   const me = useAppStore((s) => s.me)!
   const go = useAppStore((s) => s.go)
@@ -69,6 +72,11 @@ export function TuitionCard({
   const [shareOpen, setShareOpen] = useState(false)
 
   const shareContent: ShareContent = {
+    targetType: 'TUITION',
+    targetId: tuition.id,
+    authorName: tuition.author.name,
+    authorAvatar: tuition.author.avatar,
+    authorRole: tuition.author.role,
     emoji: '📚',
     title: tuition.title,
     byline: `— ${tuition.mode === 'ONLINE' ? 'Online tuition' : tuition.mode === 'HOME' ? 'Home tuition' : 'Center tuition'} request by ${tuition.author.name}`,
@@ -268,12 +276,13 @@ export function TuitionCard({
         <ActionGrid
           count={
             2 +
+            (embedded ? -1 : 0) +
             (isTeacherViewer && !isMine ? 1 : 0) +
             (isTeacherViewer || (isMine && tuition.existingConnectionId) ? 1 : 0)
           }
         >
           <CardAction icon={ThumbsUp} label="Like" active={liked} onClick={toggleLike} />
-          <CardAction icon={Share2} label="Share" onClick={() => setShareOpen(true)} />
+          {!embedded ? <CardAction icon={Share2} label="Share" onClick={() => setShareOpen(true)} /> : null}
           {isTeacherViewer && !isMine ? (
             <CardAction icon={Handshake} label={`Accept · ${tuition.coinCost}`} onClick={startContact} />
           ) : null}
@@ -340,7 +349,9 @@ export function TuitionCard({
           label: tuition.title,
         }}
       />
-      <ShareDialog open={shareOpen} onOpenChange={setShareOpen} content={shareContent} />
+      {!embedded ? (
+        <ShareDialog open={shareOpen} onOpenChange={setShareOpen} content={shareContent} onShared={onChanged} />
+      ) : null}
     </FbCard>
   )
 }

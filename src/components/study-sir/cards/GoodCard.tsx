@@ -21,7 +21,16 @@ import { ActionGrid, CardAction, FbCard, StatText } from '../shared/bits'
 import { RichText } from '../shared/RichText'
 import { SafeImage } from '../shared/SafeImage'
 
-export function GoodCard({ good, onChanged }: { good: GoodDTO; onChanged?: () => void }) {
+export function GoodCard({
+  good,
+  onChanged,
+  embedded = false,
+}: {
+  good: GoodDTO
+  onChanged?: () => void
+  /** rendered inside a SharedPostCard wrapper — the Share action is hidden */
+  embedded?: boolean
+}) {
   const me = useAppStore((s) => s.me)!
   const go = useAppStore((s) => s.go)
   const refreshMe = useAppStore((s) => s.refreshMe)
@@ -36,11 +45,17 @@ export function GoodCard({ good, onChanged }: { good: GoodDTO; onChanged?: () =>
   const [shareOpen, setShareOpen] = useState(false)
 
   const shareContent: ShareContent = {
+    targetType: 'GOOD',
+    targetId: good.id,
+    authorName: good.seller.name,
+    authorAvatar: good.seller.avatar,
+    authorRole: good.seller.role,
     emoji: '🛍️',
     title: good.title,
     byline: `— digital product by ${good.seller.name}`,
     description: good.description,
     price: `💰 Price: ${fmt(good.price)}`,
+    image: good.image,
   }
 
   const sellerIsTeacher = good.seller.role === 'TEACHER'
@@ -151,7 +166,7 @@ export function GoodCard({ good, onChanged }: { good: GoodDTO; onChanged?: () =>
 
       <div className="border-t px-3 pb-2 pt-1.5">
         <StatText>{likeCount} Likes</StatText>
-        <ActionGrid count={4}>
+        <ActionGrid count={embedded ? 3 : 4}>
           <CardAction icon={ThumbsUp} label="Like" active={liked} onClick={toggleLike} />
           <CardAction
             icon={MessageSquareText}
@@ -159,7 +174,7 @@ export function GoodCard({ good, onChanged }: { good: GoodDTO; onChanged?: () =>
             disabled={!sellerIsTeacher}
             onClick={() => setReviewOpen(true)}
           />
-          <CardAction icon={Share2} label="Share" onClick={() => setShareOpen(true)} />
+          {!embedded ? <CardAction icon={Share2} label="Share" onClick={() => setShareOpen(true)} /> : null}
           <CardAction icon={Download} label="Download" active={purchased} onClick={download} />
         </ActionGrid>
       </div>
@@ -193,7 +208,9 @@ export function GoodCard({ good, onChanged }: { good: GoodDTO; onChanged?: () =>
           label: good.title,
         }}
       />
-      <ShareDialog open={shareOpen} onOpenChange={setShareOpen} content={shareContent} />
+      {!embedded ? (
+        <ShareDialog open={shareOpen} onOpenChange={setShareOpen} content={shareContent} onShared={onChanged} />
+      ) : null}
     </FbCard>
   )
 }

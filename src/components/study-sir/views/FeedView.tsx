@@ -11,7 +11,7 @@ import { PostGoodDialog } from '../dialogs/PostGoodDialog'
 import { PostTuitionDialog } from '../dialogs/PostTuitionDialog'
 import { FeedItemCard } from '../cards/FeedItemCard'
 import { FeedRail } from './FeedRail'
-import { CardSkeleton, FbCard } from '../shared/bits'
+import { CardSkeleton, FbCard, feedItemKey } from '../shared/bits'
 import { firstName } from '../shared/format'
 import { EmptyState } from '../shared/EmptyState'
 import { UserAvatar } from '../shared/UserAvatar'
@@ -177,7 +177,7 @@ export function FeedView() {
             hint={q ? `No results match “${q}”. Try a different search or filter.` : 'Be the first to post in this category!'}
           />
         ) : (
-          items.map((item) => <FeedItemCard key={`${item.kind}-${item.kind === "tuition" ? item.tuition.id : item.kind === "course" ? item.course.id : item.kind === "good" ? item.good.id : item.teacher.id}`} item={item} onChanged={refresh} />)
+          items.map((item) => <FeedItemCard key={feedItemKey(item)} item={item} onChanged={refresh} />)
         )}
       </div>
 
