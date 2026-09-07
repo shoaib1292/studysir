@@ -16,6 +16,7 @@ import { RichText } from '../shared/RichText'
 import { Stars } from '../shared/Stars'
 import { SafeImage } from '../shared/SafeImage'
 import { UserAvatar } from '../shared/UserAvatar'
+import { useRequireAuth } from '../auth/useRequireAuth'
 
 export function TeacherCard({
   teacher,
@@ -27,9 +28,10 @@ export function TeacherCard({
   /** rendered inside a SharedPostCard wrapper — the Share action is hidden */
   embedded?: boolean
 }) {
-  const me = useAppStore((s) => s.me)!
+  const me = useAppStore((s) => s.me)
   const go = useAppStore((s) => s.go)
   const refreshMe = useAppStore((s) => s.refreshMe)
+  const { requireAuth, LoginPromptDialog } = useRequireAuth()
 
   const [liked, setLiked] = useState(teacher.myLike)
   const [likeCount, setLikeCount] = useState(teacher.likeCount)
@@ -38,6 +40,13 @@ export function TeacherCard({
   const [hireOpen, setHireOpen] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
+
+  // Auth-protected action handlers
+  const handleLike = () => requireAuth(toggleLike)
+  const handleReview = () => requireAuth(() => setReviewOpen(true))
+  const handleShare = () => requireAuth(() => setShareOpen(true))
+  const handleTiming = () => requireAuth(() => setTimingOpen(true))
+  const handleHire = () => requireAuth(() => setHireOpen(true))
 
   const shareContent: ShareContent = {
     targetType: 'TEACHER',
@@ -148,11 +157,11 @@ export function TeacherCard({
           {likeCount} Likes · {teacher.reviewCount} Reviews
         </StatText>
         <ActionGrid count={embedded ? 4 : 5}>
-          <CardAction icon={ThumbsUp} label="Like" active={liked} onClick={toggleLike} />
-          <CardAction icon={MessageSquareText} label="Review" onClick={() => setReviewOpen(true)} />
-          {!embedded ? <CardAction icon={Share2} label="Share" onClick={() => setShareOpen(true)} /> : null}
-          <CardAction icon={Clock} label="Timing" onClick={() => setTimingOpen(true)} />
-          <CardAction icon={Handshake} label="Hire Teacher" primary onClick={() => setHireOpen(true)} />
+          <CardAction icon={ThumbsUp} label="Like" active={liked} onClick={handleLike} />
+          <CardAction icon={MessageSquareText} label="Review" onClick={handleReview} />
+          {!embedded ? <CardAction icon={Share2} label="Share" onClick={handleShare} /> : null}
+          <CardAction icon={Clock} label="Timing" onClick={handleTiming} />
+          <CardAction icon={Handshake} label="Hire Teacher" primary onClick={handleHire} />
         </ActionGrid>
       </div>
 
@@ -174,7 +183,7 @@ export function TeacherCard({
         title={`Request ${teacher.name}?`}
         message={`Your request is FREE. ${teacher.name} accepts it to unlock the chat — accepting costs the teacher coins, not you.`}
         cost={0}
-        balance={me.coins}
+        balance={me?.coins ?? 0}
         confirmLabel="Send Request — Free"
         confirmIcon={Send}
         loading={connecting}
@@ -183,6 +192,7 @@ export function TeacherCard({
       {!embedded ? (
         <ShareDialog open={shareOpen} onOpenChange={setShareOpen} content={shareContent} onShared={onChanged} />
       ) : null}
+      {LoginPromptDialog}
     </FbCard>
   )
 }

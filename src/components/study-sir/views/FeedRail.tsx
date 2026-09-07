@@ -17,8 +17,8 @@ import { UserAvatar } from '../shared/UserAvatar'
 export function FeedRail() {
   const go = useAppStore((s) => s.go)
   const onlineIds = useAppStore((s) => s.onlineIds)
-  const me = useAppStore((s) => s.me)!
-  const { fmt } = useMoney(me)
+  const me = useAppStore((s) => s.me)
+  const { fmt } = useMoney(me ?? null)
 
   const [teachers, setTeachers] = useState<TeacherCardDTO[] | null>(null)
   const [users, setUsers] = useState<UserDTO[] | null>(null)
@@ -54,17 +54,17 @@ export function FeedRail() {
   const suggested = useMemo(() => {
     if (!teachers) return null
     return [...teachers]
-      .filter((t) => t.id !== me.id)
+      .filter((t) => t.id !== me?.id)
       .sort((a, b) => b.avgRating - a.avgRating || b.hireCount - a.hireCount || b.likeCount - a.likeCount)
       .slice(0, 3)
-  }, [teachers, me.id])
+  }, [teachers, me?.id])
 
   const onlineContacts = useMemo(() => {
     if (!users) return null
     return users
-      .filter((u) => u.id !== me.id && u.role === 'TEACHER' && onlineIds.includes(u.id))
+      .filter((u) => u.id !== me?.id && u.role === 'TEACHER' && onlineIds.includes(u.id))
       .slice(0, 8)
-  }, [users, onlineIds, me.id])
+  }, [users, onlineIds, me?.id])
 
   return (
     <aside aria-label="Feed suggestions" className="hidden w-[290px] shrink-0 xl:block">

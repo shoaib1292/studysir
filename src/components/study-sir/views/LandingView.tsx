@@ -226,7 +226,7 @@ export function LandingView({ onLogin, onSignup }: LandingViewProps) {
           <div className="mx-auto max-w-5xl px-4 py-10 md:py-16">
             <div className="grid w-full grid-cols-2 items-end gap-x-4 gap-y-8 lg:grid-cols-[auto_1fr_auto] lg:gap-6">
               <div className="col-span-2 order-1 text-center lg:order-2 lg:col-span-1">
-                <p className="text-4xl font-extrabold tracking-[0.3em] text-[#1877F2] sm:text-5xl md:text-6xl">
+                <p className="font-logo text-4xl font-extrabold tracking-[0.3em] text-[#1877F2] sm:text-5xl md:text-6xl">
                   EDUCATION
                 </p>
                 <p className="mx-auto mt-4 max-w-xl text-xl font-bold leading-snug sm:text-2xl md:text-3xl">
@@ -255,11 +255,11 @@ export function LandingView({ onLogin, onSignup }: LandingViewProps) {
 
               {/* 3D girl — left of the text on desktop, left half of the image row on mobile */}
               <div className="order-2 flex justify-end lg:order-1 lg:justify-start">
-                <img src="/hero/girl.png" alt="Student studying science" className="w-44 md:w-64 lg:w-72" />
+                <img src="/hero/girl.png" alt="Student studying science" className="w-[22rem] md:w-[32rem] lg:w-[36rem]" />
               </div>
               {/* 3D boy — right of the text on desktop, right half of the image row on mobile */}
               <div className="order-3 flex justify-start lg:order-3 lg:justify-end">
-                <img src="/hero/boy.png" alt="Student learning on a laptop" className="w-36 md:w-52 lg:w-60" />
+                <img src="/hero/boy.png" alt="Student learning on a laptop" className="w-[18rem] md:w-[26rem] lg:w-[30rem]" />
               </div>
             </div>
           </div>

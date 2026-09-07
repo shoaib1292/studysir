@@ -39,6 +39,7 @@ import { RichText } from '../shared/RichText'
 import { UserAvatar } from '../shared/UserAvatar'
 import { timeAgo } from '../shared/format'
 import { useMoney } from '@/store/useCurrencyStore'
+import { useRequireAuth } from '../auth/useRequireAuth'
 
 export function TuitionCard({
   tuition,
@@ -52,13 +53,15 @@ export function TuitionCard({
   /** rendered inside a SharedPostCard wrapper — the Share action is hidden */
   embedded?: boolean
 }) {
-  const me = useAppStore((s) => s.me)!
+  const me = useAppStore((s) => s.me)
   const go = useAppStore((s) => s.go)
   const refreshMe = useAppStore((s) => s.refreshMe)
-  const { fmt } = useMoney(me)
+  const { fmt } = useMoney(me ?? null)
+  const { requireAuth, LoginPromptDialog } = useRequireAuth()
 
-  const isMine = tuition.authorId === me.id
-  const isTeacherViewer = me.role === 'TEACHER'
+  const isLoggedIn = !!me
+  const isMine = me ? tuition.authorId === me.id : false
+  const isTeacherViewer = me?.role === 'TEACHER'
 
   const [liked, setLiked] = useState(tuition.myLike)
   const [likeCount, setLikeCount] = useState(tuition.likeCount)
@@ -132,6 +135,15 @@ export function TuitionCard({
     setConfirmOpen(true)
   }
 
+  // Auth-protected action handlers
+  const handleLike = () => requireAuth(toggleLike)
+  const handleSave = () => requireAuth(toggleSave)
+  const handleContact = () => requireAuth(startContact)
+  const handleShare = () => requireAuth(() => setShareOpen(true))
+  const handleEdit = () => requireAuth(() => setEditOpen(true))
+  const handleReport = () => requireAuth(() => setReportOpen(true))
+  const handleClosePost = () => requireAuth(closePost)
+
   async function confirmConnect() {
     setConnecting(true)
     try {
@@ -192,7 +204,7 @@ export function TuitionCard({
               type="button"
               aria-label={saved ? 'Remove from saved' : 'Save post'}
               title={saved ? 'Saved — tap to remove' : 'Save for later'}
-              onClick={toggleSave}
+              onClick={handleSave}
               className={cn(
                 'rounded-full p-1.5 transition-colors hover:bg-muted',
                 saved ? 'text-[#1877F2] dark:text-blue-400' : 'text-muted-foreground'
@@ -216,12 +228,12 @@ export function TuitionCard({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setEditOpen(true)} className="gap-2">
+                <DropdownMenuItem onClick={handleEdit} className="gap-2">
                   <Pencil className="size-4" />
                   Edit Post
                 </DropdownMenuItem>
                 {status === 'OPEN' ? (
-                  <DropdownMenuItem onClick={closePost} className="gap-2 text-red-600 focus:text-red-600">
+                  <DropdownMenuItem onClick={handleClosePost} className="gap-2 text-red-600 focus:text-red-600">
                     <XCircle className="size-4" />
                     Close Post
                   </DropdownMenuItem>
@@ -245,7 +257,7 @@ export function TuitionCard({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem
-                  onClick={() => setReportOpen(true)}
+                  onClick={handleReport}
                   className="gap-2 text-red-600 focus:text-red-600"
                 >
                   <Flag className="size-4" />
@@ -281,13 +293,13 @@ export function TuitionCard({
             (isTeacherViewer || (isMine && tuition.existingConnectionId) ? 1 : 0)
           }
         >
-          <CardAction icon={ThumbsUp} label="Like" active={liked} onClick={toggleLike} />
-          {!embedded ? <CardAction icon={Share2} label="Share" onClick={() => setShareOpen(true)} /> : null}
+          <CardAction icon={ThumbsUp} label="Like" active={liked} onClick={handleLike} />
+          {!embedded ? <CardAction icon={Share2} label="Share" onClick={handleShare} /> : null}
           {isTeacherViewer && !isMine ? (
-            <CardAction icon={Handshake} label={`Accept · ${tuition.coinCost}`} onClick={startContact} />
+            <CardAction icon={Handshake} label={`Accept · ${tuition.coinCost}`} onClick={handleContact} />
           ) : null}
           {isTeacherViewer || (isMine && tuition.existingConnectionId) ? (
-            <CardAction icon={MessagesSquare} label="Live Chat" onClick={startContact} />
+            <CardAction icon={MessagesSquare} label="Live Chat" onClick={handleContact} />
           ) : null}
         </ActionGrid>
 
@@ -322,7 +334,7 @@ export function TuitionCard({
         title="Accept this tuition?"
         message={`Accepting "${tuition.title}" will deduct ${tuition.coinCost} coins from your balance and unlock the chat with the student. If the student never replies in 10 days, coins are auto-refunded.`}
         cost={tuition.coinCost}
-        balance={me.coins}
+        balance={me?.coins ?? 0}
         confirmLabel={`Accept for ${tuition.coinCost} coins`}
         loading={connecting}
         onConfirm={confirmConnect}
@@ -331,7 +343,7 @@ export function TuitionCard({
         open={notEnough}
         onOpenChange={setNotEnough}
         needed={tuition.coinCost}
-        balance={me.coins}
+        balance={me?.coins ?? 0}
       />
       <PostTuitionDialog
         open={editOpen}
@@ -352,6 +364,7 @@ export function TuitionCard({
       {!embedded ? (
         <ShareDialog open={shareOpen} onOpenChange={setShareOpen} content={shareContent} onShared={onChanged} />
       ) : null}
+      {LoginPromptDialog}
     </FbCard>
   )
 }

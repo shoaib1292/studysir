@@ -13,7 +13,7 @@ import { CardSkeleton } from '../shared/bits'
 import { EmptyState } from '../shared/EmptyState'
 
 export function TuitionView() {
-  const me = useAppStore((s) => s.me)!
+  const me = useAppStore((s) => s.me)
   const nonce = useAppStore((s) => s.nonce)
 
   const [items, setItems] = useState<FeedItem[] | null>(null)
@@ -42,13 +42,13 @@ export function TuitionView() {
 
   const tuitions = (items ?? []).filter((i) => i.kind === 'tuition')
   const openRequests = tuitions.filter((i) => i.kind === 'tuition' && i.tuition.status === 'OPEN')
-  const myPosts = tuitions.filter((i) => i.kind === 'tuition' && i.tuition.authorId === me.id)
+  const myPosts = tuitions.filter((i) => i.kind === 'tuition' && me && i.tuition.authorId === me.id)
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-4">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-xl font-bold">Tution Requests</h1>
-        {me.role !== 'TEACHER' ? (
+        {me?.role !== 'TEACHER' ? (
           <Button onClick={() => setPostOpen(true)}>
             <GraduationCap className="size-4" />
             Post Tution
@@ -77,12 +77,12 @@ export function TuitionView() {
               icon={GraduationCap}
               title="No open requests right now"
               hint={
-                me.role === 'TEACHER'
+                me?.role === 'TEACHER'
                   ? 'When students or parents post new tuition, they will appear here.'
                   : 'Post your tuition need and teachers will approach you.'
               }
               action={
-                me.role !== 'TEACHER' ? (
+                me?.role !== 'TEACHER' ? (
                   <Button size="sm" onClick={() => setPostOpen(true)}>
                     Post Tution
                   </Button>
@@ -105,7 +105,7 @@ export function TuitionView() {
               title="You haven’t posted any tuition yet"
               hint="Your posts and the teachers who contacted you will show up here."
               action={
-                me.role !== 'TEACHER' ? (
+                me?.role !== 'TEACHER' ? (
                   <Button size="sm" onClick={() => setPostOpen(true)}>
                     Post Tution
                   </Button>

@@ -5,7 +5,7 @@
 // original post embedded inside the wrapper card, exactly like Facebook.
 // This composer still offers copy-text / WhatsApp of the rich post content.
 import { useEffect, useMemo, useState } from 'react'
-import { Check, Copy, Loader2, MessageCircle, Share2 } from 'lucide-react'
+import { Check, Copy, Facebook, Linkedin, Link, Loader2, MessageCircle, Send, Share2, Twitter } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -178,15 +178,27 @@ export function ShareDialog({
   content: ShareContent | null
   onShared?: () => void
 }) {
-  const me = useAppStore((s) => s.me)!
+  const me = useAppStore((s) => s.me)
   const [caption, setCaption] = useState('')
   const [copied, setCopied] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const text = useMemo(() => (content ? composeShareText(content) : ''), [content])
 
+  // Generate shareable link
+  const shareLink = useMemo(() => {
+    if (!content) return ''
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
+    return `${baseUrl}/post/${content.targetType.toLowerCase()}-${content.targetId}`
+  }, [content])
+
   // fresh composer each time it opens (like Facebook)
   useEffect(() => {
-    if (open) setCaption('')
+    if (open) {
+      setCaption('')
+      setCopied(false)
+      setLinkCopied(false)
+    }
   }, [open])
 
   if (!content) return null
@@ -207,8 +219,40 @@ export function ShareDialog({
     }
   }
 
-  function openWhatsApp() {
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(shareLink)
+      setLinkCopied(true)
+      toast.success('Link copied!', {
+        description: 'Share this link anywhere - the post will open directly.',
+      })
+      setTimeout(() => setLinkCopied(false), 2000)
+    } catch {
+      toast.error('Could not copy the link')
+    }
+  }
+
+  function shareToWhatsApp() {
+    const shareText = `${content.title}\n\n${shareLink}`
+    window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank', 'noopener,noreferrer')
+  }
+
+  function shareToFacebook() {
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareLink)}`, '_blank', 'noopener,noreferrer')
+  }
+
+  function shareToTwitter() {
+    const tweetText = `Check out this post on StudySir: ${content.title}`
+    window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(shareLink)}&text=${encodeURIComponent(tweetText)}`, '_blank', 'noopener,noreferrer')
+  }
+
+  function shareToLinkedIn() {
+    window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareLink)}`, '_blank', 'noopener,noreferrer')
+  }
+
+  function shareToTelegram() {
+    const shareText = `${content.title}\n\n${shareLink}`
+    window.open(`https://t.me/share/url?url=${encodeURIComponent(shareLink)}&text=${encodeURIComponent(shareText)}`, '_blank', 'noopener,noreferrer')
   }
 
   async function postToFeed() {
@@ -241,9 +285,9 @@ export function ShareDialog({
 
         {/* identity row */}
         <div className="flex items-center gap-2.5">
-          <UserAvatar src={me.avatar} name={me.name} />
+          <UserAvatar src={me?.avatar} name={me?.name ?? 'Guest'} />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-bold leading-tight">{me.name}</p>
+            <p className="truncate text-sm font-bold leading-tight">{me?.name ?? 'Guest'}</p>
             <span className="mt-0.5 inline-block rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
               Anyone on StudySir 🌐
             </span>
@@ -284,33 +328,62 @@ export function ShareDialog({
           </div>
         </div>
 
-        <DialogFooter className="gap-2 sm:justify-between">
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" onClick={() => void copyText()}>
-              {copied ? <Check className="mr-1.5 size-4 text-green-600" /> : <Copy className="mr-1.5 size-4" />}
-              Copy post text
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
-              onClick={openWhatsApp}
-            >
-              <MessageCircle className="mr-1.5 size-4" />
-              WhatsApp
+        {/* Shareable link section */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Link className="size-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Share link (opens directly to this post)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 truncate rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+              {shareLink}
+            </div>
+            <Button variant="outline" size="sm" onClick={copyLink}>
+              {linkCopied ? <Check className="mr-1.5 size-4 text-green-600" /> : <Copy className="mr-1.5 size-4" />}
+              {linkCopied ? 'Copied!' : 'Copy'}
             </Button>
           </div>
+        </div>
+
+        {/* External sharing platforms */}
+        <div className="space-y-3">
+          <p className="text-sm font-medium text-muted-foreground">Share on social media</p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={shareToWhatsApp} className="gap-1.5">
+              <MessageCircle className="size-4 text-green-600" />
+              WhatsApp
+            </Button>
+            <Button variant="outline" size="sm" onClick={shareToFacebook} className="gap-1.5">
+              <Facebook className="size-4 text-blue-600" />
+              Facebook
+            </Button>
+            <Button variant="outline" size="sm" onClick={shareToTwitter} className="gap-1.5">
+              <Twitter className="size-4 text-sky-500" />
+              Twitter
+            </Button>
+            <Button variant="outline" size="sm" onClick={shareToLinkedIn} className="gap-1.5">
+              <Linkedin className="size-4 text-blue-700" />
+              LinkedIn
+            </Button>
+            <Button variant="outline" size="sm" onClick={shareToTelegram} className="gap-1.5">
+              <Send className="size-4 text-sky-500" />
+              Telegram
+            </Button>
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2">
           <Button
             onClick={() => void postToFeed()}
             disabled={submitting}
-            className="bg-[#1877F2] text-white hover:bg-[#166fe5]"
+            className="w-full bg-[#1877F2] text-white hover:bg-[#166fe5]"
           >
             {submitting ? (
               <Loader2 className="mr-1.5 size-4 animate-spin" />
             ) : (
               <Share2 className="mr-1.5 size-4" />
             )}
-            Post to StudySir
+            Share to StudySir Feed
           </Button>
         </DialogFooter>
       </DialogContent>

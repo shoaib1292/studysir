@@ -273,6 +273,7 @@ export default function StudySirApp() {
     )
   }
 
+  // Guest users see the landing page with hero and public feed
   if (!me) {
     return (
       <>

@@ -41,6 +41,7 @@ import { SafeImage } from '../shared/SafeImage'
 import { Textarea } from '@/components/ui/textarea'
 import { UserAvatar } from '../shared/UserAvatar'
 import { timeAgo } from '../shared/format'
+import { useRequireAuth } from '../auth/useRequireAuth'
 
 type CourseWithRating = CourseDTO & { teacherAvgRating?: number }
 
@@ -54,10 +55,11 @@ export function CourseCard({
   /** rendered inside a SharedPostCard wrapper — the Share action is hidden */
   embedded?: boolean
 }) {
-  const me = useAppStore((s) => s.me)!
+  const me = useAppStore((s) => s.me)
   const go = useAppStore((s) => s.go)
   const refreshMe = useAppStore((s) => s.refreshMe)
-  const { fmt } = useMoney(me)
+  const { fmt } = useMoney(me ?? null)
+  const { requireAuth, LoginPromptDialog } = useRequireAuth()
 
   const [liked, setLiked] = useState(course.myLike)
   const [likeCount, setLikeCount] = useState(course.likeCount)
@@ -93,7 +95,15 @@ export function CourseCard({
 
   const teacherRating = (course as CourseWithRating).teacherAvgRating
   const alreadyJoined = !!course.myConnectionId
-  const isMine = course.teacherId === me.id
+  const isMine = me ? course.teacherId === me.id : false
+
+  // Auth-protected action handlers
+  const handleLike = () => requireAuth(toggleLike)
+  const handleReview = () => requireAuth(() => setReviewOpen(true))
+  const handleShare = () => requireAuth(() => setShareOpen(true))
+  const handleQuestion = () => requireAuth(() => setQuestionOpen(true))
+  const handleJoin = () => requireAuth(() => setJoinOpen(true))
+  const handleReport = () => requireAuth(() => setReportOpen(true))
 
   async function toggleLike() {
     const next = !liked
@@ -185,7 +195,7 @@ export function CourseCard({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem
-                  onClick={() => setReportOpen(true)}
+                  onClick={handleReport}
                   className="gap-2 text-red-600 focus:text-red-600"
                 >
                   <Flag className="size-4" />
@@ -218,19 +228,19 @@ export function CourseCard({
       <div className="border-t px-3 pb-2 pt-1.5">
         <StatText>{likeCount} Likes</StatText>
         <ActionGrid count={embedded ? 4 : 5}>
-          <CardAction icon={ThumbsUp} label="Like" active={liked} onClick={toggleLike} />
-          <CardAction icon={MessageSquareText} label="Review" onClick={() => setReviewOpen(true)} />
-          {!embedded ? <CardAction icon={Share2} label="Share" onClick={() => setShareOpen(true)} /> : null}
-          <CardAction icon={HelpCircle} label="Question" disabled={alreadyJoined} onClick={() => setQuestionOpen(true)} />
+          <CardAction icon={ThumbsUp} label="Like" active={liked} onClick={handleLike} />
+          <CardAction icon={MessageSquareText} label="Review" onClick={handleReview} />
+          {!embedded ? <CardAction icon={Share2} label="Share" onClick={handleShare} /> : null}
+          <CardAction icon={HelpCircle} label="Question" disabled={alreadyJoined} onClick={handleQuestion} />
           {alreadyJoined ? (
             <CardAction
               icon={MessagesSquare}
               label="Open Chat"
               primary
-              onClick={() => go('chats', { connectionId: course.myConnectionId! })}
+              onClick={handleJoin}
             />
           ) : (
-            <CardAction icon={Presentation} label="Join Request" primary onClick={() => setJoinOpen(true)} />
+            <CardAction icon={Presentation} label="Join Request" primary onClick={handleJoin} />
           )}
         </ActionGrid>
       </div>
@@ -265,7 +275,7 @@ export function CourseCard({
         title="Request to join this course?"
         message={`Joining "${course.title}" is FREE for you. ${course.teacher.name} will accept the request to unlock the chat (accepting costs the teacher coins).`}
         cost={0}
-        balance={me.coins}
+        balance={me?.coins ?? 0}
         confirmLabel="Send Join Request — Free"
         loading={joining}
         onConfirm={() => enroll()}
@@ -283,6 +293,7 @@ export function CourseCard({
       {!embedded ? (
         <ShareDialog open={shareOpen} onOpenChange={setShareOpen} content={shareContent} onShared={onChanged} />
       ) : null}
+      {LoginPromptDialog}
     </FbCard>
   )
 }

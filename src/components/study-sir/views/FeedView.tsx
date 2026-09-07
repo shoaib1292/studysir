@@ -15,6 +15,7 @@ import { CardSkeleton, FbCard, feedItemKey } from '../shared/bits'
 import { firstName } from '../shared/format'
 import { EmptyState } from '../shared/EmptyState'
 import { UserAvatar } from '../shared/UserAvatar'
+import { useRequireAuth } from '../auth/useRequireAuth'
 
 type FeedType = 'all' | 'tuition' | 'course' | 'good' | 'teacher'
 type ComposerDialog = 'tuition' | 'course' | 'good' | null
@@ -27,9 +28,36 @@ const FILTERS: Array<{ key: FeedType; label: string }> = [
   { key: 'teacher', label: 'Teachers' },
 ]
 
-function ComposerCard({ onOpen }: { onOpen: (d: Exclude<ComposerDialog, null>) => void }) {
-  const me = useAppStore((s) => s.me)!
-  const isTeacher = me.role === 'TEACHER'
+function ComposerCard({
+  onOpen,
+  onLoginRequired,
+}: {
+  onOpen: (d: Exclude<ComposerDialog, null>) => void
+  onLoginRequired: () => void
+}) {
+  const me = useAppStore((s) => s.me)
+  const isGuest = !me
+  const isTeacher = me?.role === 'TEACHER'
+
+  // For guests, show a prompt to login
+  if (isGuest) {
+    return (
+      <FbCard className="p-3">
+        <div className="flex items-center gap-2">
+          <div className="grid size-10 place-items-center rounded-full bg-muted text-muted-foreground">
+            <GraduationCap className="size-5" />
+          </div>
+          <button
+            type="button"
+            onClick={onLoginRequired}
+            className="flex-1 rounded-full bg-muted px-4 py-2.5 text-left text-muted-foreground transition-colors hover:bg-secondary"
+          >
+            Login to post tuition, courses, or sell items
+          </button>
+        </div>
+      </FbCard>
+    )
+  }
 
   return (
     <FbCard className="p-3">
@@ -86,10 +114,14 @@ export function FeedView() {
   const params = useAppStore((s) => s.params)
   const nonce = useAppStore((s) => s.nonce)
   const replace = useAppStore((s) => s.replace)
+  const { requireAuth, LoginPromptDialog } = useRequireAuth()
 
   const [type, setType] = useState<FeedType>('all')
   const [state, setState] = useState<{ key: string; items: FeedItem[] } | null>(null)
   const [dialog, setDialog] = useState<ComposerDialog>(null)
+
+  // Auth-protected dialog opener
+  const openDialog = (d: Exclude<ComposerDialog, null>) => requireAuth(() => setDialog(d))
 
   const q = params.q
   const feedKey = `${type}:${q ?? ''}:${nonce}`
@@ -162,7 +194,7 @@ export function FeedView() {
       </div>
 
       <div className="space-y-4">
-        <ComposerCard onOpen={setDialog} />
+        <ComposerCard onOpen={openDialog} onLoginRequired={() => openDialog('tuition')} />
 
         {items === null ? (
           <>
@@ -196,6 +228,7 @@ export function FeedView() {
         onOpenChange={(o) => !o && setDialog(null)}
         onPosted={refresh}
       />
+      {LoginPromptDialog}
       </div>
 
       {/* Right rail: suggested teachers + live contacts (xl+) */}
