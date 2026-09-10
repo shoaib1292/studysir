@@ -33,7 +33,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { api, errorMessage } from '@/lib/api'
-import { fileToCompactDataUrl } from '@/lib/image'
 import type { ConnectionDTO, MessageDTO, MessageReactionGroup } from '@/lib/types'
 import { emitTyping, getSocket, onEvent, offEvent, RT } from '@/lib/socket'
 import { toast } from 'sonner'
@@ -904,7 +903,7 @@ function ChatThread({
     setSending(true)
     const optimisticId = `tmp-${Date.now()}`
     try {
-      const image = await fileToCompactDataUrl(file)
+      const image = (await api.uploadImage('chat-images', file)).url
       // optimistic bubble with the local preview
       const optimistic: MessageDTO = {
         id: optimisticId,

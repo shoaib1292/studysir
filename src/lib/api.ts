@@ -84,6 +84,39 @@ export async function request<T>(
   return data as T
 }
 
+/** Upload an image to an InsForge storage bucket and return its public URL. */
+export async function uploadImage(
+  bucket: 'avatars' | 'covers' | 'goods' | 'course-covers' | 'chat-images',
+  file: File
+): Promise<{ url: string; key: string; bucket: string }> {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('bucket', bucket)
+
+  const res = await fetch('/api/upload', {
+    method: 'POST',
+    credentials: 'include',
+    body: form,
+  })
+
+  let data: unknown = null
+  try {
+    data = await res.json()
+  } catch {
+    // non-JSON body
+  }
+
+  if (!res.ok) {
+    const msg =
+      data && typeof data === 'object' && 'error' in data && typeof (data as { error: unknown }).error === 'string'
+        ? (data as { error: string }).error
+        : `Upload failed (${res.status})`
+    throw new ApiError(msg, res.status, data)
+  }
+
+  return data as { url: string; key: string; bucket: string }
+}
+
 export interface ProfileResponse {
   user: UserDTO
   stats: ProfileStats
@@ -164,6 +197,9 @@ export const api = {
   adminLogin: (email: string, password: string) =>
     request<{ user: UserDTO }>('/api/auth/admin-login', { method: 'POST', body: { email, password } }),
   logout: () => request<{ ok: true }>('/api/session', { method: 'DELETE' }),
+
+  // uploads (InsForge storage)
+  uploadImage,
 
   // users / profile
   getUsers: () => request<{ users: UserDTO[] }>('/api/users'),

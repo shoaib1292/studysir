@@ -1,0 +1,154 @@
+services:
+  postgres:
+    image: insforge/postgres-all:15.13.2
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres || pg_isready -h 127.0.0.1 -U ${POSTGRES_USER:-insforge}"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - insforge-network
+
+  postgrest:
+    image: postgrest/postgrest:v12.2.12
+    restart: unless-stopped
+    environment:
+      PGRST_DB_URI: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      PGRST_OPENAPI_SERVER_PROXY_URI: ${DOMAIN:-http://localhost:7130}
+      PGRST_DB_SCHEMA: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_CHANNEL_ENABLED: "true"
+      PGRST_DB_CHANNEL: pgrst
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ > /dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - insforge-network
+
+  insforge:
+    image: insforge/insforge-oss:latest
+    working_dir: /app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      postgrest:
+        condition: service_started
+    environment:
+      PORT: "7130"
+      PROJECT_ROOT: /app
+      API_BASE_URL: ${DOMAIN:-http://localhost:7130}
+      VITE_API_BASE_URL: ${DOMAIN:-http://localhost:7130}
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      POSTGREST_BASE_URL: http://postgrest:3000
+      DENO_RUNTIME_URL: http://deno:7133
+      LOGS_DIR: /insforge-logs
+      STORAGE_DIR: /insforge-storage
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      STRIPE_TEST_SECRET_KEY: ${STRIPE_TEST_SECRET_KEY:-}
+      STRIPE_LIVE_SECRET_KEY: ${STRIPE_LIVE_SECRET_KEY:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:-}
+      MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID:-}
+      MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET:-}
+      LINKEDIN_CLIENT_ID: ${LINKEDIN_CLIENT_ID:-}
+      LINKEDIN_CLIENT_SECRET: ${LINKEDIN_CLIENT_SECRET:-}
+      X_CLIENT_ID: ${X_CLIENT_ID:-}
+      X_CLIENT_SECRET: ${X_CLIENT_SECRET:-}
+      APPLE_CLIENT_ID: ${APPLE_CLIENT_ID:-}
+      APPLE_CLIENT_SECRET: ${APPLE_CLIENT_SECRET:-}
+    volumes:
+      - storage-data:/insforge-storage
+      - insforge-logs:/insforge-logs
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - insforge-network
+    labels:
+      - "coolify.managed=true"
+      - "coolify.type=application"
+
+  deno:
+    image: insforge/deno-runtime:latest
+    working_dir: /app
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - postgrest
+    environment:
+      PORT: "7133"
+      DENO_ENV: production
+      DENO_DIR: /deno-dir
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGREST_BASE_URL: http://postgrest:3000
+      WORKER_TIMEOUT_MS: ${WORKER_TIMEOUT_MS:-60000}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      JWT_SECRET: ${JWT_SECRET}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-}
+      AWS_REGION: ${AWS_REGION:-}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-}
+    volumes:
+      - deno_cache:/deno-dir
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:7133/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - insforge-network
+
+volumes:
+  postgres-data:
+    driver: local
+  deno_cache:
+    driver: local
+  storage-data:
+    driver: local
+  insforge-logs:
+    driver: local
+
+networks:
+  insforge-network:
+    driver: bridge

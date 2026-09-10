@@ -34,7 +34,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { api, errorMessage } from '@/lib/api'
-import { fileToCompactDataUrl } from '@/lib/image'
 import type { AiAgentDTO, AiPersona } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { UserAvatar } from '../../shared/UserAvatar'
@@ -291,7 +290,7 @@ function AgentDialog({
     if (!file) return
     setUploading(true)
     try {
-      set('avatar', await fileToCompactDataUrl(file))
+      set('avatar', (await api.uploadImage('avatars', file)).url)
     } catch (err) {
       toast.error('Could not process image', { description: errorMessage(err) })
     } finally {

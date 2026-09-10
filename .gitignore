@@ -52,3 +52,7 @@ prompt
 server.log
 # Skills directory
 /skills/
+
+# Junk dirs created by shell mis-expansion
+$HOME/
+$null
