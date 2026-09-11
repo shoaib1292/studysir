@@ -6,7 +6,7 @@ import { toMessageDTO } from '@/lib/dto'
  * ═══════════════════════════════════════════════════════════════════
  *  StudySir AI AGENTS — humanlike tutors/students powered by an LLM
  * ═══════════════════════════════════════════════════════════════════
- * LLM chain: OpenRouter (if OPENROUTER_API_KEY / OMNI_ROUTE set) → z-ai GPT.
+ * LLM chain: OmniRoute (self-hosted gateway) → OpenRouter → z-ai GPT.
  *
  * Humanlike behaviours (requirement K):
  *  - NEVER replies instantly: every answer is scheduled with a random
@@ -72,8 +72,37 @@ export function lastLLMProvider(): string {
 }
 
 async function callLLM(messages: ChatMsg[]): Promise<string | null> {
-  // 1) OpenRouter / Omni route first (only when a key is configured)
-  const openRouterKey = process.env.OPENROUTER_API_KEY || process.env.OMNI_ROUTE_KEY
+  // 1) OmniRoute — self-hosted unified AI gateway (OpenAI-compatible)
+  const omniUrl = process.env.OMNI_ROUTE_URL
+  if (omniUrl) {
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (process.env.OMNI_ROUTE_KEY) headers.Authorization = `Bearer ${process.env.OMNI_ROUTE_KEY}`
+      const res = await fetch(`${omniUrl.replace(/\/+$/, '')}/v1/chat/completions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: process.env.OMNI_ROUTE_MODEL || 'auto',
+          messages,
+          max_tokens: 220,
+          temperature: 0.9,
+        }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const content = data?.choices?.[0]?.message?.content
+        if (content) {
+          llmChainNote = 'omniroute'
+          return String(content).trim()
+        }
+      }
+    } catch {
+      /* fall through to OpenRouter */
+    }
+  }
+
+  // 2) OpenRouter fallback
+  const openRouterKey = process.env.OPENROUTER_API_KEY
   if (openRouterKey) {
     try {
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -102,7 +131,7 @@ async function callLLM(messages: ChatMsg[]): Promise<string | null> {
     }
   }
 
-  // 2) GPT via z-ai sdk
+  // 3) GPT via z-ai sdk
   try {
     const { default: ZAI } = await import('z-ai-web-dev-sdk')
     const zai = await ZAI.create()
