@@ -19,6 +19,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { api, errorMessage } from '@/lib/api'
 import type { TuitionPostDTO } from '@/lib/types'
 import { clientCoinCost } from '../shared/constants'
+import { compressImageFile } from '@/lib/image'
 import { SafeImage } from '../shared/SafeImage'
 
 export function PostTuitionDialog({
@@ -88,7 +89,8 @@ export function PostTuitionDialog({
     }
     setUploading(true)
     try {
-      const { url } = await api.uploadImage('tuition-images', file)
+      const compressed = await compressImageFile(file)
+      const { url } = await api.uploadImage('tuition-images', compressed)
       setImage(url)
       toast.success('Photo attached')
     } catch (e) {

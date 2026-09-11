@@ -22,13 +22,19 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
     const post = await res.json()
 
+    const ogParams = new URLSearchParams()
+    if (post.title) ogParams.set('title', post.title)
+    if (post.price) ogParams.set('price', post.price)
+    if (post.targetType) ogParams.set('type', post.targetType)
+    const ogImage = post.image ?? `${baseUrl}/api/og?${ogParams.toString()}`
+
     return {
       title: `${post.title} — StudySir`,
       description: post.description?.slice(0, 160) || 'Check out this post on StudySir',
       openGraph: {
         title: post.title,
         description: post.description?.slice(0, 200) || 'Check out this post on StudySir',
-        images: [post.image ?? `${baseUrl}/images/cover-classroom.png`],
+        images: [ogImage],
         type: 'website',
         siteName: 'StudySir',
       },
@@ -36,7 +42,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
         card: 'summary_large_image',
         title: post.title,
         description: post.description?.slice(0, 200) || 'Check out this post on StudySir',
-        images: [post.image ?? `${baseUrl}/images/cover-classroom.png`],
+        images: [ogImage],
       },
     }
   } catch {

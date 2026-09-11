@@ -15,7 +15,8 @@ import type { AvailabilityDTO } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store/useAppStore'
 import { useCurrencyStore, useMoney } from '@/store/useCurrencyStore'
-import { AVATAR_OPTIONS, COVER_OPTIONS, ROLE_LABEL } from '../shared/constants'
+import { ROLE_LABEL } from '../shared/constants'
+import { compressImageFile } from '@/lib/image'
 import { FbCard } from '../shared/bits'
 import { InstallAppCard } from '../shared/InstallAppCard'
 import { KycCard } from '../shared/KycCard'
@@ -128,7 +129,8 @@ export function SettingsView() {
     if (field === 'avatar') setUploadingAvatar(true)
     else setUploadingCover(true)
     try {
-      const { url } = await api.uploadImage(bucket, file)
+      const compressed = await compressImageFile(file)
+      const { url } = await api.uploadImage(bucket, compressed)
       set(field)(url)
       toast.success(field === 'avatar' ? 'Avatar uploaded' : 'Cover uploaded')
     } catch (e) {
@@ -189,88 +191,59 @@ export function SettingsView() {
       <section className="space-y-3">
         <SectionTitle>Profile</SectionTitle>
         <FbCard className="space-y-4 p-4">
-          {/* Avatar + cover pickers */}
+          {/* Avatar + cover: upload your own (no preset demos) */}
           <div className="flex flex-wrap items-start gap-4">
             <UserAvatar src={form.avatar || null} name={form.name || me.name} className="size-16" />
-            <div className="min-w-0 flex-1 space-y-2">
-              <div>
-                <Label className="text-xs text-muted-foreground">Avatar</Label>
-                <div className="mt-1.5 grid grid-cols-4 gap-2 sm:grid-cols-8">
-                  {AVATAR_OPTIONS.map((opt) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      aria-label={`Pick avatar ${opt}`}
-                      onClick={() => set('avatar')(opt)}
-                      className={cn(
-                        'size-12 overflow-hidden rounded-full ring-2 transition-all',
-                        form.avatar === opt ? 'ring-[#1877F2]' : 'ring-transparent hover:ring-muted-foreground/40'
-                      )}
-                    >
-                      <SafeImage src={opt} alt="avatar option" className="h-12 w-12 object-cover" iconClassName="size-4" />
-                    </button>
-                  ))}
-                </div>
-                <div className="mt-2 flex items-center gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={() => avatarInputRef.current?.click()} disabled={uploadingAvatar}>
-                    {uploadingAvatar ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <ImagePlus className="mr-1.5 size-4" />}
-                    Upload avatar
-                  </Button>
-                  <input
-                    ref={avatarInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      void uploadPhoto('avatars', file, 'avatar')
-                    }}
-                  />
-                </div>
+            <div className="min-w-0 flex-1 space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => avatarInputRef.current?.click()} disabled={uploadingAvatar}>
+                  {uploadingAvatar ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <ImagePlus className="mr-1.5 size-4" />}
+                  {form.avatar ? 'Change avatar' : 'Upload avatar'}
+                </Button>
+                {form.avatar ? (
+                  <button
+                    type="button"
+                    onClick={() => set('avatar')('')}
+                    className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted-foreground/20"
+                  >
+                    <X className="size-3.5" /> Remove
+                  </button>
+                ) : null}
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    void uploadPhoto('avatars', file, 'avatar')
+                  }}
+                />
               </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Cover</Label>
-                <div className="mt-1.5 flex gap-2">
-                  {COVER_OPTIONS.map((opt) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      aria-label={`Pick cover ${opt}`}
-                      onClick={() => set('coverImage')(opt)}
-                      className={cn(
-                        'h-12 w-20 overflow-hidden rounded-lg ring-2 transition-all',
-                        form.coverImage === opt ? 'ring-[#1877F2]' : 'ring-transparent hover:ring-muted-foreground/40'
-                      )}
-                    >
-                      <SafeImage src={opt} alt="cover option" className="h-12 w-20 object-cover" iconClassName="size-4" />
-                    </button>
-                  ))}
-                </div>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  {form.coverImage && !COVER_OPTIONS.includes(form.coverImage) ? (
-                    <button
-                      type="button"
-                      onClick={() => set('coverImage')('')}
-                      className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted-foreground/20"
-                    >
-                      <X className="size-3.5" /> Remove cover
-                    </button>
-                  ) : null}
-                  <Button type="button" variant="outline" size="sm" onClick={() => coverInputRef.current?.click()} disabled={uploadingCover}>
-                    {uploadingCover ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <ImagePlus className="mr-1.5 size-4" />}
-                    Upload cover
-                  </Button>
-                  <input
-                    ref={coverInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      void uploadPhoto('covers', file, 'coverImage')
-                    }}
-                  />
-                </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => coverInputRef.current?.click()} disabled={uploadingCover}>
+                  {uploadingCover ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <ImagePlus className="mr-1.5 size-4" />}
+                  {form.coverImage ? 'Change cover' : 'Upload cover'}
+                </Button>
+                {form.coverImage ? (
+                  <button
+                    type="button"
+                    onClick={() => set('coverImage')('')}
+                    className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted-foreground/20"
+                  >
+                    <X className="size-3.5" /> Remove cover
+                  </button>
+                ) : null}
+                <input
+                  ref={coverInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    void uploadPhoto('covers', file, 'coverImage')
+                  }}
+                />
               </div>
             </div>
           </div>

@@ -37,7 +37,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           targetId,
           title: post.title,
           description: post.description,
-          image: post.image || '/images/cover-classroom.png',
+          image: post.image || null,
           authorName: post.author?.name || 'Unknown',
           price: post.feeMin != null ? `PKR ${post.feeMin.toLocaleString()} - ${post.feeMax?.toLocaleString()}` : null,
         }
@@ -53,7 +53,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           targetId,
           title: post.title,
           description: post.description,
-          image: post.cover || '/images/cover-classroom.png',
+          image: post.cover || null,
           authorName: post.teacher?.name || 'Unknown',
           price: post.fee != null ? `PKR ${post.fee.toLocaleString()}` : null,
         }
@@ -69,7 +69,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           targetId,
           title: post.title,
           description: post.description,
-          image: post.image || '/images/cover-classroom.png',
+          image: post.image || null,
           authorName: post.seller?.name || 'Unknown',
           price: post.price != null ? `PKR ${post.price.toLocaleString()}` : null,
         }
@@ -84,7 +84,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           targetId,
           title: post.headline || post.name || 'Teacher',
           description: post.bio || 'Teacher on StudySir',
-          image: post.avatar || '/images/cover-classroom.png',
+          image: post.avatar || null,
           authorName: post.name,
           price: post.feeMin != null ? `PKR ${post.feeMin.toLocaleString()} - ${(post.feeMax ?? post.feeMin).toLocaleString()}` : null,
         }

@@ -3,25 +3,6 @@ import type { ConnectionStatus } from '@/lib/types'
 /** Cost of a direct teacher contact / hire when no tuition post is involved. */
 export const DIRECT_CONTACT_COST = 10
 
-export const AVATAR_OPTIONS = [
-  '/images/avatar-warren.png',
-  '/images/avatar-student.png',
-  '/images/avatar-parent.png',
-  '/images/avatar-mukesh.png',
-  '/images/avatar-adani.png',
-  '/images/avatar-elon.png',
-  '/images/avatar-alina.png',
-  '/images/avatar-noman.png',
-]
-
-export const COVER_OPTIONS = ['/images/cover-meeting.png', '/images/cover-classroom.png']
-
-export const GOOD_IMAGE_OPTIONS = [
-  '/images/book-finance.png',
-  '/images/course-english.png',
-  '/images/cover-classroom.png',
-]
-
 /**
  * Client-side mirror of the server's computeCoinCost (kept in sync manually —
  * src/lib/coins.ts imports prisma so it can't be pulled into the client bundle).

@@ -16,8 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { api, errorMessage } from '@/lib/api'
-import { cn } from '@/lib/utils'
-import { COVER_OPTIONS } from '../shared/constants'
+import { compressImageFile } from '@/lib/image'
 import { SafeImage } from '../shared/SafeImage'
 
 export function PostCourseDialog({
@@ -31,7 +30,7 @@ export function PostCourseDialog({
 }) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [cover, setCover] = useState<string>(COVER_OPTIONS[0])
+  const [cover, setCover] = useState<string>('')
   const [language, setLanguage] = useState('')
   const [subject, setSubject] = useState('')
   const [duration, setDuration] = useState('')
@@ -45,7 +44,6 @@ export function PostCourseDialog({
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const valid = title.trim().length > 2 && description.trim().length > 2 && (Number(fee) || 0) > 0
-  const isCustomCover = Boolean(cover) && !COVER_OPTIONS.includes(cover)
 
   async function pickCover(file: File | undefined) {
     if (!file || uploading) return
@@ -55,7 +53,8 @@ export function PostCourseDialog({
     }
     setUploading(true)
     try {
-      const { url } = await api.uploadImage('course-covers', file)
+      const compressed = await compressImageFile(file)
+      const { url } = await api.uploadImage('course-covers', compressed)
       setCover(url)
       toast.success('Cover uploaded')
     } catch (e) {
@@ -97,7 +96,7 @@ export function PostCourseDialog({
   function reset() {
     setTitle('')
     setDescription('')
-    setCover(COVER_OPTIONS[0])
+    setCover('')
     setLanguage('')
     setSubject('')
     setDuration('')
@@ -127,50 +126,44 @@ export function PostCourseDialog({
           </div>
           <div className="grid gap-1.5">
             <Label>Cover image</Label>
-            <div className="grid grid-cols-3 gap-2">
-              {COVER_OPTIONS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setCover(c)}
-                  className={cn(
-                    'overflow-hidden rounded-lg border-2 transition-all',
-                    cover === c ? 'border-[#1877F2] ring-2 ring-[#1877F2]/30' : 'border-transparent hover:border-muted-foreground/30'
-                  )}
-                >
-                  <SafeImage src={c} alt="cover" className="aspect-video w-full object-cover" />
-                </button>
-              ))}
-            </div>
-            {isCustomCover ? (
-              <div className="relative mt-2 overflow-hidden rounded-lg border">
+            {cover ? (
+              <div className="relative overflow-hidden rounded-lg border">
                 <SafeImage src={cover} alt="cover" className="aspect-video w-full object-cover" />
                 <button
                   type="button"
-                  aria-label="Remove uploaded cover"
-                  onClick={() => setCover(COVER_OPTIONS[0])}
+                  aria-label="Remove cover"
+                  onClick={() => setCover('')}
                   className="absolute right-2 top-2 grid size-7 place-items-center rounded-full bg-black/60 text-white hover:bg-black/80"
                 >
                   <X className="size-4" />
                 </button>
               </div>
-            ) : null}
-            <div className="mt-2 flex items-center gap-2">
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="flex h-28 items-center justify-center gap-2 rounded-lg border-2 border-dashed text-sm font-medium text-muted-foreground transition-colors hover:border-[#1877F2] hover:text-[#1877F2] disabled:opacity-60"
+              >
+                {uploading ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
+                {uploading ? 'Uploading…' : 'Upload cover photo'}
+              </button>
+            )}
+            {cover ? (
               <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                {uploading ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <ImagePlus className="mr-1.5 size-4" />}
-                Upload photo
+                Change cover
               </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  void pickCover(file)
-                }}
-              />
-            </div>
+            ) : null}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                void pickCover(file)
+              }}
+            />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
