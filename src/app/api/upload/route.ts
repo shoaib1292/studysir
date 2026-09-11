@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireSessionUser, HttpError } from '@/lib/session'
 import { insforge } from '@/lib/insforge'
 
-const ALLOWED_BUCKETS = ['avatars', 'covers', 'goods', 'course-covers', 'chat-images']
+const ALLOWED_BUCKETS = ['avatars', 'covers', 'goods', 'course-covers', 'chat-images', 'tuition-images']
 
 function extFor(type: string, name: string): string {
   const map: Record<string, string> = {

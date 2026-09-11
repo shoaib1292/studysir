@@ -37,7 +37,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           targetId,
           title: post.title,
           description: post.description,
-          image: '/images/cover-classroom.png',
+          image: post.image || '/images/cover-classroom.png',
           authorName: post.author?.name || 'Unknown',
           price: post.feeMin != null ? `PKR ${post.feeMin.toLocaleString()} - ${post.feeMax?.toLocaleString()}` : null,
         }

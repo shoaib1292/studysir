@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { api } from '@/lib/api'
 import { FeedItem, UserDTO } from '@/lib/types'
 import { FeedItemCard } from '@/components/study-sir/cards/FeedItemCard'
+import { LoginPromptDialog } from '@/components/study-sir/auth/LoginPromptDialog'
 
 interface PostData {
   targetType: string
@@ -34,17 +35,22 @@ export default function PublicPostView() {
   const [feedItem, setFeedItem] = useState<FeedItem | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [authOpen, setAuthOpen] = useState(false)
 
   const postId = params?.id as string
 
-  // Check session on mount - this is the key fix!
+  // Check session on mount — guests get a dismissible login prompt (FB-style).
   useEffect(() => {
     api.getSession()
       .then((d) => {
-        if (d.user) setMe(d.user)
+        if (d.user) {
+          setMe(d.user)
+        } else {
+          setAuthOpen(true)
+        }
       })
       .catch(() => {
-        // Not logged in - stay as guest
+        setAuthOpen(true)
       })
   }, [])
 
@@ -154,16 +160,12 @@ export default function PublicPostView() {
             StudySir
           </Link>
           <div className="flex items-center gap-2">
-            <Link href="/">
-              <Button variant="outline" size="sm" className="rounded-full">
-                Log in
-              </Button>
-            </Link>
-            <Link href="/">
-              <Button size="sm" className="rounded-full bg-[#1877F2] hover:bg-[#166fe5]">
-                Sign up free
-              </Button>
-            </Link>
+            <Button variant="outline" size="sm" className="rounded-full" onClick={() => setAuthOpen(true)}>
+              Log in
+            </Button>
+            <Button size="sm" className="rounded-full bg-[#1877F2] hover:bg-[#166fe5]" onClick={() => setAuthOpen(true)}>
+              Sign up free
+            </Button>
           </div>
         </div>
       </header>
@@ -218,11 +220,12 @@ export default function PublicPostView() {
                 <p className="font-semibold">Interested in this {post.targetType}?</p>
                 <p className="text-sm text-muted-foreground">Join StudySir to connect with {post.authorName}</p>
               </div>
-              <Link href="/">
-                <Button className="rounded-full bg-[#1877F2] px-6 hover:bg-[#166fe5] whitespace-nowrap">
-                  Join Free
-                </Button>
-              </Link>
+              <Button
+                className="rounded-full bg-[#1877F2] px-6 hover:bg-[#166fe5] whitespace-nowrap"
+                onClick={() => setAuthOpen(true)}
+              >
+                Join Free
+              </Button>
             </div>
           </div>
         </div>
@@ -232,6 +235,29 @@ export default function PublicPostView() {
           StudySir © {new Date().getFullYear()} — Connecting Students &amp; Teachers
         </p>
       </main>
+
+      {/* Floating login bar (dismissible prompt reappears here) */}
+      {!me ? (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-card/95 p-3 shadow-[0_-4px_24px_rgba(0,0,0,0.08)] backdrop-blur">
+          <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-2">
+            <p className="min-w-0 text-sm text-muted-foreground">
+              <span className="font-semibold text-foreground">See full details</span> — log in to connect with {post.authorName}
+            </p>
+            <Button size="sm" className="shrink-0 rounded-full bg-[#1877F2] hover:bg-[#166fe5]" onClick={() => setAuthOpen(true)}>
+              Log in / Sign up
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      <LoginPromptDialog
+        open={authOpen}
+        onOpenChange={setAuthOpen}
+        onSuccess={(u) => {
+          setMe(u)
+          setAuthOpen(false)
+        }}
+      />
     </div>
   )
 }

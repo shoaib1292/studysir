@@ -82,6 +82,7 @@ model TuitionPost {
   author        User     @relation(fields: [authorId], references: [id])
   title         String
   description   String
+  image         String? // optional photo attached to the tuition request
   mode          String   @default("ONLINE")
   city          String?
   subjects      String?

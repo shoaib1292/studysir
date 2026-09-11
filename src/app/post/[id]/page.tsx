@@ -28,7 +28,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       openGraph: {
         title: post.title,
         description: post.description?.slice(0, 200) || 'Check out this post on StudySir',
-        images: post.image ? [post.image] : ['/images/cover-classroom.png'],
+        images: [post.image ?? `${baseUrl}/images/cover-classroom.png`],
         type: 'website',
         siteName: 'StudySir',
       },
@@ -36,7 +36,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
         card: 'summary_large_image',
         title: post.title,
         description: post.description?.slice(0, 200) || 'Check out this post on StudySir',
-        images: post.image ? [post.image] : ['/images/cover-classroom.png'],
+        images: [post.image ?? `${baseUrl}/images/cover-classroom.png`],
       },
     }
   } catch {

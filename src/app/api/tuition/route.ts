@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
         authorId: me.id,
         title: String(body.title).slice(0, 200),
         description: String(body.description).slice(0, 2000),
+        image: body.image ? String(body.image) : null,
         mode,
         city: body.city ? String(body.city).slice(0, 100) : null,
         subjects: body.subjects ? String(body.subjects).slice(0, 200) : null,

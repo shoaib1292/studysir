@@ -103,6 +103,7 @@ export async function toTuitionDTO(t: AnyRecord, viewerId?: string | null): Prom
     author: pickUser(t.author as AnyRecord),
     title: t.title as string,
     description: t.description as string,
+    image: (t.image as string) ?? null,
     mode: t.mode as TuitionPostDTO['mode'],
     city: (t.city as string) ?? null,
     subjects: (t.subjects as string) ?? null,

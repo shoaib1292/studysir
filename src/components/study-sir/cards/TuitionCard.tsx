@@ -36,6 +36,7 @@ import { ReportDialog } from '../dialogs/ReportDialog'
 import { ShareDialog, type ShareContent } from '../dialogs/ShareDialog'
 import { ActionGrid, CardAction, DetailRow, FbCard, StatText, TuitionStatusBadge } from '../shared/bits'
 import { RichText } from '../shared/RichText'
+import { SafeImage } from '../shared/SafeImage'
 import { UserAvatar } from '../shared/UserAvatar'
 import { timeAgo } from '../shared/format'
 import { useMoney } from '@/store/useCurrencyStore'
@@ -92,6 +93,7 @@ export function TuitionCard({
     ],
     description: tuition.description,
     price: `💰 Fee range: ${fmt(tuition.feeMin)} – ${fmt(tuition.feeMax)}`,
+    image: tuition.image,
   }
 
   async function toggleLike() {
@@ -272,6 +274,7 @@ export function TuitionCard({
       {/* Body */}
       <div className="space-y-3 px-4 pb-4">
         <h3 className="text-[17px] font-bold leading-snug">{tuition.title}</h3>
+        {tuition.image ? <SafeImage src={tuition.image} alt={tuition.title} className="aspect-[4/3] w-full rounded-lg object-cover" /> : null}
         <RichText text={tuition.description} keywords={[tuition.subjects, tuition.city]} clamp={4} />
         <div className="space-y-1.5 rounded-lg bg-muted/60 p-3">
           <DetailRow icon={Languages} label="Languages" value={tuition.languages} />

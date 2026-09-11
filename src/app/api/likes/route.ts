@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireSessionUser, HttpError } from '@/lib/session'
 
-const VALID = ['TEACHER', 'COURSE', 'GOOD', 'TUITION']
+const VALID = ['TEACHER', 'COURSE', 'GOOD', 'TUITION', 'SHARED']
 
 export async function POST(req: NextRequest) {
   try {

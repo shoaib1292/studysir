@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Ban, Loader2, LogOut, MonitorCog, Moon, Save, Sun } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Ban, ImagePlus, Loader2, LogOut, MonitorCog, Moon, Save, Sun, X } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -110,10 +110,39 @@ export function SettingsView() {
     coverImage: me.coverImage ?? '',
   }))
   const [saving, setSaving] = useState(false)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [uploadingCover, setUploadingCover] = useState(false)
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+  const coverInputRef = useRef<HTMLInputElement>(null)
 
   const isTeacher = me.role === 'TEACHER'
 
   const set = (key: keyof SettingsForm) => (value: string) => setForm((f) => ({ ...f, [key]: value }))
+
+  async function uploadPhoto(bucket: 'avatars' | 'covers', file: File | undefined, field: 'avatar' | 'coverImage') {
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please pick an image file')
+      return
+    }
+    if (field === 'avatar') setUploadingAvatar(true)
+    else setUploadingCover(true)
+    try {
+      const { url } = await api.uploadImage(bucket, file)
+      set(field)(url)
+      toast.success(field === 'avatar' ? 'Avatar uploaded' : 'Cover uploaded')
+    } catch (e) {
+      toast.error('Could not upload image', { description: errorMessage(e) })
+    } finally {
+      if (field === 'avatar') {
+        setUploadingAvatar(false)
+        if (avatarInputRef.current) avatarInputRef.current.value = ''
+      } else {
+        setUploadingCover(false)
+        if (coverInputRef.current) coverInputRef.current.value = ''
+      }
+    }
+  }
 
   async function save() {
     if (saving) return
@@ -182,6 +211,22 @@ export function SettingsView() {
                     </button>
                   ))}
                 </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => avatarInputRef.current?.click()} disabled={uploadingAvatar}>
+                    {uploadingAvatar ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <ImagePlus className="mr-1.5 size-4" />}
+                    Upload avatar
+                  </Button>
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      void uploadPhoto('avatars', file, 'avatar')
+                    }}
+                  />
+                </div>
               </div>
               <div>
                 <Label className="text-xs text-muted-foreground">Cover</Label>
@@ -200,6 +245,31 @@ export function SettingsView() {
                       <SafeImage src={opt} alt="cover option" className="h-12 w-20 object-cover" iconClassName="size-4" />
                     </button>
                   ))}
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {form.coverImage && !COVER_OPTIONS.includes(form.coverImage) ? (
+                    <button
+                      type="button"
+                      onClick={() => set('coverImage')('')}
+                      className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted-foreground/20"
+                    >
+                      <X className="size-3.5" /> Remove cover
+                    </button>
+                  ) : null}
+                  <Button type="button" variant="outline" size="sm" onClick={() => coverInputRef.current?.click()} disabled={uploadingCover}>
+                    {uploadingCover ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <ImagePlus className="mr-1.5 size-4" />}
+                    Upload cover
+                  </Button>
+                  <input
+                    ref={coverInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      void uploadPhoto('covers', file, 'coverImage')
+                    }}
+                  />
                 </div>
               </div>
             </div>

@@ -37,6 +37,9 @@ export function LoginPromptDialog({
   const [name, setName] = useState('')
   const [role, setRole] = useState('STUDENT')
   const [busy, setBusy] = useState(false)
+  const [verificationEmail, setVerificationEmail] = useState<string | null>(null)
+  const [verifyCode, setVerifyCode] = useState('')
+  const [verifyBusy, setVerifyBusy] = useState(false)
 
   // Load demo users when dialog opens
   if (open && users.length === 0) {
@@ -72,13 +75,47 @@ export function LoginPromptDialog({
         toast.success(`Welcome back, ${user.name}!`)
         done(user)
       } else {
-        const { user } = await api.signup({ name: name.trim(), email: email.trim(), password, role })
-        toast.success(`Account created — welcome, ${user.name}!`)
-        done(user)
+        const res = await api.signup({ name: name.trim(), email: email.trim(), password, role })
+        if (res.requireEmailVerification) {
+          setVerificationEmail(res.email ?? email.trim())
+          setVerifyCode('')
+          toast.success('Verify your email', { description: 'We sent a 6-digit code to your inbox.' })
+        } else if (res.user) {
+          toast.success(`Account created — welcome, ${res.user.name}!`)
+          done(res.user)
+        }
       }
     } catch (err) {
       toast.error(mode === 'login' ? 'Login failed' : 'Signup failed', { description: errorMessage(err) })
       setBusy(false)
+    }
+  }
+
+  async function submitVerify(e: React.FormEvent) {
+    e.preventDefault()
+    if (!verificationEmail || verifyBusy) return
+    setVerifyBusy(true)
+    try {
+      const { user } = await api.verifyEmail(verificationEmail, verifyCode.trim())
+      toast.success(`Welcome, ${user.name}!`)
+      done(user)
+    } catch (err) {
+      toast.error('Verification failed', { description: errorMessage(err) })
+    } finally {
+      setVerifyBusy(false)
+    }
+  }
+
+  async function resendCode() {
+    if (!verificationEmail || verifyBusy) return
+    setVerifyBusy(true)
+    try {
+      await api.resendVerification(verificationEmail)
+      toast.success('Code resent', { description: 'Check your inbox again.' })
+    } catch (err) {
+      toast.error('Could not resend code', { description: errorMessage(err) })
+    } finally {
+      setVerifyBusy(false)
     }
   }
 
@@ -95,103 +132,136 @@ export function LoginPromptDialog({
           </p>
         </DialogHeader>
 
-        <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)} className="mt-2">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="login" className="gap-1.5">
-              <LogIn className="size-4" /> Log in
-            </TabsTrigger>
-            <TabsTrigger value="signup" className="gap-1.5">
-              <UserPlus className="size-4" /> Sign up
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-
-        <form onSubmit={submitEmail} className="mt-3 space-y-3">
-          {mode === 'signup' && (
+        {verificationEmail ? (
+          <form onSubmit={submitVerify} className="mt-3 space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Enter the 6-digit code we sent to <b className="text-foreground">{verificationEmail}</b>.
+            </p>
             <div className="space-y-1.5">
-              <Label htmlFor="prompt-fullname">Full name</Label>
+              <Label htmlFor="prompt-verify-code">Verification code</Label>
               <Input
-                id="prompt-fullname"
-                placeholder="e.g. Ali Raza"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                id="prompt-verify-code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="123456"
+                value={verifyCode}
+                onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 required
-                minLength={2}
               />
             </div>
-          )}
-          <div className="space-y-1.5">
-            <Label htmlFor="prompt-email">Email</Label>
-            <Input
-              id="prompt-email"
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="prompt-password">Password</Label>
-            <Input
-              id="prompt-password"
-              type="password"
-              placeholder={mode === 'signup' ? 'At least 6 characters' : 'Your password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-            />
-          </div>
+            <Button type="submit" disabled={verifyBusy || verifyCode.length !== 6} className="w-full bg-[#1877F2] hover:bg-[#166fe0]">
+              {verifyBusy ? 'Verifying…' : 'Verify & continue'}
+            </Button>
+            <button
+              type="button"
+              onClick={() => void resendCode()}
+              disabled={verifyBusy}
+              className="w-full text-center text-sm font-medium text-[#1877F2] hover:underline disabled:opacity-60"
+            >
+              Resend code
+            </button>
+          </form>
+        ) : (
+          <>
+            <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)} className="mt-2">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="login" className="gap-1.5">
+                  <LogIn className="size-4" /> Log in
+                </TabsTrigger>
+                <TabsTrigger value="signup" className="gap-1.5">
+                  <UserPlus className="size-4" /> Sign up
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
 
-          {mode === 'signup' && (
-            <div className="flex gap-2">
-              {['STUDENT', 'PARENT', 'TEACHER'].map((r) => (
+            <form onSubmit={submitEmail} className="mt-3 space-y-3">
+              {mode === 'signup' && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="prompt-fullname">Full name</Label>
+                  <Input
+                    id="prompt-fullname"
+                    placeholder="e.g. Ali Raza"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    minLength={2}
+                  />
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label htmlFor="prompt-email">Email</Label>
+                <Input
+                  id="prompt-email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="prompt-password">Password</Label>
+                <Input
+                  id="prompt-password"
+                  type="password"
+                  placeholder={mode === 'signup' ? 'At least 6 characters' : 'Your password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                />
+              </div>
+
+              {mode === 'signup' && (
+                <div className="flex gap-2">
+                  {['STUDENT', 'PARENT', 'TEACHER'].map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setRole(r)}
+                      className={cn(
+                        'flex-1 rounded-lg border p-2 text-center text-xs font-semibold transition-colors',
+                        role === r && 'border-[#1877F2] bg-[#1877F2]/5 text-[#1877F2]'
+                      )}
+                    >
+                      {ROLE_LABEL[r]}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <Button type="submit" disabled={busy} className="w-full gap-2 bg-[#1877F2] hover:bg-[#166fe0]">
+                {mode === 'login' ? 'Log in' : 'Create account'}
+              </Button>
+            </form>
+
+            <div className="my-2 flex items-center gap-3">
+              <div className="h-px flex-1 bg-border" />
+              <span className="text-xs text-muted-foreground">or quick demo login</span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
+
+            <div className="grid max-h-40 grid-cols-1 gap-1.5 overflow-y-auto pr-1">
+              {users.map((user) => (
                 <button
-                  key={r}
+                  key={user.id}
                   type="button"
-                  onClick={() => setRole(r)}
-                  className={cn(
-                    'flex-1 rounded-lg border p-2 text-center text-xs font-semibold transition-colors',
-                    role === r && 'border-[#1877F2] bg-[#1877F2]/5 text-[#1877F2]'
-                  )}
+                  disabled={loggingIn !== null || busy}
+                  onClick={() => pick(user)}
+                  className="flex items-center gap-2 rounded-lg border p-2 text-left transition-colors hover:bg-muted disabled:opacity-60"
                 >
-                  {ROLE_LABEL[r]}
+                  <UserAvatar src={user.avatar} name={user.name} className="size-8" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs font-semibold">{user.name}</span>
+                    <span className={cn('rounded px-1 py-0.5 text-[9px] font-semibold', ROLE_CHIP[user.role])}>
+                      {ROLE_LABEL[user.role]}
+                    </span>
+                  </span>
                 </button>
               ))}
             </div>
-          )}
-
-          <Button type="submit" disabled={busy} className="w-full gap-2 bg-[#1877F2] hover:bg-[#166fe0]">
-            {mode === 'login' ? 'Log in' : 'Create account'}
-          </Button>
-        </form>
-
-        <div className="my-2 flex items-center gap-3">
-          <div className="h-px flex-1 bg-border" />
-          <span className="text-xs text-muted-foreground">or quick demo login</span>
-          <div className="h-px flex-1 bg-border" />
-        </div>
-
-        <div className="grid max-h-40 grid-cols-1 gap-1.5 overflow-y-auto pr-1">
-          {users.map((user) => (
-            <button
-              key={user.id}
-              type="button"
-              disabled={loggingIn !== null || busy}
-              onClick={() => pick(user)}
-              className="flex items-center gap-2 rounded-lg border p-2 text-left transition-colors hover:bg-muted disabled:opacity-60"
-            >
-              <UserAvatar src={user.avatar} name={user.name} className="size-8" />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-xs font-semibold">{user.name}</span>
-                <span className={cn('rounded px-1 py-0.5 text-[9px] font-semibold', ROLE_CHIP[user.role])}>
-                  {ROLE_LABEL[user.role]}
-                </span>
-              </span>
-            </button>
-          ))}
-        </div>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   )

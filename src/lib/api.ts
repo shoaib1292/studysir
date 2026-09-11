@@ -86,7 +86,7 @@ export async function request<T>(
 
 /** Upload an image to an InsForge storage bucket and return its public URL. */
 export async function uploadImage(
-  bucket: 'avatars' | 'covers' | 'goods' | 'course-covers' | 'chat-images',
+  bucket: 'avatars' | 'covers' | 'goods' | 'course-covers' | 'chat-images' | 'tuition-images',
   file: File
 ): Promise<{ url: string; key: string; bucket: string }> {
   const form = new FormData()
@@ -130,6 +130,7 @@ export interface ProfileResponse {
 export interface TuitionInput {
   title: string
   description: string
+  image?: string
   mode: 'ONLINE' | 'HOME' | 'CENTER'
   city?: string
   subjects?: string

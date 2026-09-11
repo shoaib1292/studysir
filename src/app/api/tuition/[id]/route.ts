@@ -50,6 +50,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 
     data.title = title.slice(0, 120)
     data.description = description.slice(0, 2000)
+    data.image = typeof body?.image === 'string' ? body.image : (body?.image === null ? null : tuition.image)
     data.mode = mode
     data.city = str(body?.city, tuition.city)
     data.subjects = str(body?.subjects, tuition.subjects)

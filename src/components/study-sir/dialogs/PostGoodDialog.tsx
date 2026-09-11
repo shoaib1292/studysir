@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { ImagePlus, Loader2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -33,8 +34,30 @@ export function PostGoodDialog({
   const [image, setImage] = useState<string>(GOOD_IMAGE_OPTIONS[0])
   const [price, setPrice] = useState('')
   const [loading, setLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const valid = title.trim().length > 2 && description.trim().length > 2 && (Number(price) || 0) > 0
+  const isCustomImage = Boolean(image) && !GOOD_IMAGE_OPTIONS.includes(image)
+
+  async function pickImage(file: File | undefined) {
+    if (!file || uploading) return
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please pick an image file')
+      return
+    }
+    setUploading(true)
+    try {
+      const { url } = await api.uploadImage('goods', file)
+      setImage(url)
+      toast.success('Image uploaded')
+    } catch (e) {
+      toast.error('Could not upload image', { description: errorMessage(e) })
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
 
   async function submit() {
     if (!valid || loading) return
@@ -97,6 +120,35 @@ export function PostGoodDialog({
                   <SafeImage src={img} alt="item" className="aspect-video w-full object-cover" />
                 </button>
               ))}
+            </div>
+            {isCustomImage ? (
+              <div className="relative mt-2 overflow-hidden rounded-lg border">
+                <SafeImage src={image} alt="item" className="aspect-video w-full object-cover" />
+                <button
+                  type="button"
+                  aria-label="Remove uploaded image"
+                  onClick={() => setImage(GOOD_IMAGE_OPTIONS[0])}
+                  className="absolute right-2 top-2 grid size-7 place-items-center rounded-full bg-black/60 text-white hover:bg-black/80"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            ) : null}
+            <div className="mt-2 flex items-center gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                {uploading ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <ImagePlus className="mr-1.5 size-4" />}
+                Upload photo
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  void pickImage(file)
+                }}
+              />
             </div>
           </div>
           <div className="grid gap-1.5">

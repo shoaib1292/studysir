@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Coins } from 'lucide-react'
+import { Coins, ImagePlus, Loader2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -19,6 +19,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { api, errorMessage } from '@/lib/api'
 import type { TuitionPostDTO } from '@/lib/types'
 import { clientCoinCost } from '../shared/constants'
+import { SafeImage } from '../shared/SafeImage'
 
 export function PostTuitionDialog({
   open,
@@ -44,7 +45,10 @@ export function PostTuitionDialog({
   const [feeMin, setFeeMin] = useState('5')
   const [feeMax, setFeeMax] = useState('100')
   const [timing, setTiming] = useState('')
+  const [image, setImage] = useState('')
+  const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Prefill on open (edit mode pulls the post, create mode resets)
   useEffect(() => {
@@ -60,6 +64,7 @@ export function PostTuitionDialog({
       setFeeMin(String(post.feeMin))
       setFeeMax(String(post.feeMax))
       setTiming(post.timing ?? '')
+      setImage(post.image ?? '')
     } else {
       setTitle('')
       setDescription('')
@@ -71,8 +76,28 @@ export function PostTuitionDialog({
       setFeeMin('5')
       setFeeMax('100')
       setTiming('')
+      setImage('')
     }
   }, [open, post])
+
+  async function pickImage(file: File | undefined) {
+    if (!file || uploading) return
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please pick an image file')
+      return
+    }
+    setUploading(true)
+    try {
+      const { url } = await api.uploadImage('tuition-images', file)
+      setImage(url)
+      toast.success('Photo attached')
+    } catch (e) {
+      toast.error('Could not upload photo', { description: errorMessage(e) })
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
 
   const min = Number(feeMin) || 0
   const max = Number(feeMax) || 0
@@ -87,6 +112,7 @@ export function PostTuitionDialog({
       const payload = {
         title: title.trim(),
         description: description.trim(),
+        image: image || undefined,
         mode,
         city: city.trim() || undefined,
         subjects: subjects.trim() || undefined,
@@ -132,6 +158,42 @@ export function PostTuitionDialog({
           <div className="grid gap-1.5">
             <Label htmlFor="tuition-desc">Description *</Label>
             <Textarea id="tuition-desc" placeholder="Tell teachers about the student, subjects, location and expectations…" value={description} onChange={(e) => setDescription(e.target.value)} rows={4} />
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Photo (optional)</Label>
+            {image ? (
+              <div className="relative overflow-hidden rounded-lg border">
+                <SafeImage src={image} alt="Tuition photo" className="aspect-video w-full object-cover" />
+                <button
+                  type="button"
+                  aria-label="Remove photo"
+                  onClick={() => setImage('')}
+                  className="absolute right-2 top-2 grid size-7 place-items-center rounded-full bg-black/60 text-white hover:bg-black/80"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="flex h-24 items-center justify-center gap-2 rounded-lg border-2 border-dashed text-sm font-medium text-muted-foreground transition-colors hover:border-[#1877F2] hover:text-[#1877F2] disabled:opacity-60"
+              >
+                {uploading ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
+                {uploading ? 'Uploading…' : 'Add photo'}
+              </button>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                void pickImage(file)
+              }}
+            />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">

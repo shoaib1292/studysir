@@ -49,6 +49,7 @@ export interface TuitionPostDTO {
   author: Pick<UserDTO, 'id' | 'name' | 'avatar' | 'role' | 'headline' | 'city'>
   title: string
   description: string
+  image: string | null
   mode: 'ONLINE' | 'HOME' | 'CENTER'
   city: string | null
   subjects: string | null

@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { ImagePlus, Loader2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -40,8 +41,30 @@ export function PostCourseDialog({
   const [format, setFormat] = useState('')
   const [fee, setFee] = useState('')
   const [loading, setLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const valid = title.trim().length > 2 && description.trim().length > 2 && (Number(fee) || 0) > 0
+  const isCustomCover = Boolean(cover) && !COVER_OPTIONS.includes(cover)
+
+  async function pickCover(file: File | undefined) {
+    if (!file || uploading) return
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please pick an image file')
+      return
+    }
+    setUploading(true)
+    try {
+      const { url } = await api.uploadImage('course-covers', file)
+      setCover(url)
+      toast.success('Cover uploaded')
+    } catch (e) {
+      toast.error('Could not upload cover', { description: errorMessage(e) })
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
 
   async function submit() {
     if (!valid || loading) return
@@ -118,6 +141,35 @@ export function PostCourseDialog({
                   <SafeImage src={c} alt="cover" className="aspect-video w-full object-cover" />
                 </button>
               ))}
+            </div>
+            {isCustomCover ? (
+              <div className="relative mt-2 overflow-hidden rounded-lg border">
+                <SafeImage src={cover} alt="cover" className="aspect-video w-full object-cover" />
+                <button
+                  type="button"
+                  aria-label="Remove uploaded cover"
+                  onClick={() => setCover(COVER_OPTIONS[0])}
+                  className="absolute right-2 top-2 grid size-7 place-items-center rounded-full bg-black/60 text-white hover:bg-black/80"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            ) : null}
+            <div className="mt-2 flex items-center gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                {uploading ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : <ImagePlus className="mr-1.5 size-4" />}
+                Upload photo
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  void pickCover(file)
+                }}
+              />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">

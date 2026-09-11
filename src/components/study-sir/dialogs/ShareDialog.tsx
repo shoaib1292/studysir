@@ -102,6 +102,7 @@ export function shareContentForFeedItem(item: FeedItem, fmtMoney: (n: number) =>
         ],
         description: t.description,
         price: `💰 Fee range: ${fmtMoney(t.feeMin)} – ${fmtMoney(t.feeMax)}`,
+        image: t.image,
       }
     }
     case 'course': {
@@ -158,7 +159,7 @@ export function shareContentForFeedItem(item: FeedItem, fmtMoney: (n: number) =>
           t.feeMin !== null && t.feeMax !== null
             ? `💰 Fee range: ${fmtMoney(t.feeMin)} – ${fmtMoney(t.feeMax)}`
             : undefined,
-        image: t.avatar,
+        image: t.coverImage ?? t.avatar,
       }
     }
     default:
