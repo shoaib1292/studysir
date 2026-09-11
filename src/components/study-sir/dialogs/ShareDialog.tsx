@@ -234,8 +234,8 @@ export function ShareDialog({
   }
 
   function shareToWhatsApp() {
-    const shareText = `${content.title}\n\n${shareLink}`
-    window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank', 'noopener,noreferrer')
+    const fullText = text.slice(0, 3000)
+    window.open(`https://wa.me/?text=${encodeURIComponent(fullText)}`, '_blank', 'noopener,noreferrer')
   }
 
   function shareToFacebook() {
@@ -275,7 +275,7 @@ export function ShareDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="rounded-2xl sm:max-w-lg">
+      <DialogContent className="grid-cols-1 max-h-[90vh] overflow-y-auto overflow-x-hidden rounded-2xl sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Share2 className="size-5 text-[#1877F2]" />
@@ -317,8 +317,10 @@ export function ShareDialog({
               </div>
             </div>
           </div>
-          {content.image ? <SafeImage src={content.image} alt={content.title} className="h-28 w-full object-cover" /> : null}
-          <div className="space-y-1 p-3">
+          {content.image ? (
+            <SafeImage src={content.image} alt={content.title} className="h-36 sm:h-48 w-full object-contain bg-black/10" />
+          ) : null}
+          <div className="space-y-1 p-3 sm:p-4">
             {content.emoji ? <span className="text-sm">{content.emoji}</span> : null}
             <p className="text-sm font-bold leading-snug">{content.title}</p>
             {content.description ? (
@@ -349,7 +351,7 @@ export function ShareDialog({
         {/* External sharing platforms */}
         <div className="space-y-3">
           <p className="text-sm font-medium text-muted-foreground">Share on social media</p>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             <Button variant="outline" size="sm" onClick={shareToWhatsApp} className="gap-1.5">
               <MessageCircle className="size-4 text-green-600" />
               WhatsApp
