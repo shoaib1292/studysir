@@ -193,7 +193,14 @@ export const api = {
   loginWithPassword: (email: string, password: string) =>
     request<{ user: UserDTO }>('/api/auth/login', { method: 'POST', body: { email, password } }),
   signup: (data: { name: string; email: string; password: string; role: string }) =>
-    request<{ user: UserDTO }>('/api/auth/signup', { method: 'POST', body: data }),
+    request<{ user?: UserDTO; requireEmailVerification?: boolean; email?: string }>('/api/auth/signup', {
+      method: 'POST',
+      body: data,
+    }),
+  verifyEmail: (email: string, code: string) =>
+    request<{ user: UserDTO }>('/api/auth/verify-email', { method: 'POST', body: { email, code } }),
+  resendVerification: (email: string) =>
+    request<{ ok: true }>('/api/auth/resend-verification', { method: 'POST', body: { email } }),
   adminLogin: (email: string, password: string) =>
     request<{ user: UserDTO }>('/api/auth/admin-login', { method: 'POST', body: { email, password } }),
   logout: () => request<{ ok: true }>('/api/session', { method: 'DELETE' }),

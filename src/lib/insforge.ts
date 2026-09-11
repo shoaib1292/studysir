@@ -126,6 +126,14 @@ class InsForgeClient {
       body
     })
   }
+
+  // Email sending (uses InsForge's configured SMTP)
+  async sendEmail(to: string, subject: string, html: string): Promise<void> {
+    await this.request('/api/email/send-raw', {
+      method: 'POST',
+      body: { to, subject, html }
+    })
+  }
 }
 
 export const insforge = new InsForgeClient()

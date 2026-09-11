@@ -29,6 +29,9 @@ model User {
   coins         Int      @default(0)
   money         Float    @default(0)
   isVerified    Boolean  @default(false)
+  emailVerified Boolean  @default(false) // email verification completed (signup OTP flow)
+  emailVerificationCode          String?
+  emailVerificationCodeExpiresAt DateTime?
   kycStatus     String   @default("NONE") // teacher KYC: NONE | PENDING | APPROVED | REJECTED
   isAdmin       Boolean  @default(false) // platform-admin access (separate login entry)
   subRole       String? // admin sub-role: OWNER (full) | STAFF (reports+users only)

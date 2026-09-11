@@ -21,7 +21,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { api, errorMessage } from '@/lib/api'
+import { api, errorMessage, ApiError } from '@/lib/api'
 import type { UserDTO } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -73,6 +73,10 @@ export function LoginScreen({
   const [name, setName] = useState('')
   const [role, setRole] = useState('STUDENT')
   const [busy, setBusy] = useState(false)
+
+  const [verificationEmail, setVerificationEmail] = useState<string | null>(null)
+  const [verifyCode, setVerifyCode] = useState('')
+  const [verifyBusy, setVerifyBusy] = useState(false)
 
   const [adminOpen, setAdminOpen] = useState(false)
   const [adminEmail, setAdminEmail] = useState('')
@@ -126,13 +130,59 @@ export function LoginScreen({
         toast.success(`Welcome back, ${user.name}!`)
         done(user)
       } else {
-        const { user } = await api.signup({ name: name.trim(), email: email.trim(), password, role })
-        toast.success(`Account created — welcome, ${user.name}!`)
-        done(user)
+        const res = await api.signup({ name: name.trim(), email: email.trim(), password, role })
+        if (res.requireEmailVerification && res.email) {
+          setVerificationEmail(res.email)
+          setVerifyCode('')
+          toast.success('Account created — check your email for the code')
+          setBusy(false)
+          return
+        }
+        if (res.user) {
+          toast.success(`Account created — welcome, ${res.user.name}!`)
+          done(res.user)
+          return
+        }
+        toast.error('Signup failed', { description: 'Unexpected response' })
+        setBusy(false)
       }
     } catch (err) {
+      if (err instanceof ApiError && (err.data as { code?: string } | null)?.code === 'EMAIL_NOT_VERIFIED') {
+        setVerificationEmail(email.trim())
+        setVerifyCode('')
+        toast.info('Verify your email to continue')
+        setBusy(false)
+        return
+      }
       toast.error(mode === 'login' ? 'Login failed' : 'Signup failed', { description: errorMessage(err) })
       setBusy(false)
+    }
+  }
+
+  async function submitVerify(e: React.FormEvent) {
+    e.preventDefault()
+    if (verifyBusy || !verificationEmail) return
+    setVerifyBusy(true)
+    try {
+      const { user } = await api.verifyEmail(verificationEmail, verifyCode.trim())
+      toast.success(`Welcome, ${user.name}!`)
+      done(user)
+    } catch (err) {
+      toast.error('Verification failed', { description: errorMessage(err) })
+      setVerifyBusy(false)
+    }
+  }
+
+  async function resendCode() {
+    if (!verificationEmail || verifyBusy) return
+    setVerifyBusy(true)
+    try {
+      await api.resendVerification(verificationEmail)
+      toast.success('Code sent again — check your email')
+    } catch (err) {
+      toast.error('Could not resend code', { description: errorMessage(err) })
+    } finally {
+      setVerifyBusy(false)
     }
   }
 
@@ -171,6 +221,44 @@ export function LoginScreen({
           </p>
         </div>
 
+        {verificationEmail ? (
+          <div className="mt-6 rounded-xl border p-4">
+            <div className="text-center">
+              <ShieldCheck className="mx-auto size-8 text-[#1877F2]" />
+              <p className="mt-2 text-sm text-muted-foreground">We sent a 6-digit code to</p>
+              <p className="font-semibold">{verificationEmail}</p>
+            </div>
+            <form onSubmit={submitVerify} className="mt-4 space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="verify-code">Verification code</Label>
+                <Input
+                  id="verify-code"
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="123456"
+                  value={verifyCode}
+                  onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, ''))}
+                  required
+                  autoComplete="one-time-code"
+                  className="text-center text-lg tracking-[0.4em]"
+                />
+              </div>
+              <Button type="submit" disabled={verifyBusy} className="w-full gap-2 bg-[#1877F2] hover:bg-[#166fe0]">
+                {verifyBusy ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}
+                Verify email
+              </Button>
+              <div className="flex items-center justify-between">
+                <button type="button" onClick={() => setVerificationEmail(null)} className="text-xs text-muted-foreground transition-colors hover:text-foreground">
+                  Back
+                </button>
+                <button type="button" onClick={resendCode} disabled={verifyBusy} className="text-xs font-medium text-[#1877F2] hover:underline disabled:opacity-60">
+                  Resend code
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : (
+          <>
         <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)} className="mt-6">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="login" className="gap-1.5">
@@ -329,6 +417,8 @@ export function LoginScreen({
             Admin Login
           </button>
         </div>
+        </>
+        )}
       </div>
 
       {/* Separate platform-admin login dialog */}

@@ -23,6 +23,12 @@ export async function POST(req: NextRequest) {
   if (user.isAI) {
     return NextResponse.json({ error: 'AI accounts cannot log in' }, { status: 403 })
   }
+  if (!user.emailVerified) {
+    return NextResponse.json(
+      { error: 'Please verify your email before logging in', code: 'EMAIL_NOT_VERIFIED' },
+      { status: 403 }
+    )
+  }
   if (user.isAdmin) {
     return NextResponse.json(
       { error: 'This is a platform-admin account — use the Admin Login.' },

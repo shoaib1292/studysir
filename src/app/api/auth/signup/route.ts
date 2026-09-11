@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { setSessionUser } from '@/lib/session'
 import { hashPassword } from '@/lib/password'
-import { toUserDTO } from '@/lib/dto'
 import { TEACHER_SIGNUP_COINS } from '@/lib/coins'
+import { generateEmailCode, sendVerificationEmail, EMAIL_CODE_TTL_MS } from '@/lib/email'
 
 /**
  * Create a real account (students/parents/teachers).
+ * - Email verification is required before login (OTP sent to the email).
  * - Students/parents: NO coins — money wallet only (top-up via admin-verified payments).
  * - Teachers: welcome coin grant so they can accept requests.
  */
@@ -26,6 +26,8 @@ export async function POST(req: NextRequest) {
   if (existing) return NextResponse.json({ error: 'An account with this email already exists' }, { status: 409 })
 
   const isTeacher = role === 'TEACHER'
+  const code = generateEmailCode()
+
   const user = await db.user.create({
     data: {
       name,
@@ -36,9 +38,17 @@ export async function POST(req: NextRequest) {
       money: 0,
       headline: isTeacher ? 'New Teacher on StudySir' : role === 'PARENT' ? 'Parent' : 'Student',
       country: 'Pakistan',
+      emailVerified: false,
+      emailVerificationCode: code,
+      emailVerificationCodeExpiresAt: new Date(Date.now() + EMAIL_CODE_TTL_MS),
     },
   })
 
-  await setSessionUser(user.id)
-  return NextResponse.json({ user: toUserDTO(user) }, { status: 201 })
+  try {
+    await sendVerificationEmail(email, code)
+  } catch (e) {
+    console.error('[signup] verification email send failed', e)
+  }
+
+  return NextResponse.json({ requireEmailVerification: true, email: user.email }, { status: 201 })
 }
