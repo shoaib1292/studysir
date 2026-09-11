@@ -159,7 +159,40 @@ export interface GoodInput {
   title: string
   description: string
   image?: string
+  assetType?: 'file' | 'link'
+  accessLink?: string
   price: number
+  fileUrl?: string
+}
+
+/** Upload a non-image digital asset (PDF, ZIP, etc.) and return its public URL. */
+export async function uploadAsset(file: File): Promise<{ url: string; key: string; bucket: string }> {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('bucket', 'digital-assets')
+
+  const res = await fetch('/api/upload', {
+    method: 'POST',
+    credentials: 'include',
+    body: form,
+  })
+
+  let data: unknown = null
+  try {
+    data = await res.json()
+  } catch {
+    // non-JSON body
+  }
+
+  if (!res.ok) {
+    const msg =
+      data && typeof data === 'object' && 'error' in data && typeof (data as { error: unknown }).error === 'string'
+        ? (data as { error: string }).error
+        : `Upload failed (${res.status})`
+    throw new ApiError(msg, res.status, data)
+  }
+
+  return data as { url: string; key: string; bucket: string }
 }
 
 export interface ProfilePatch {
@@ -208,6 +241,7 @@ export const api = {
 
   // uploads (InsForge storage)
   uploadImage,
+  uploadAsset,
 
   // users / profile
   getUsers: () => request<{ users: UserDTO[] }>('/api/users'),

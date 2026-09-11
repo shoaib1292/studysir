@@ -356,9 +356,11 @@ model DigitalGood {
   seller      User     @relation(fields: [sellerId], references: [id])
   title       String
   description String
-  image       String?
+  image       String? // cover/thumbnail image
+  assetType   String  @default("file") // file | link
+  accessLink  String? // external access/download link (assetType = link)
   price       Float    @default(0)
-  fileUrl     String?
+  fileUrl     String? // uploaded digital asset file (assetType = file)
   hidden      Boolean  @default(false) // moderation: soft-hidden from feeds
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

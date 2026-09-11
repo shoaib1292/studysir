@@ -100,6 +100,9 @@ export interface GoodDTO {
   title: string
   description: string
   image: string | null
+  assetType: 'file' | 'link'
+  accessLink: string | null
+  fileUrl: string | null
   price: number
   likeCount: number
   myLike: boolean

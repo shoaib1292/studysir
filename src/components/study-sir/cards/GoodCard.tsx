@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Download, Flag, MessageSquareText, MoreVertical, Share2, ThumbsUp } from 'lucide-react'
+import { Download, ExternalLink, Flag, MessageSquareText, MoreVertical, Share2, ThumbsUp } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -90,54 +90,60 @@ export function GoodCard({
       setBuyOpen(true)
       return
     }
-    // Real behavior: download a receipt + access file for the purchased item
-    const lines = [
-      '===============================================',
-      '  StudySir — Digital Purchase Receipt',
-      '===============================================',
-      '',
-      `Item:     ${good.title}`,
-      `Seller:   ${good.seller.name}`,
-      `Price:    PKR ${good.price}`,
-      `Purchased by: ${me.name} (${me.email})`,
-      `Date:     ${new Date().toLocaleString()}`,
-      '',
-      'Your download is available in Digital Store → Download',
-      'at any time. Thank you for supporting teachers on StudySir!',
-      '',
-      '===============================================',
-    ].join('\n')
-    const blob = new Blob([lines], { type: 'text/plain;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `studysir-${good.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40)}.txt`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-    toast.success('Receipt downloaded', { description: `${good.title} is yours. 🎉` })
+
+    // Link-type asset: open the seller-provided access link.
+    if (good.assetType === 'link' && good.accessLink) {
+      window.open(good.accessLink, '_blank', 'noopener,noreferrer')
+      toast.success('Opening access link', { description: 'The seller\'s link opened in a new tab.' })
+      return
+    }
+
+    // File-type asset: download the purchased file directly.
+    if (good.fileUrl) {
+      const a = document.createElement('a')
+      a.href = good.fileUrl
+      a.download = good.title
+      a.rel = 'noopener'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      toast.success('Download started', { description: `${good.title} is yours. 🎉` })
+      return
+    }
+
+    toast.info('No file available', { description: 'The seller has not attached a download yet.' })
   }
+
+  const assetLabel = purchased
+    ? good.assetType === 'link'
+      ? 'Open link'
+      : 'Download'
+    : 'Download'
 
   return (
     <FbCard className="overflow-hidden">
-      {/* Main content: Image left, Details right */}
-      <div className="flex">
-        {/* Left side - Product Image (1:1 aspect ratio) */}
-        <div className="relative w-40 shrink-0 overflow-hidden bg-muted">
+      {/* Main content: stacked on mobile, side-by-side on sm+ */}
+      <div className="flex flex-col sm:flex-row">
+        {/* Product Image: full-width banner on mobile, sidebar on sm+ */}
+        <div className="relative aspect-video w-full shrink-0 overflow-hidden bg-muted sm:aspect-square sm:w-40">
           <SafeImage
             src={good.image}
             alt={good.title}
             className="h-full w-full object-cover"
             iconClassName="size-10"
           />
-          {/* Price overlay on image bottom */}
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-2">
-            <p className="text-lg font-extrabold text-white">{fmt(good.price)}</p>
+          {/* Price overlay */}
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-2.5">
+            <p className="text-xl font-extrabold text-white">{fmt(good.price)}</p>
+            {good.assetType === 'link' ? (
+              <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-white/90">
+                <ExternalLink className="size-3" /> Access link
+              </span>
+            ) : null}
           </div>
         </div>
 
-        {/* Right side - Product Details */}
+        {/* Product Details */}
         <div className="flex min-w-0 flex-1 flex-col p-3">
           {/* Header with title and menu */}
           <div className="flex items-start justify-between gap-2">
@@ -210,7 +216,7 @@ export function GoodCard({
             onClick={handleReview}
           />
           {!embedded ? <CardAction icon={Share2} label="Share" onClick={handleShare} /> : null}
-          <CardAction icon={Download} label="Download" active={purchased} onClick={handleDownload} />
+          <CardAction icon={good.assetType === 'link' ? ExternalLink : Download} label={assetLabel} active={purchased} onClick={handleDownload} />
         </ActionGrid>
       </div>
 

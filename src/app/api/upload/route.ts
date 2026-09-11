@@ -3,11 +3,14 @@ import { requireSessionUser, HttpError } from '@/lib/session'
 import { insforge } from '@/lib/insforge'
 import sharp from 'sharp'
 
-const ALLOWED_BUCKETS = ['avatars', 'covers', 'goods', 'course-covers', 'chat-images', 'tuition-images']
+const ALLOWED_BUCKETS = ['avatars', 'covers', 'goods', 'course-covers', 'chat-images', 'tuition-images', 'digital-assets']
 
 // Server-side safety net: always store a downscaled, re-encoded image so a huge
 // upload can never bloat the bucket even if the client skipped compression.
 const STORAGE_MAX_DIM = 1600
+
+// Digital assets (PDFs, ZIPs, etc.) are stored as-is — no image processing.
+const ASSET_BUCKET = 'digital-assets'
 
 function extFor(type: string, name: string): string {
   const map: Record<string, string> = {
@@ -32,28 +35,41 @@ export async function POST(req: NextRequest) {
     const bucket = (form.get('bucket') as string) || 'avatars'
 
     if (!(file instanceof Blob)) throw new HttpError(400, 'No file provided')
-    if (!file.type.startsWith('image/')) throw new HttpError(400, 'Only images are allowed')
     if (!ALLOWED_BUCKETS.includes(bucket)) throw new HttpError(400, 'Invalid upload bucket')
 
-    const name = typeof (file as { name?: string }).name === 'string' ? (file as { name: string }).name : 'image'
+    const isAsset = bucket === ASSET_BUCKET
+    if (!isAsset && !file.type.startsWith('image/')) throw new HttpError(400, 'Only images are allowed')
 
-    const input = new Uint8Array(await (file as Blob).arrayBuffer())
-    const pipeline = sharp(input).rotate().resize({ width: STORAGE_MAX_DIM, height: STORAGE_MAX_DIM, fit: 'inside', withoutEnlargement: true })
-    let out: Buffer
-    let outExt: string
-    if (file.type === 'image/png') {
-      out = await pipeline.png({ compressionLevel: 9, adaptiveFiltering: true }).toBuffer()
-      outExt = '.png'
-    } else if (file.type === 'image/webp') {
-      out = await pipeline.webp({ quality: 85 }).toBuffer()
-      outExt = '.webp'
+    const name = typeof (file as { name?: string }).name === 'string' ? (file as { name: string }).name : isAsset ? 'asset' : 'image'
+
+    let key: string
+    let body: Blob
+
+    if (isAsset) {
+      // Digital asset: keep original bytes, just give it a safe unique key.
+      const ext = (/\.[a-z0-9]{1,8}$/i.exec(name)?.[0] || '').toLowerCase()
+      key = `${Date.now()}-${crypto.randomUUID()}${ext}`
+      body = file as Blob
     } else {
-      out = await pipeline.jpeg({ quality: 85, mozjpeg: true }).toBuffer()
-      outExt = '.jpg'
+      const input = new Uint8Array(await (file as Blob).arrayBuffer())
+      const pipeline = sharp(input).rotate().resize({ width: STORAGE_MAX_DIM, height: STORAGE_MAX_DIM, fit: 'inside', withoutEnlargement: true })
+      let out: Buffer
+      let outExt: string
+      if (file.type === 'image/png') {
+        out = await pipeline.png({ compressionLevel: 9, adaptiveFiltering: true }).toBuffer()
+        outExt = '.png'
+      } else if (file.type === 'image/webp') {
+        out = await pipeline.webp({ quality: 85 }).toBuffer()
+        outExt = '.webp'
+      } else {
+        out = await pipeline.jpeg({ quality: 85, mozjpeg: true }).toBuffer()
+        outExt = '.jpg'
+      }
+      key = `${Date.now()}-${crypto.randomUUID()}${outExt}`
+      body = new Blob([out as unknown as BlobPart], { type: file.type })
     }
 
-    const key = `${Date.now()}-${crypto.randomUUID()}${outExt}`
-    const { url } = await insforge.uploadFile(bucket, key, new Blob([out as unknown as BlobPart], { type: file.type }))
+    const { url } = await insforge.uploadFile(bucket, key, body)
 
     return NextResponse.json({ url, key, bucket })
   } catch (e) {

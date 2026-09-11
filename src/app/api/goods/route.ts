@@ -14,6 +14,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Title and description are required' }, { status: 400 })
     }
     const price = Number(body.price) || 0
+    const assetType = body.assetType === 'link' ? 'link' : 'file'
+
+    if (assetType === 'file' && !body.fileUrl) {
+      return NextResponse.json({ error: 'Please upload a digital asset file' }, { status: 400 })
+    }
+    if (assetType === 'link') {
+      const link = String(body.accessLink || '').trim()
+      if (!link) return NextResponse.json({ error: 'Please provide an access link' }, { status: 400 })
+      if (!/^https?:\/\//i.test(link)) return NextResponse.json({ error: 'Access link must start with http:// or https://' }, { status: 400 })
+    }
 
     const good = await db.digitalGood.create({
       data: {
@@ -21,8 +31,10 @@ export async function POST(req: NextRequest) {
         title: String(body.title).slice(0, 200),
         description: String(body.description).slice(0, 2000),
         image: body.image ? String(body.image) : null,
+        assetType,
+        accessLink: assetType === 'link' ? String(body.accessLink).trim() : null,
         price,
-        fileUrl: body.fileUrl ? String(body.fileUrl) : null,
+        fileUrl: assetType === 'file' && body.fileUrl ? String(body.fileUrl) : null,
       },
       include: { seller: true },
     })
