@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { requireSessionUser, HttpError } from '@/lib/session'
 import { computeCoinCost } from '@/lib/coins'
 import { toTuitionDTO } from '@/lib/dto'
+import { scanContent, blockReason, excerpt, MODERATION_REASONS, MODERATION_STATUS } from '@/lib/moderation'
 
 function handle(e: unknown) {
   if (e instanceof HttpError) {
@@ -27,6 +28,13 @@ export async function POST(req: NextRequest) {
     const mode = ['ONLINE', 'HOME', 'CENTER'].includes(body.mode) ? body.mode : 'ONLINE'
     const coinCost = computeCoinCost(feeMin, feeMax, mode)
 
+    // Content moderation: block direct contact info; send links to review.
+    const moderationText = [body.title, body.description, body.subjects, body.timing, body.city].join(' ')
+    const scan = scanContent(moderationText)
+    const blocked = blockReason(scan)
+    if (blocked) return NextResponse.json({ error: blocked }, { status: 400 })
+    const moderationStatus = scan.hasUnapprovedLink ? MODERATION_STATUS.PENDING : MODERATION_STATUS.APPROVED
+
     const tuition = await db.tuitionPost.create({
       data: {
         authorId: me.id,
@@ -42,9 +50,23 @@ export async function POST(req: NextRequest) {
         feeMax,
         timing: body.timing ? String(body.timing).slice(0, 100) : null,
         coinCost,
+        moderationStatus,
       },
       include: { author: true },
     })
+
+    if (moderationStatus === MODERATION_STATUS.PENDING) {
+      await db.moderationItem.create({
+        data: {
+          targetType: 'TUITION',
+          targetId: tuition.id,
+          authorId: me.id,
+          reason: MODERATION_REASONS.UNAPPROVED_LINK,
+          snippet: excerpt(moderationText, scan.linkMatches),
+        },
+      })
+      return NextResponse.json({ tuition: await toTuitionDTO(tuition, me.id), moderation: 'PENDING' }, { status: 201 })
+    }
 
     return NextResponse.json({ tuition: await toTuitionDTO(tuition, me.id) }, { status: 201 })
   } catch (e) {

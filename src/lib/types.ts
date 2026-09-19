@@ -84,6 +84,12 @@ export interface CourseDTO {
   classesPerWeek: string | null
   format: string | null
   fee: number
+  /** YouTube video URL (normalized watch URL) — null when the course has no video. */
+  videoUrl: string | null
+  /** INTRO = paid teaser (join to access full course) | FULL = complete free course (watch directly) | null */
+  videoKind: 'INTRO' | 'FULL' | null
+  /** YouTube 11-char id (parsed from videoUrl) for the client embed. */
+  videoId: string | null
   likeCount: number
   myLike: boolean
   createdAt: string
@@ -153,7 +159,7 @@ export interface SharedPostDTO {
 export interface AdminOverview {
   users: { total: number; teachers: number; students: number; parents: number; banned: number; admins: number }
   content: { tuitions: number; courses: number; goods: number; shares: number; hidden: number }
-  queues: { openReports: number; pendingPayments: number; pendingWithdrawals: number; pendingKyc: number; pendingCoinRequests: number }
+  queues: { openReports: number; pendingPayments: number; pendingWithdrawals: number; pendingKyc: number; pendingCoinRequests: number; pendingModeration: number; pendingComments: number }
   money: { coinsInCirculation: number; moneyInWallets: number; commissionEarned: number; paidTeachers: number; milestoneTarget: number; milestonePaid: boolean }
   signups: { date: string; count: number }[] // last 14 days
   recentUsers: Pick<UserDTO, 'id' | 'name' | 'avatar' | 'role' | 'createdAt' | 'status' | 'isAdmin'>[]
@@ -176,6 +182,8 @@ export interface MessageDTO {
   readAt: string | null
   /** True when the sender unsent this message (renders as a placeholder). */
   deleted: boolean
+  /** APPROVED | PENDING | BLOCKED — PENDING = link held for admin review (content hidden). */
+  moderationStatus: string
   /** Facebook-style reaction groups (client derives "mine" via userIds). */
   reactions: MessageReactionGroup[]
 }
@@ -524,4 +532,8 @@ export interface AiPersona {
   mergeWindowSec?: number
   replyChance?: number
   declineChances?: string[]
+  /** 0..1 — how likely the agent engages with the feed when the activity cron runs. */
+  engagementChance?: number
+  /** 'short' (1-2 sentences) or 'detailed' (3-5 sentences) — review/question length. */
+  reviewQuality?: 'short' | 'detailed'
 }

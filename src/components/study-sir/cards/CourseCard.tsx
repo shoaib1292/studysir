@@ -13,6 +13,7 @@ import {
   Languages,
   MessagesSquare,
   MoreVertical,
+  Play,
   Presentation,
   Repeat2,
   MessageSquareText,
@@ -44,6 +45,50 @@ import { timeAgo } from '../shared/format'
 import { useRequireAuth } from '../auth/useRequireAuth'
 
 type CourseWithRating = CourseDTO & { teacherAvgRating?: number }
+
+/**
+ * Lazy YouTube embed. Shows the video thumbnail with a big play button; the
+ * actual iframe only loads when the user clicks (keeps the feed fast — we never
+ * embed dozens of iframes for cards off-screen).
+ */
+function VideoFacade({ videoId, label }: { videoId: string; label?: string }) {
+  const [playing, setPlaying] = useState(false)
+  const thumb = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
+  if (playing) {
+    return (
+      <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black">
+        <iframe
+          src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0`}
+          title="Course video"
+          className="absolute inset-0 size-full"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen
+          referrerPolicy="strict-origin-when-cross-origin"
+        />
+      </div>
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setPlaying(true)}
+      aria-label="Play course video"
+      className="group relative block aspect-video w-full overflow-hidden rounded-lg bg-black"
+    >
+      <SafeImage src={thumb} alt="Course video thumbnail" className="size-full object-cover opacity-90 transition-opacity group-hover:opacity-100" />
+      <span className="absolute inset-0 grid place-items-center bg-black/10 transition-colors group-hover:bg-black/20">
+        <span className="grid size-14 place-items-center rounded-full bg-red-600 shadow-lg transition-transform group-hover:scale-110">
+          <Play className="size-6 fill-white text-white" />
+        </span>
+      </span>
+      {label ? (
+        <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-black/70 px-2 py-0.5 text-[11px] font-semibold text-white">
+          {label}
+        </span>
+      ) : null}
+    </button>
+  )
+}
 
 export function CourseCard({
   course,
@@ -96,6 +141,15 @@ export function CourseCard({
   const teacherRating = (course as CourseWithRating).teacherAvgRating
   const alreadyJoined = !!course.myConnectionId
   const isMine = me ? course.teacherId === me.id : false
+
+  // Video + fee rules:
+  //   • FULL free course with video → anyone can watch directly (no join request)
+  //   • INTRO video on a paid course → watch the teaser, then Join Request
+  //   • no video → original flow (Join Request / Open Chat)
+  const hasVideo = !!course.videoId && !!course.videoUrl
+  const isFullFreeVideo = hasVideo && course.videoKind === 'FULL' && course.fee === 0
+  const isIntroVideo = hasVideo && course.videoKind === 'INTRO'
+  const videoLabel = isFullFreeVideo ? 'Full free course' : isIntroVideo ? 'Intro video' : undefined
 
   // Auth-protected action handlers
   const handleLike = () => requireAuth(toggleLike)
@@ -171,7 +225,12 @@ export function CourseCard({
               ★ {teacherRating.toFixed(1)}
             </span>
           ) : null}
-          {alreadyJoined ? (
+          {isFullFreeVideo ? (
+            <span className="flex items-center gap-1 rounded bg-green-500/15 px-2 py-0.5 text-xs font-semibold text-green-700 dark:text-green-400">
+              <Play className="size-3" />
+              Free Course
+            </span>
+          ) : alreadyJoined ? (
             <span className="flex items-center gap-1 rounded bg-blue-500/15 px-2 py-0.5 text-xs font-semibold text-[#1877F2] dark:text-blue-400">
               <CheckCircle2 className="size-3" />
               Request sent
@@ -211,7 +270,13 @@ export function CourseCard({
       <div className="space-y-3 px-4 pb-4">
         <h3 className="text-[17px] font-bold leading-snug">{course.title}</h3>
         <RichText text={course.description} keywords={[course.subject, course.language]} clamp={3} />
-        <SafeImage src={course.cover} alt={course.title} className="aspect-[4/3] w-full rounded-lg object-cover" />
+        {/* When the course has a YouTube video, the video player REPLACES the
+            static cover image — the thumbnail comes from YouTube automatically. */}
+        {hasVideo && course.videoId ? (
+          <VideoFacade videoId={course.videoId} label={videoLabel} />
+        ) : (
+          <SafeImage src={course.cover} alt={course.title} className="aspect-[4/3] w-full rounded-lg object-cover" />
+        )}
         <div className="space-y-1.5 rounded-lg bg-muted/60 p-3">
           <DetailRow icon={Languages} label="Language" value={course.language} />
           <DetailRow icon={BookOpen} label="Subject" value={course.subject} />
@@ -220,7 +285,7 @@ export function CourseCard({
           <DetailRow icon={CalendarClock} label="Class duration" value={course.classDuration} />
           <DetailRow icon={Repeat2} label="Classes Per Week" value={course.classesPerWeek} />
           <DetailRow icon={MonitorPlay} label="Course Format" value={course.format} />
-          <DetailRow icon={Banknote} label="Fee" value={fmt(course.fee)} bold />
+          <DetailRow icon={Banknote} label="Fee" value={isFullFreeVideo ? 'Free' : fmt(course.fee)} bold />
         </div>
       </div>
 
@@ -231,14 +296,15 @@ export function CourseCard({
           <CardAction icon={ThumbsUp} label="Like" active={liked} onClick={handleLike} />
           <CardAction icon={MessageSquareText} label="Review" onClick={handleReview} />
           {!embedded ? <CardAction icon={Share2} label="Share" onClick={handleShare} /> : null}
-          <CardAction icon={HelpCircle} label="Question" disabled={alreadyJoined} onClick={handleQuestion} />
-          {alreadyJoined ? (
-            <CardAction
-              icon={MessagesSquare}
-              label="Open Chat"
-              primary
-              onClick={handleJoin}
-            />
+          {!isFullFreeVideo ? (
+            <CardAction icon={HelpCircle} label="Question" disabled={alreadyJoined} onClick={handleQuestion} />
+          ) : null}
+          {isFullFreeVideo ? (
+            // Free full-course video: students watch directly — no join request.
+            // The video player is already above; this just confirms access is open.
+            <CardAction icon={Play} label="Watch Free" primary onClick={() => toast.info('The video is right above — just hit play!')} />
+          ) : alreadyJoined ? (
+            <CardAction icon={MessagesSquare} label="Open Chat" primary onClick={handleJoin} />
           ) : (
             <CardAction icon={Presentation} label="Join Request" primary onClick={handleJoin} />
           )}

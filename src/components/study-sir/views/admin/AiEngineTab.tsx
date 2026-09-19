@@ -16,6 +16,7 @@ import {
   Sparkles,
   Timer,
   Trash2,
+  Zap,
   type LucideIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -33,12 +34,20 @@ import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
-import { api, errorMessage } from '@/lib/api'
+import { api, errorMessage, request } from '@/lib/api'
 import type { AiAgentDTO, AiPersona } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { UserAvatar } from '../../shared/UserAvatar'
 
 /* ────────────────────────── helpers ────────────────────────── */
+
+/** Shape of the per-run AI activity stats returned by `/api/admin/ai` → `activity`. */
+type AiActivityStats = {
+  agentsChecked: number
+  actionsTaken: number
+  byType: { likes: number; reviews: number; questions: number; tuitions: number }
+  lastRunAt: string | null
+}
 
 /** Display defaults when an agent has no (or a broken) persona JSON. */
 const PERSONA_DEFAULTS = {
@@ -697,12 +706,77 @@ function AgentDialog({
   )
 }
 
+/* ──────────────────────── AI activity section ──────────────────────── */
+
+function AiActivitySection({
+  stats,
+  running,
+  onRun,
+}: {
+  stats: AiActivityStats | undefined
+  running: boolean
+  onRun: () => void
+}) {
+  const byType = stats?.byType ?? { likes: 0, reviews: 0, questions: 0, tuitions: 0 }
+  const last = stats?.lastRunAt ? new Date(stats.lastRunAt) : null
+  return (
+    <section className="rounded-xl border bg-card p-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
+            <Zap className="size-4 text-emerald-500" />
+            AI Activity
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Background engagement — agents like posts, write reviews and ask questions in a humanized way.
+          </p>
+        </div>
+        <Button size="sm" onClick={onRun} disabled={running} className="gap-1.5">
+          {running ? <Loader2 className="size-3.5 animate-spin" /> : <Zap className="size-3.5" />}
+          Run engagement now
+        </Button>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Chip icon={Sparkles} className="px-2.5 py-1.5 text-xs">
+          {stats?.agentsChecked ?? 0} awake
+        </Chip>
+        <Chip icon={Zap} className="px-2.5 py-1.5 text-xs">
+          {stats?.actionsTaken ?? 0} actions
+        </Chip>
+        <Chip icon={Clock}>
+          {last
+            ? `Last run ${last.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+            : 'No run yet'}
+        </Chip>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <ActivityStatCell label="Likes" value={byType.likes} />
+        <ActivityStatCell label="Reviews" value={byType.reviews} />
+        <ActivityStatCell label="Questions" value={byType.questions} />
+        <ActivityStatCell label="Tuition posts" value={byType.tuitions} />
+      </div>
+    </section>
+  )
+}
+
+function ActivityStatCell({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg bg-muted/60 p-2.5 text-center">
+      <p className="text-lg font-bold tabular-nums text-foreground">{value}</p>
+      <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
+    </div>
+  )
+}
+
 /* ────────────────────────── tab ────────────────────────── */
 
 export function AiEngineTab() {
   const [stats, setStats] = useState<AiStats | null>(null)
   const [agents, setAgents] = useState<AiAgentDTO[] | null>(null)
   const [loading, setLoading] = useState(false)
+  const [runningEngage, setRunningEngage] = useState(false)
   const [dialog, setDialog] = useState<{ mode: 'create' } | { mode: 'edit'; agent: AiAgentDTO } | null>(null)
 
   const load = useCallback(async () => {
@@ -719,7 +793,26 @@ export function AiEngineTab() {
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load()
+  }, [load])
+
+  /** Trigger one cron run of the AI activity engine (likes / reviews / questions). */
+  const runEngage = useCallback(async () => {
+    setRunningEngage(true)
+    try {
+      const res = await request<{ ok: true; stats: AiActivityStats }>('/api/cron/ai-activity', {
+        method: 'POST',
+      })
+      toast.success('AI engagement run complete', {
+        description: `${res.stats.actionsTaken} action(s) taken · ${res.stats.agentsChecked} agent(s) awake.`,
+      })
+      await load()
+    } catch (e) {
+      toast.error('Could not run engagement', { description: errorMessage(e) })
+    } finally {
+      setRunningEngage(false)
+    }
   }, [load])
 
   // sorted by coins desc (runtime guard: tolerate a legacy scalar from an older backend)
@@ -823,6 +916,13 @@ export function AiEngineTab() {
           </>
         )}
       </section>
+
+      {/* AI Activity — humanized engagement (likes / reviews / questions) */}
+      <AiActivitySection
+        stats={stats.activity}
+        running={runningEngage}
+        onRun={() => void runEngage()}
+      />
 
       {/* AI agents */}
       <section className="space-y-2.5">

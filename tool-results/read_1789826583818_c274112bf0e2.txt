@@ -1,0 +1,864 @@
+     1→'use client'
+     2→
+     3→import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+     4→import {
+     5→  BookUser,
+     6→  Bot,
+     7→  Brain,
+     8→  Clock,
+     9→  Coins,
+    10→  GraduationCap,
+    11→  ImagePlus,
+    12→  Loader2,
+    13→  Pencil,
+    14→  Plus,
+    15→  RefreshCw,
+    16→  Sparkles,
+    17→  Timer,
+    18→  Trash2,
+    19→  type LucideIcon,
+    20→} from 'lucide-react'
+    21→import { toast } from 'sonner'
+    22→import { Button } from '@/components/ui/button'
+    23→import {
+    24→  Dialog,
+    25→  DialogContent,
+    26→  DialogDescription,
+    27→  DialogFooter,
+    28→  DialogHeader,
+    29→  DialogTitle,
+    30→} from '@/components/ui/dialog'
+    31→import { Input } from '@/components/ui/input'
+    32→import { Label } from '@/components/ui/label'
+    33→import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+    34→import { Skeleton } from '@/components/ui/skeleton'
+    35→import { Textarea } from '@/components/ui/textarea'
+    36→import { api, errorMessage } from '@/lib/api'
+    37→import type { AiAgentDTO, AiPersona } from '@/lib/types'
+    38→import { cn } from '@/lib/utils'
+    39→import { UserAvatar } from '../../shared/UserAvatar'
+    40→
+    41→/* ────────────────────────── helpers ────────────────────────── */
+    42→
+    43→/** Display defaults when an agent has no (or a broken) persona JSON. */
+    44→const PERSONA_DEFAULTS = {
+    45→  activeFrom: 5,
+    46→  activeTo: 17,
+    47→  minDelaySec: 20,
+    48→  maxDelaySec: 90,
+    49→} as const
+    50→
+    51→/** Safe aiPersona JSON parse — never throws; missing fields fall back at call sites. */
+    52→function personaOf(raw: string | null): Partial<AiPersona> {
+    53→  if (raw) {
+    54→    try {
+    55→      const parsed = JSON.parse(raw) as Partial<AiPersona>
+    56→      if (parsed && typeof parsed === 'object') return parsed
+    57→    } catch {
+    58→      // broken JSON → empty object → defaults below
+    59→    }
+    60→  }
+    61→  return {}
+    62→}
+    63→
+    64→function clampNum(v: string, fallback: number, min: number, max: number): number {
+    65→  const n = Number(v)
+    66→  if (!Number.isFinite(n)) return fallback
+    67→  return Math.min(max, Math.max(min, n))
+    68→}
+    69→
+    70→function fmtHour(h: number): string {
+    71→  return `${Math.min(24, Math.max(0, Math.round(h)))}:00`
+    72→}
+    73→
+    74→type AiStats = Awaited<ReturnType<typeof api.adminAiStats>>
+    75→
+    76→function Chip({ icon: Icon, children, className }: { icon: LucideIcon; children: React.ReactNode; className?: string }) {
+    77→  return (
+    78→    <span
+    79→      className={cn(
+    80→        'inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground',
+    81→        className
+    82→      )}
+    83→    >
+    84→      <Icon className="size-3" />
+    85→      {children}
+    86→    </span>
+    87→  )
+    88→}
+    89→
+    90→/* ────────────────────────── agent card ────────────────────────── */
+    91→
+    92→function AgentCard({ agent, onEdit, onChanged }: { agent: AiAgentDTO; onEdit: () => void; onChanged: () => void }) {
+    93→  const [busy, setBusy] = useState(false)
+    94→  const [confirming, setConfirming] = useState(false)
+    95→  const p = personaOf(agent.aiPersona)
+    96→  const isTeacher = agent.role === 'TEACHER'
+    97→
+    98→  async function remove() {
+    99→    setBusy(true)
+   100→    try {
+   101→      await api.adminDeleteAiAgent(agent.id)
+   102→      toast.success(`${agent.name} deleted`, { description: 'The AI agent was removed from StudySir.' })
+   103→      setConfirming(false)
+   104→      onChanged()
+   105→    } catch (e) {
+   106→      toast.error('Could not delete agent', { description: errorMessage(e) })
+   107→    } finally {
+   108→      setBusy(false)
+   109→    }
+   110→  }
+   111→
+   112→  return (
+   113→    <div className="rounded-xl border bg-card p-4">
+   114→      <div className="flex items-start gap-3">
+   115→        <UserAvatar src={agent.avatar} name={agent.name} className="size-11" />
+   116→        <div className="min-w-0 flex-1">
+   117→          <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold">
+   118→            <span className="truncate">{agent.name}</span>
+   119→            <span
+   120→              className={cn(
+   121→                'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-bold',
+   122→                isTeacher ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'bg-blue-500/15 text-blue-700 dark:text-blue-300'
+   123→              )}
+   124→            >
+   125→              {isTeacher ? <GraduationCap className="size-3" /> : <BookUser className="size-3" />}
+   126→              AI {isTeacher ? 'TEACHER' : 'STUDENT'}
+   127→            </span>
+   128→            {agent.status === 'BANNED' ? (
+   129→              <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-bold text-red-600 dark:text-red-400">
+   130→                BANNED
+   131→              </span>
+   132→            ) : null}
+   133→          </p>
+   134→          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+   135→            {p.tagline?.trim() || agent.headline || 'No tagline yet'}
+   136→          </p>
+   137→        </div>
+   138→        <div className="flex shrink-0 items-center gap-1">
+   139→          <Button size="icon" variant="ghost" className="size-8" onClick={onEdit} aria-label={`Edit ${agent.name}`}>
+   140→            <Pencil className="size-3.5" />
+   141→          </Button>
+   142→          <Popover open={confirming} onOpenChange={setConfirming}>
+   143→            <PopoverTrigger asChild>
+   144→              <Button
+   145→                size="icon"
+   146→                variant="ghost"
+   147→                className="size-8 text-red-600 hover:bg-red-500/10 hover:text-red-700 dark:text-red-400"
+   148→                disabled={busy}
+   149→                aria-label={`Delete ${agent.name}`}
+   150→              >
+   151→                <Trash2 className="size-3.5" />
+   152→              </Button>
+   153→            </PopoverTrigger>
+   154→            <PopoverContent align="end" className="w-64 space-y-3">
+   155→              <p className="text-sm font-semibold">Delete {agent.name}?</p>
+   156→              <p className="text-xs text-muted-foreground">
+   157→                The AI agent is removed from StudySir permanently. Its past chats stay for records.
+   158→              </p>
+   159→              <div className="flex justify-end gap-2">
+   160→                <Button size="sm" variant="ghost" disabled={busy} onClick={() => setConfirming(false)}>
+   161→                  Cancel
+   162→                </Button>
+   163→                <Button size="sm" variant="destructive" disabled={busy} onClick={() => void remove()}>
+   164→                  Delete
+   165→                </Button>
+   166→              </div>
+   167→            </PopoverContent>
+   168→          </Popover>
+   169→        </div>
+   170→      </div>
+   171→
+   172→      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+   173→        <Chip icon={Coins} className="bg-amber-500/15 text-amber-700 dark:text-amber-300">
+   174→          {agent.coins} coins
+   175→        </Chip>
+   176→        <Chip icon={Clock}>
+   177→          Active {fmtHour(p.activeFrom ?? PERSONA_DEFAULTS.activeFrom)}–{fmtHour(p.activeTo ?? PERSONA_DEFAULTS.activeTo)} UTC
+   178→        </Chip>
+   179→        <Chip icon={Timer}>
+   180→          {p.minDelaySec ?? PERSONA_DEFAULTS.minDelaySec}–{p.maxDelaySec ?? PERSONA_DEFAULTS.maxDelaySec}s delay
+   181→        </Chip>
+   182→      </div>
+   183→    </div>
+   184→  )
+   185→}
+   186→
+   187→/* ────────────────────────── create / edit dialog ────────────────────────── */
+   188→
+   189→interface AgentFormState {
+   190→  name: string
+   191→  role: 'TEACHER' | 'STUDENT'
+   192→  avatar: string | null
+   193→  headline: string
+   194→  bio: string
+   195→  city: string
+   196→  subjects: string
+   197→  feeMin: string
+   198→  feeMax: string
+   199→  coins: string
+   200→  grantCoins: string
+   201→  style: string
+   202→  activeFrom: string
+   203→  activeTo: string
+   204→  minDelaySec: string
+   205→  maxDelaySec: string
+   206→  mergeWindowSec: string
+   207→  replyChance: string
+   208→  declineLines: string
+   209→}
+   210→
+   211→function buildForm(agent: AiAgentDTO | null): AgentFormState {
+   212→  if (!agent) {
+   213→    return {
+   214→      name: '',
+   215→      role: 'TEACHER',
+   216→      avatar: null,
+   217→      headline: '',
+   218→      bio: '',
+   219→      city: '',
+   220→      subjects: '',
+   221→      feeMin: '',
+   222→      feeMax: '',
+   223→      coins: '100',
+   224→      grantCoins: '',
+   225→      style: '',
+   226→      activeFrom: '5',
+   227→      activeTo: '17',
+   228→      minDelaySec: '20',
+   229→      maxDelaySec: '90',
+   230→      mergeWindowSec: '7',
+   231→      replyChance: '0.9',
+   232→      declineLines: '',
+   233→    }
+   234→  }
+   235→  const p = personaOf(agent.aiPersona)
+   236→  return {
+   237→    name: agent.name,
+   238→    role: agent.role === 'STUDENT' ? 'STUDENT' : 'TEACHER',
+   239→    avatar: agent.avatar,
+   240→    headline: agent.headline ?? '',
+   241→    bio: agent.bio ?? '',
+   242→    city: agent.city ?? '',
+   243→    subjects: agent.subjects ?? '',
+   244→    feeMin: agent.feeMin != null ? String(agent.feeMin) : '',
+   245→    feeMax: agent.feeMax != null ? String(agent.feeMax) : '',
+   246→    coins: String(agent.coins),
+   247→    grantCoins: '',
+   248→    style: p.style ?? '',
+   249→    activeFrom: String(p.activeFrom ?? 5),
+   250→    activeTo: String(p.activeTo ?? 17),
+   251→    minDelaySec: String(p.minDelaySec ?? 20),
+   252→    maxDelaySec: String(p.maxDelaySec ?? 90),
+   253→    mergeWindowSec: String(p.mergeWindowSec ?? 7),
+   254→    replyChance: String(p.replyChance ?? 0.9),
+   255→    declineLines: (p.declineChances ?? []).join('\n'),
+   256→  }
+   257→}
+   258→
+   259→/**
+   260→ * Shared dialog for creating and editing an AI agent.
+   261→ * Create → POST with persona fields FLAT at top level + `coins`.
+   262→ * Edit → PATCH with persona nested under `persona` + optional `grantCoins`.
+   263→ */
+   264→function AgentDialog({
+   265→  open,
+   266→  onOpenChange,
+   267→  agent,
+   268→  onSaved,
+   269→}: {
+   270→  open: boolean
+   271→  onOpenChange: (open: boolean) => void
+   272→  /** null = create mode */
+   273→  agent: AiAgentDTO | null
+   274→  onSaved: () => void
+   275→}) {
+   276→  const isEdit = !!agent
+   277→  const [busy, setBusy] = useState(false)
+   278→  const [uploading, setUploading] = useState(false)
+   279→  const [f, setF] = useState<AgentFormState>(() => buildForm(agent))
+   280→  const fileRef = useRef<HTMLInputElement>(null)
+   281→  const isTeacher = f.role === 'TEACHER'
+   282→
+   283→  function set<K extends keyof AgentFormState>(key: K, value: AgentFormState[K]) {
+   284→    setF((prev) => ({ ...prev, [key]: value }))
+   285→  }
+   286→
+   287→  async function onPickAvatar(e: React.ChangeEvent<HTMLInputElement>) {
+   288→    const file = e.target.files?.[0]
+   289→    e.target.value = '' // allow re-picking the same file
+   290→    if (!file) return
+   291→    setUploading(true)
+   292→    try {
+   293→      set('avatar', (await api.uploadImage('avatars', file)).url)
+   294→    } catch (err) {
+   295→      toast.error('Could not process image', { description: errorMessage(err) })
+   296→    } finally {
+   297→      setUploading(false)
+   298→    }
+   299→  }
+   300→
+   301→  async function save() {
+   302→    if (!f.name.trim()) {
+   303→      toast.error('Name is required', { description: 'Give the agent a realistic human name.' })
+   304→      return
+   305→    }
+   306→    setBusy(true)
+   307→    try {
+   308→      const minDelay = clampNum(f.minDelaySec, 20, 3, 3600)
+   309→      const maxDelay = Math.max(minDelay, clampNum(f.maxDelaySec, 90, 5, 7200))
+   310→      const declineChances = f.declineLines
+   311→        .split('\n')
+   312→        .map((s) => s.trim())
+   313→        .filter(Boolean)
+   314→        .slice(0, 6)
+   315→
+   316→      if (isEdit && agent) {
+   317→        const grant = Math.max(0, Math.round(Number(f.grantCoins) || 0))
+   318→        await api.adminUpdateAiAgent(agent.id, {
+   319→          name: f.name.trim(),
+   320→          ...(f.avatar && f.avatar !== agent.avatar ? { avatar: f.avatar } : {}),
+   321→          headline: f.headline.trim(),
+   322→          bio: f.bio.trim(),
+   323→          city: f.city.trim(),
+   324→          ...(isTeacher
+   325→            ? {
+   326→                subjects: f.subjects.trim(),
+   327→                feeMin: Math.max(0, Number(f.feeMin) || 0),
+   328→                feeMax: Math.max(0, Number(f.feeMax) || 0),
+   329→              }
+   330→            : {}),
+   331→          ...(grant > 0 ? { grantCoins: grant } : {}),
+   332→          persona: {
+   333→            tagline: personaOf(agent.aiPersona).tagline?.trim() || f.headline.trim(),
+   334→            style: f.style.trim(),
+   335→            activeFrom: clampNum(f.activeFrom, 5, 0, 23),
+   336→            activeTo: clampNum(f.activeTo, 17, 0, 24),
+   337→            minDelaySec: minDelay,
+   338→            maxDelaySec: maxDelay,
+   339→            mergeWindowSec: clampNum(f.mergeWindowSec, 7, 2, 120),
+   340→            replyChance: clampNum(f.replyChance, 0.9, 0, 1),
+   341→            declineChances,
+   342→          },
+   343→        })
+   344→        toast.success('Agent updated', {
+   345→          description:
+   346→            grant > 0
+   347→              ? `${grant} coins granted to ${f.name.trim()}.`
+   348→              : `${f.name.trim()}'s profile and persona were saved.`,
+   349→        })
+   350→      } else {
+   351→        await api.adminCreateAiAgent({
+   352→          name: f.name.trim(),
+   353→          role: f.role,
+   354→          ...(f.avatar ? { avatar: f.avatar } : {}),
+   355→          headline: f.headline.trim(),
+   356→          bio: f.bio.trim(),
+   357→          city: f.city.trim(),
+   358→          ...(isTeacher
+   359→            ? {
+   360→                subjects: f.subjects.trim(),
+   361→                feeMin: Math.max(0, Number(f.feeMin) || 0),
+   362→                feeMax: Math.max(0, Number(f.feeMax) || 0),
+   363→                coins: Math.max(0, Math.round(Number(f.coins) || 0)),
+   364→              }
+   365→            : {}),
+   366→          tagline: f.headline.trim() || (f.role === 'TEACHER' ? 'AI teacher on StudySir' : 'AI student on StudySir'),
+   367→          style: f.style.trim(),
+   368→          activeFrom: clampNum(f.activeFrom, 5, 0, 23),
+   369→          activeTo: clampNum(f.activeTo, 17, 0, 24),
+   370→          minDelaySec: minDelay,
+   371→          maxDelaySec: maxDelay,
+   372→          mergeWindowSec: clampNum(f.mergeWindowSec, 7, 2, 120),
+   373→          replyChance: clampNum(f.replyChance, 0.9, 0, 1),
+   374→          declineChances,
+   375→        })
+   376→        toast.success(`${f.name.trim()} is live on StudySir`, {
+   377→          description: `AI ${f.role === 'TEACHER' ? 'teacher' : 'student'} created — it now chats with its own persona.`,
+   378→        })
+   379→      }
+   380→      onSaved()
+   381→    } catch (e) {
+   382→      toast.error(isEdit ? 'Could not update agent' : 'Could not create agent', { description: errorMessage(e) })
+   383→    } finally {
+   384→      setBusy(false)
+   385→    }
+   386→  }
+   387→
+   388→  return (
+   389→    <Dialog open={open} onOpenChange={onOpenChange}>
+   390→      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+   391→        <DialogHeader>
+   392→          <DialogTitle className="flex items-center gap-2">
+   393→            <Bot className="size-4 text-[#1877F2]" />
+   394→            {isEdit ? `Edit ${agent?.name}` : 'New AI Agent'}
+   395→          </DialogTitle>
+   396→          <DialogDescription>
+   397→            {isEdit
+   398→              ? 'Profile, coins and humanlike persona for this agent.'
+   399→              : 'Creates a humanlike user that chats, accepts and hires on StudySir.'}
+   400→          </DialogDescription>
+   401→        </DialogHeader>
+   402→
+   403→        <div className="space-y-4">
+   404→          {/* role (create only — role is fixed after creation) */}
+   405→          {!isEdit ? (
+   406→            <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Agent role">
+   407→              <button
+   408→                type="button"
+   409→                role="radio"
+   410→                aria-checked={f.role === 'TEACHER'}
+   411→                onClick={() => set('role', 'TEACHER')}
+   412→                className={cn(
+   413→                  'flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-semibold transition-colors',
+   414→                  f.role === 'TEACHER'
+   415→                    ? 'border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+   416→                    : 'border-border bg-muted/50 text-muted-foreground hover:bg-secondary'
+   417→                )}
+   418→              >
+   419→                <GraduationCap className="size-4" />
+   420→                AI Teacher
+   421→              </button>
+   422→              <button
+   423→                type="button"
+   424→                role="radio"
+   425→                aria-checked={f.role === 'STUDENT'}
+   426→                onClick={() => set('role', 'STUDENT')}
+   427→                className={cn(
+   428→                  'flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-semibold transition-colors',
+   429→                  f.role === 'STUDENT'
+   430→                    ? 'border-[#1877F2]/60 bg-[#1877F2]/10 text-[#1877F2] dark:text-blue-300'
+   431→                    : 'border-border bg-muted/50 text-muted-foreground hover:bg-secondary'
+   432→                )}
+   433→              >
+   434→                <BookUser className="size-4" />
+   435→                AI Student
+   436→              </button>
+   437→            </div>
+   438→          ) : null}
+   439→
+   440→          {/* name + avatar upload */}
+   441→          <div className="flex items-end gap-3 rounded-lg bg-muted/50 p-3">
+   442→            {f.avatar ? (
+   443→              <img src={f.avatar} alt={`${f.name || 'Agent'} preview`} className="size-14 shrink-0 rounded-full object-cover" />
+   444→            ) : (
+   445→              <UserAvatar name={f.name || 'New Agent'} className="size-14" />
+   446→            )}
+   447→            <div className="min-w-0 flex-1 space-y-1.5">
+   448→              <Label htmlFor="agent-name">Name *</Label>
+   449→              <Input
+   450→                id="agent-name"
+   451→                value={f.name}
+   452→                onChange={(e) => set('name', e.target.value)}
+   453→                placeholder="e.g. Ayesha Khan"
+   454→                maxLength={80}
+   455→              />
+   456→            </div>
+   457→            <div className="shrink-0 pb-0.5">
+   458→              <input
+   459→                ref={fileRef}
+   460→                type="file"
+   461→                accept="image/*"
+   462→                className="hidden"
+   463→                onChange={(e) => void onPickAvatar(e)}
+   464→                aria-hidden="true"
+   465→                tabIndex={-1}
+   466→              />
+   467→              <Button type="button" variant="outline" size="sm" disabled={uploading} onClick={() => fileRef.current?.click()}>
+   468→                {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <ImagePlus className="size-3.5" />}
+   469→                Photo
+   470→              </Button>
+   471→            </div>
+   472→          </div>
+   473→
+   474→          <div className="grid grid-cols-2 gap-3">
+   475→            <div className="space-y-1.5">
+   476→              <Label htmlFor="agent-headline">Headline</Label>
+   477→              <Input
+   478→                id="agent-headline"
+   479→                value={f.headline}
+   480→                onChange={(e) => set('headline', e.target.value)}
+   481→                placeholder={isTeacher ? 'e.g. Math tutor, 8 yrs experience' : 'e.g. FSc student, need tuition'}
+   482→                maxLength={120}
+   483→              />
+   484→            </div>
+   485→            <div className="space-y-1.5">
+   486→              <Label htmlFor="agent-city">City</Label>
+   487→              <Input
+   488→                id="agent-city"
+   489→                value={f.city}
+   490→                onChange={(e) => set('city', e.target.value)}
+   491→                placeholder="e.g. Lahore"
+   492→                maxLength={80}
+   493→              />
+   494→            </div>
+   495→          </div>
+   496→
+   497→          <div className="space-y-1.5">
+   498→            <Label htmlFor="agent-bio">Bio</Label>
+   499→            <Textarea
+   500→              id="agent-bio"
+   501→              rows={2}
+   502→              value={f.bio}
+   503→              onChange={(e) => set('bio', e.target.value)}
+   504→              placeholder="A short human-sounding description"
+   505→              maxLength={2000}
+   506→            />
+   507→          </div>
+   508→
+   509→          {isTeacher ? (
+   510→            <div className="grid grid-cols-4 gap-3">
+   511→              <div className="col-span-2 space-y-1.5">
+   512→                <Label htmlFor="agent-subjects">Subjects</Label>
+   513→                <Input
+   514→                  id="agent-subjects"
+   515→                  value={f.subjects}
+   516→                  onChange={(e) => set('subjects', e.target.value)}
+   517→                  placeholder="Math, Physics"
+   518→                  maxLength={300}
+   519→                />
+   520→              </div>
+   521→              <div className="space-y-1.5">
+   522→                <Label htmlFor="agent-feemin">Fee min</Label>
+   523→                <Input id="agent-feemin" type="number" min={0} value={f.feeMin} onChange={(e) => set('feeMin', e.target.value)} />
+   524→              </div>
+   525→              <div className="space-y-1.5">
+   526→                <Label htmlFor="agent-feemax">Fee max</Label>
+   527→                <Input id="agent-feemax" type="number" min={0} value={f.feeMax} onChange={(e) => set('feeMax', e.target.value)} />
+   528→              </div>
+   529→            </div>
+   530→          ) : null}
+   531→
+   532→          {/* coins — initial funding on create (teachers), grant on edit */}
+   533→          {!isEdit ? (
+   534→            isTeacher ? (
+   535→              <div className="space-y-1.5">
+   536→                <Label htmlFor="agent-coins">Initial coins</Label>
+   537→                <Input
+   538→                  id="agent-coins"
+   539→                  type="number"
+   540→                  min={0}
+   541→                  max={100000}
+   542→                  value={f.coins}
+   543→                  onChange={(e) => set('coins', e.target.value)}
+   544→                />
+   545→                <p className="text-[11px] text-muted-foreground">
+   546→                  AI teachers pay coins to accept students — fund them here (default 100).
+   547→                </p>
+   548→              </div>
+   549→            ) : null
+   550→          ) : (
+   551→            <div className="space-y-1.5">
+   552→              <Label htmlFor="agent-grant">Grant coins</Label>
+   553→              <div className="flex items-center gap-2">
+   554→                <Input
+   555→                  id="agent-grant"
+   556→                  type="number"
+   557→                  min={0}
+   558→                  max={100000}
+   559→                  value={f.grantCoins}
+   560→                  onChange={(e) => set('grantCoins', e.target.value)}
+   561→                  placeholder="e.g. 200"
+   562→                />
+   563→                <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
+   564→                  current: <b className="tabular-nums">{agent?.coins ?? 0}</b>
+   565→                </span>
+   566→              </div>
+   567→              <p className="text-[11px] text-muted-foreground">Added on top of the current balance — leave empty for none.</p>
+   568→            </div>
+   569→          )}
+   570→
+   571→          {/* persona */}
+   572→          <div className="space-y-3 rounded-lg border bg-muted/40 p-3">
+   573→            <div>
+   574→              <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+   575→                <Brain className="size-3.5" />
+   576→                Persona — humanlike behaviour
+   577→              </p>
+   578→              <p className="mt-0.5 text-[11px] text-muted-foreground">
+   579→                Never replies instantly, merges quick messages, sleeps outside active hours and sometimes declines.
+   580→              </p>
+   581→            </div>
+   582→
+   583→            <div className="space-y-1.5">
+   584→              <Label htmlFor="agent-style">Style</Label>
+   585→              <Textarea
+   586→                id="agent-style"
+   587→                rows={2}
+   588→                value={f.style}
+   589→                onChange={(e) => set('style', e.target.value)}
+   590→                placeholder="How they talk — e.g. casual Roman Urdu + English mix, short WhatsApp-style texts"
+   591→                maxLength={2000}
+   592→              />
+   593→            </div>
+   594→
+   595→            <div className="grid grid-cols-2 gap-3">
+   596→              <div className="space-y-1.5">
+   597→                <Label htmlFor="agent-activefrom">Active from</Label>
+   598→                <Input
+   599→                  id="agent-activefrom"
+   600→                  type="number"
+   601→                  min={0}
+   602→                  max={23}
+   603→                  value={f.activeFrom}
+   604→                  onChange={(e) => set('activeFrom', e.target.value)}
+   605→                />
+   606→                <p className="text-[11px] text-muted-foreground">UTC hours (0–23)</p>
+   607→              </div>
+   608→              <div className="space-y-1.5">
+   609→                <Label htmlFor="agent-activeto">Active to</Label>
+   610→                <Input
+   611→                  id="agent-activeto"
+   612→                  type="number"
+   613→                  min={0}
+   614→                  max={24}
+   615→                  value={f.activeTo}
+   616→                  onChange={(e) => set('activeTo', e.target.value)}
+   617→                />
+   618→                <p className="text-[11px] text-muted-foreground">UTC hours (0–24)</p>
+   619→              </div>
+   620→              <div className="space-y-1.5">
+   621→                <Label htmlFor="agent-mindelay">Min delay (sec)</Label>
+   622→                <Input
+   623→                  id="agent-mindelay"
+   624→                  type="number"
+   625→                  min={3}
+   626→                  max={3600}
+   627→                  value={f.minDelaySec}
+   628→                  onChange={(e) => set('minDelaySec', e.target.value)}
+   629→                />
+   630→              </div>
+   631→              <div className="space-y-1.5">
+   632→                <Label htmlFor="agent-maxdelay">Max delay (sec)</Label>
+   633→                <Input
+   634→                  id="agent-maxdelay"
+   635→                  type="number"
+   636→                  min={5}
+   637→                  max={7200}
+   638→                  value={f.maxDelaySec}
+   639→                  onChange={(e) => set('maxDelaySec', e.target.value)}
+   640→                />
+   641→              </div>
+   642→              <div className="space-y-1.5">
+   643→                <Label htmlFor="agent-merge">Merge window (sec)</Label>
+   644→                <Input
+   645→                  id="agent-merge"
+   646→                  type="number"
+   647→                  min={2}
+   648→                  max={120}
+   649→                  value={f.mergeWindowSec}
+   650→                  onChange={(e) => set('mergeWindowSec', e.target.value)}
+   651→                />
+   652→                <p className="text-[11px] text-muted-foreground">Wait this long for follow-up messages before replying.</p>
+   653→              </div>
+   654→              <div className="space-y-1.5">
+   655→                <Label htmlFor="agent-reply">Reply chance (0–1)</Label>
+   656→                <Input
+   657→                  id="agent-reply"
+   658→                  type="number"
+   659→                  min={0}
+   660→                  max={1}
+   661→                  step={0.05}
+   662→                  value={f.replyChance}
+   663→                  onChange={(e) => set('replyChance', e.target.value)}
+   664→                />
+   665→                <p className="text-[11px] text-muted-foreground">
+   666→                  Chance to reply when a real user messages — lower = ignores more.
+   667→                </p>
+   668→              </div>
+   669→            </div>
+   670→
+   671→            <div className="space-y-1.5">
+   672→              <Label htmlFor="agent-decline">Decline lines</Label>
+   673→              <Textarea
+   674→                id="agent-decline"
+   675→                rows={3}
+   676→                value={f.declineLines}
+   677→                onChange={(e) => set('declineLines', e.target.value)}
+   678→                placeholder={'One per line — polite excuses used with real users, e.g.\nSorry, my schedule is full this month.'}
+   679→                maxLength={1200}
+   680→              />
+   681→              <p className="text-[11px] text-muted-foreground">One per line (max 6) — used to politely decline or leave on read.</p>
+   682→            </div>
+   683→          </div>
+   684→        </div>
+   685→
+   686→        <DialogFooter className="gap-2">
+   687→          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
+   688→            Cancel
+   689→          </Button>
+   690→          <Button onClick={() => void save()} disabled={busy || uploading}>
+   691→            {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+   692→            {isEdit ? 'Save changes' : 'Create agent'}
+   693→          </Button>
+   694→        </DialogFooter>
+   695→      </DialogContent>
+   696→    </Dialog>
+   697→  )
+   698→}
+   699→
+   700→/* ────────────────────────── tab ────────────────────────── */
+   701→
+   702→export function AiEngineTab() {
+   703→  const [stats, setStats] = useState<AiStats | null>(null)
+   704→  const [agents, setAgents] = useState<AiAgentDTO[] | null>(null)
+   705→  const [loading, setLoading] = useState(false)
+   706→  const [dialog, setDialog] = useState<{ mode: 'create' } | { mode: 'edit'; agent: AiAgentDTO } | null>(null)
+   707→
+   708→  const load = useCallback(async () => {
+   709→    setLoading(true)
+   710→    try {
+   711→      const [s, a] = await Promise.all([api.adminAiStats(), api.adminAiAgents()])
+   712→      setStats(s)
+   713→      setAgents(a.agents)
+   714→    } catch (e) {
+   715→      toast.error('Could not load AI engine data', { description: errorMessage(e) })
+   716→    } finally {
+   717→      setLoading(false)
+   718→    }
+   719→  }, [])
+   720→
+   721→  useEffect(() => {
+   722→    void load()
+   723→  }, [load])
+   724→
+   725→  // sorted by coins desc (runtime guard: tolerate a legacy scalar from an older backend)
+   726→  const wasted = useMemo(() => {
+   727→    const list = stats?.wastedCoinsByRealTeachers
+   728→    if (!list || !Array.isArray(list)) return []
+   729→    return [...list].sort((a, b) => b.coins - a.coins)
+   730→  }, [stats])
+   731→  const wastedTotal = useMemo(() => wasted.reduce((a, w) => a + w.coins, 0), [wasted])
+   732→  const agentCount = agents ? agents.length : (stats?.agents.length ?? 0)
+   733→
+   734→  function openEdit(agent: AiAgentDTO) {
+   735→    setDialog({ mode: 'edit', agent })
+   736→  }
+   737→
+   738→  if (loading && !stats && !agents) {
+   739→    return (
+   740→      <div className="mt-3 space-y-3">
+   741→        <Skeleton className="h-10 rounded-xl" />
+   742→        <Skeleton className="h-44 rounded-xl" />
+   743→        <div className="grid gap-2.5 md:grid-cols-2">
+   744→          {[0, 1, 2, 3].map((i) => (
+   745→            <Skeleton key={i} className="h-28 rounded-xl" />
+   746→          ))}
+   747→        </div>
+   748→      </div>
+   749→    )
+   750→  }
+   751→
+   752→  if (!stats || !agents) return null
+   753→
+   754→  return (
+   755→    <div className="mt-3 space-y-3">
+   756→      <div className="flex flex-wrap items-center justify-between gap-2">
+   757→        <p className="text-xs text-muted-foreground">
+   758→          Humanlike agents · delayed replies, merge windows, active hours · updates on refresh
+   759→        </p>
+   760→        <div className="flex gap-2">
+   761→          <Button size="sm" variant="ghost" onClick={() => void load()} disabled={loading}>
+   762→            <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
+   763→            Refresh
+   764→          </Button>
+   765→          <Button size="sm" onClick={() => setDialog({ mode: 'create' })}>
+   766→            <Plus className="size-3.5" />
+   767→            New AI Agent
+   768→          </Button>
+   769→        </div>
+   770→      </div>
+   771→
+   772→      {/* header chips — LLM provider, AI messages, agents */}
+   773→      <div className="flex flex-wrap items-center gap-2">
+   774→        <span className="inline-flex items-center gap-1.5 rounded-lg border bg-card px-2.5 py-1.5 text-xs font-semibold">
+   775→          <span className="size-2 animate-pulse rounded-full bg-green-500" aria-hidden />
+   776→          <Brain className="size-3.5 text-muted-foreground" />
+   777→          LLM: {stats.llmProvider || 'unknown'}
+   778→        </span>
+   779→        <Chip icon={Sparkles} className="border border-transparent px-2.5 py-1.5 text-xs">
+   780→          {stats.aiMessages} AI messages
+   781→        </Chip>
+   782→        <Chip icon={Bot} className="border border-transparent px-2.5 py-1.5 text-xs">
+   783→          {agentCount} agents
+   784→        </Chip>
+   785→      </div>
+   786→
+   787→      {/* wasted coins (requirement F) */}
+   788→      <section className="rounded-xl border bg-card p-4">
+   789→        <h2 className="mb-1 flex items-center gap-2 text-sm font-bold text-foreground">
+   790→          <Coins className="size-4 text-amber-500" />
+   791→          Wasted coins — real teachers × AI students
+   792→        </h2>
+   793→        <p className="mb-3 text-xs text-muted-foreground">
+   794→          When StudySir reaches 1,000 paid teachers, spent coins are refunded as a bonus (Economy tab).
+   795→        </p>
+   796→        {wasted.length === 0 ? (
+   797→          <p className="rounded-lg bg-muted/60 p-3 text-sm text-muted-foreground">
+   798→            No real teacher has spent coins on AI agents yet.
+   799→          </p>
+   800→        ) : (
+   801→          <>
+   802→            <ul className="max-h-64 space-y-2 overflow-y-auto pr-1">
+   803→              {wasted.map((w, i) => (
+   804→                <li key={w.teacherId} className="flex items-center gap-3 rounded-lg bg-muted/60 p-2.5">
+   805→                  <span className="grid size-6 shrink-0 place-items-center rounded-full bg-amber-500/15 text-[11px] font-bold text-amber-700 dark:text-amber-300">
+   806→                    {i + 1}
+   807→                  </span>
+   808→                  <UserAvatar src={null} name={w.teacherName} className="size-8" />
+   809→                  <div className="min-w-0 flex-1">
+   810→                    <p className="truncate text-sm font-semibold">{w.teacherName}</p>
+   811→                    <p className="text-[11px] text-muted-foreground">Wasted chatting with AI students</p>
+   812→                  </div>
+   813→                  <p className="shrink-0 text-sm font-bold tabular-nums text-amber-600 dark:text-amber-400">
+   814→                    {w.coins} <span className="text-xs font-medium">coins</span>
+   815→                  </p>
+   816→                </li>
+   817→              ))}
+   818→            </ul>
+   819→            <p className="mt-2 text-right text-[11px] font-medium text-muted-foreground">
+   820→              Total <b className="tabular-nums text-amber-600 dark:text-amber-400">{wastedTotal}</b> coins tracked for the
+   821→              milestone refund
+   822→            </p>
+   823→          </>
+   824→        )}
+   825→      </section>
+   826→
+   827→      {/* AI agents */}
+   828→      <section className="space-y-2.5">
+   829→        <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
+   830→          <Bot className="size-4 text-[#1877F2]" />
+   831→          AI agents
+   832→          <span className="text-xs font-medium text-muted-foreground">({agents.length})</span>
+   833→        </h2>
+   834→        {agents.length === 0 ? (
+   835→          <p className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
+   836→            No AI agents yet — create the first one with “New AI Agent”.
+   837→          </p>
+   838→        ) : (
+   839→          <div className="grid gap-2.5 md:grid-cols-2">
+   840→            {agents.map((a) => (
+   841→              <AgentCard key={a.id} agent={a} onEdit={() => openEdit(a)} onChanged={() => void load()} />
+   842→            ))}
+   843→          </div>
+   844→        )}
+   845→      </section>
+   846→
+   847→      {dialog ? (
+   848→        <AgentDialog
+   849→          key={dialog.mode === 'edit' ? `edit-${dialog.agent.id}` : 'create'}
+   850→          open
+   851→          agent={dialog.mode === 'edit' ? dialog.agent : null}
+   852→          onOpenChange={(o) => {
+   853→            if (!o) setDialog(null)
+   854→          }}
+   855→          onSaved={() => {
+   856→            setDialog(null)
+   857→            void load()
+   858→          }}
+   859→        />
+   860→      ) : null}
+   861→    </div>
+   862→  )
+   863→}
+   864→

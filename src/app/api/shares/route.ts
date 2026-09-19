@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireSessionUser, HttpError } from '@/lib/session'
 import { notify } from '@/lib/coins'
+import { scanContent, blockReason, excerpt, MODERATION_REASONS, MODERATION_STATUS } from '@/lib/moderation'
 
 /**
  * POST /api/shares — Facebook-style share-to-feed (requirement M).
@@ -21,6 +22,12 @@ export async function POST(req: NextRequest) {
       throw new HttpError(400, 'Invalid share target')
     }
     if (!targetId) throw new HttpError(400, 'Missing targetId')
+
+    // Content moderation on the caption: block contact info; send links to review.
+    const scan = scanContent(text)
+    const blocked = blockReason(scan)
+    if (blocked) throw new HttpError(400, blocked)
+    const moderationStatus = scan.hasUnapprovedLink ? MODERATION_STATUS.PENDING : MODERATION_STATUS.APPROVED
 
     // Verify the original exists and is not hidden
     let ok = false
@@ -44,8 +51,21 @@ export async function POST(req: NextRequest) {
         courseId: targetType === 'COURSE' ? targetId : null,
         goodId: targetType === 'GOOD' ? targetId : null,
         teacherId: targetType === 'TEACHER' ? targetId : null,
+        moderationStatus,
       },
     })
+
+    if (moderationStatus === MODERATION_STATUS.PENDING) {
+      await db.moderationItem.create({
+        data: {
+          targetType: 'SHARED',
+          targetId: shared.id,
+          authorId: me.id,
+          reason: MODERATION_REASONS.UNAPPROVED_LINK,
+          snippet: excerpt(text, scan.linkMatches),
+        },
+      })
+    }
 
     // Notify the original author that their post was shared
     let notified = false

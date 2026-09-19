@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { ImagePlus, Loader2, X } from 'lucide-react'
+import { ImagePlus, Loader2, PlayCircle, Youtube, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -14,9 +14,12 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
 import { api, errorMessage } from '@/lib/api'
+import type { CourseInput } from '@/lib/api'
 import { compressImageFile } from '@/lib/image'
+import { parseYouTubeUrl } from '@/lib/youtube'
 import { SafeImage } from '../shared/SafeImage'
 
 export function PostCourseDialog({
@@ -39,11 +42,24 @@ export function PostCourseDialog({
   const [classesPerWeek, setClassesPerWeek] = useState('')
   const [format, setFormat] = useState('')
   const [fee, setFee] = useState('')
+  const [videoUrl, setVideoUrl] = useState('')
+  // videoKind: 'INTRO' = paid teaser (join to access) | 'FULL' = complete free course
+  const [videoKind, setVideoKind] = useState<'INTRO' | 'FULL'>('INTRO')
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const valid = title.trim().length > 2 && description.trim().length > 2 && (Number(fee) || 0) > 0
+  // Live YouTube preview parsed from the URL the teacher is typing.
+  const yt = videoUrl.trim() ? parseYouTubeUrl(videoUrl) : null
+  const isFullFree = videoKind === 'FULL'
+  // A full free-course video forces the fee to 0; an intro video requires a paid fee.
+  const effectiveFee = isFullFree ? 0 : Number(fee) || 0
+  const valid =
+    title.trim().length > 2 &&
+    description.trim().length > 2 &&
+    (!yt || (yt && effectiveFee >= 0)) && // with a video, free is allowed
+    (!yt || isFullFree ? effectiveFee >= 0 : effectiveFee > 0) // intro video must be paid
+    ? true : false
 
   async function pickCover(file: File | undefined) {
     if (!file || uploading) return
@@ -69,7 +85,7 @@ export function PostCourseDialog({
     if (!valid || loading) return
     setLoading(true)
     try {
-      await api.createCourse({
+      const payload: CourseInput = {
         title: title.trim(),
         description: description.trim(),
         cover: cover || undefined,
@@ -80,9 +96,14 @@ export function PostCourseDialog({
         classDuration: classDuration.trim() || undefined,
         classesPerWeek: classesPerWeek.trim() || undefined,
         format: format.trim() || undefined,
-        fee: Number(fee) || 0,
-      })
-      toast.success('Course published!', { description: 'Students can now join your course.' })
+        fee: isFullFree ? 0 : Number(fee) || 0,
+      }
+      if (yt) {
+        payload.videoUrl = yt.watchUrl
+        payload.videoKind = videoKind
+      }
+      await api.createCourse(payload)
+      toast.success('Course published!', { description: yt ? (isFullFree ? 'Students can watch the free course now.' : 'Intro video live — students watch then send a Join Request.') : 'Students can now join your course.' })
       onOpenChange(false)
       onPosted()
       reset()
@@ -105,6 +126,8 @@ export function PostCourseDialog({
     setClassesPerWeek('')
     setFormat('')
     setFee('')
+    setVideoUrl('')
+    setVideoKind('INTRO')
   }
 
   return (
@@ -195,9 +218,76 @@ export function PostCourseDialog({
               <Input id="course-format" placeholder="Group classes via Google Meet" value={format} onChange={(e) => setFormat(e.target.value)} />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="course-fee">Fee ($) *</Label>
-              <Input id="course-fee" type="number" min={0} placeholder="15" value={fee} onChange={(e) => setFee(e.target.value)} />
+              <Label htmlFor="course-fee">Fee ($) {isFullFree ? '(free — full course)' : '*'}</Label>
+              <Input
+                id="course-fee"
+                type="number"
+                min={0}
+                placeholder={isFullFree ? '0' : '15'}
+                value={isFullFree ? '0' : fee}
+                disabled={isFullFree}
+                onChange={(e) => setFee(e.target.value)}
+              />
+              {isFullFree ? (
+                <p className="text-[11px] text-muted-foreground">A full free-course video is free for everyone — no join request needed.</p>
+              ) : null}
             </div>
+          </div>
+
+          {/* YouTube video attachment */}
+          <div className="grid gap-2 rounded-lg border bg-muted/30 p-3">
+            <div className="flex items-center gap-2">
+              <Youtube className="size-4 text-red-600" />
+              <p className="text-sm font-semibold">YouTube video (optional)</p>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Paste a YouTube link to attach an intro video or a full free course. The thumbnail is auto-generated from the video.
+            </p>
+            <div className="grid gap-1.5">
+              <Label htmlFor="course-video" className="sr-only">YouTube link</Label>
+              <Input
+                id="course-video"
+                placeholder="https://www.youtube.com/watch?v=…  or  https://youtu.be/…"
+                value={videoUrl}
+                onChange={(e) => setVideoUrl(e.target.value)}
+              />
+              {videoUrl.trim() && !yt ? (
+                <p className="text-[11px] text-red-600">That doesn't look like a YouTube link. Use a youtube.com/watch?v=… or youtu.be/… URL.</p>
+              ) : null}
+            </div>
+
+            {yt ? (
+              <RadioGroup
+                value={videoKind}
+                onValueChange={(v) => setVideoKind(v as 'INTRO' | 'FULL')}
+                className="grid gap-2"
+              >
+                <label htmlFor="kind-intro" className="flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 has-[:checked]:border-[#1877F2] has-[:checked]:bg-[#1877F2]/5">
+                  <RadioGroupItem value="INTRO" id="kind-intro" className="mt-0.5" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">Intro / teaser video <span className="text-muted-foreground">(paid course)</span></p>
+                    <p className="text-[11px] text-muted-foreground">Students watch this preview, then send a Join Request to access the full course.</p>
+                  </div>
+                </label>
+                <label htmlFor="kind-full" className="flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 has-[:checked]:border-[#1877F2] has-[:checked]:bg-[#1877F2]/5">
+                  <RadioGroupItem value="FULL" id="kind-full" className="mt-0.5" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">Full free course <span className="text-muted-foreground">(everyone can watch)</span></p>
+                    <p className="text-[11px] text-muted-foreground">The complete course video is embedded on the card — anyone can watch it for free, no join request needed. Course fee becomes 0.</p>
+                  </div>
+                </label>
+              </RadioGroup>
+            ) : null}
+
+            {yt ? (
+              <div className="relative overflow-hidden rounded-lg border">
+                <SafeImage src={yt.thumbnailHq} alt="YouTube preview" className="aspect-video w-full object-cover" />
+                <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-black/70 px-2 py-0.5 text-[11px] font-semibold text-white">
+                  <PlayCircle className="size-3.5" />
+                  {isFullFree ? 'Full free course' : 'Intro video'}
+                </span>
+              </div>
+            ) : null}
           </div>
         </div>
 

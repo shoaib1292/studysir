@@ -34,7 +34,9 @@ model User {
   emailVerificationCodeExpiresAt DateTime?
   kycStatus     String   @default("NONE") // teacher KYC: NONE | PENDING | APPROVED | REJECTED
   isAdmin       Boolean  @default(false) // platform-admin access (separate login entry)
-  subRole       String? // admin sub-role: OWNER (full) | STAFF (reports+users only)
+  subRole       String? // admin sub-role: OWNER (full) | STAFF (custom permissions below)
+  permissions  String? // JSON array of module keys a STAFF admin may access
+  staffCreatedBy String? // admin who created this staff account
   isAI          Boolean  @default(false) // AI-powered demo agent (teacher or student)
   aiPersona     String? // JSON: { style, activeFrom, activeTo, minDelaySec, maxDelaySec, replyChance, ... }
   currency      String? // preferred display currency code (USD/EUR/INR/PKR)
@@ -73,6 +75,8 @@ model User {
   planPurchases   PlanPurchase[] @relation("planBuyer")
   affiliateSales  PlanPurchase[] @relation("planAffiliate")
   affiliateEarns  AffiliateEarning[]
+  moderationItems ModerationItem[]
+  comments        Comment[]
 }
 
 // mode: ONLINE | HOME | CENTER  | status: OPEN | HIRED | CLOSED
@@ -94,6 +98,7 @@ model TuitionPost {
   coinCost      Int      @default(10)
   status        String   @default("OPEN")
   hidden        Boolean  @default(false) // moderation: soft-hidden from feeds
+  moderationStatus String   @default("APPROVED") // APPROVED | PENDING | REJECTED (links need admin approval)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -138,6 +143,7 @@ model Message {
   forwarded    Boolean    @default(false) // true when the message was forwarded from another chat
   readAt       DateTime?
   deletedAt    DateTime?  // "unsend" — soft delete, renders as an Unsent placeholder
+  moderationStatus String   @default("APPROVED") // APPROVED | PENDING | BLOCKED (contact info / unapproved link)
   createdAt    DateTime   @default(now())
 
   reactions Reaction[]
@@ -173,6 +179,12 @@ model Course {
   fee            Float    @default(0)
   status         String   @default("OPEN")
   hidden         Boolean  @default(false) // moderation: soft-hidden from feeds
+  moderationStatus String @default("APPROVED") // APPROVED | PENDING | REJECTED
+  // YouTube video attached to the course. videoKind:
+  //   INTRO — a teaser/preview; students watch it then send a Join Request (paid course)
+  //   FULL  — the complete free course; anyone can watch directly, no join needed
+  videoUrl       String?
+  videoKind      String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }
@@ -362,6 +374,7 @@ model DigitalGood {
   price       Float    @default(0)
   fileUrl     String? // uploaded digital asset file (assetType = file)
   hidden      Boolean  @default(false) // moderation: soft-hidden from feeds
+  moderationStatus String @default("APPROVED") // APPROVED | PENDING | REJECTED
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -401,6 +414,7 @@ model SharedPost {
   goodId      String?
   teacherId   String?
   hidden      Boolean  @default(false) // moderation: soft-hidden from feeds
+  moderationStatus String @default("APPROVED") // APPROVED | PENDING | REJECTED
   createdAt   DateTime @default(now())
 }
 
@@ -437,4 +451,36 @@ model AffiliateEarning {
   tier        String? // BASIC | PRO | ACADEMY
   amount      Float // PKR credited to the affiliate's money wallet
   createdAt   DateTime @default(now())
+}
+
+// Content moderation queue. Auto-created when a user posts a phone number, email,
+// or an unapproved link in a post/comment/message. status: PENDING | APPROVED | REJECTED
+// targetType: TUITION | COURSE | GOOD | SHARED | MESSAGE
+// reason: CONTACT_INFO (phone/email — blocked outright) | UNAPPROVED_LINK (sent to review)
+model ModerationItem {
+  id          String   @id @default(cuid())
+  targetType  String
+  targetId    String
+  authorId    String
+  author      User     @relation(fields: [authorId], references: [id])
+  reason      String
+  snippet     String   // the flagged text excerpt
+  status      String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  adminNote   String?
+  decidedBy   String?  // admin userId who decided
+  decidedAt   DateTime?
+  createdAt   DateTime @default(now())
+}
+
+// Course/Good/Tuition public discussions — questions & replies from buyers/visitors.
+// targetType: COURSE | GOOD | TUITION
+model Comment {
+  id                String   @id @default(cuid())
+  authorId          String
+  author            User     @relation(fields: [authorId], references: [id])
+  targetType        String
+  targetId          String
+  content           String
+  moderationStatus  String   @default("APPROVED") // APPROVED | PENDING | REJECTED (links reviewed)
+  createdAt         DateTime @default(now())
 }

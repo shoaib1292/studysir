@@ -27,7 +27,21 @@ import { EmptyState } from '../../shared/EmptyState'
 import { timeAgo } from '../../shared/format'
 
 /** Every admin console section — defined here so tabs can navigate without import cycles. */
-export type AdminSection = 'overview' | 'users' | 'reports' | 'payments' | 'kyc' | 'economy' | 'ai' | 'analytics'
+export type AdminSection =
+  | 'overview'
+  | 'users'
+  | 'reports'
+  | 'moderation'
+  | 'payments'
+  | 'withdrawals'
+  | 'kyc'
+  | 'plans'
+  | 'bank-accounts'
+  | 'economy'
+  | 'ai'
+  | 'analytics'
+  | 'staff'
+  | 'settings'
 
 const REPORT_ROLE_CHIP: Record<string, string> = {
   TEACHER: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',

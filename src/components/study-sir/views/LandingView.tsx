@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils'
 import { EmptyState } from '../shared/EmptyState'
 import { UserAvatar } from '../shared/UserAvatar'
 import { timeAgo } from '../shared/format'
+import { Footer } from '../layout/Footer'
 
 interface LandingViewProps {
   onLogin: () => void
@@ -309,11 +310,7 @@ export function LandingView({ onLogin, onSignup }: LandingViewProps) {
         </section>
       </main>
 
-      <footer className="mt-auto border-t bg-card py-4 text-center">
-        <p className="text-xs text-muted-foreground">
-          <span className="font-logo">StudySir</span> © 2025 · Connecting Students &amp; Teachers
-        </p>
-      </footer>
+      <Footer />
     </div>
   )
 }

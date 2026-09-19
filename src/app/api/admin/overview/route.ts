@@ -18,6 +18,7 @@ export async function GET() {
       total, teachers, students, parents, banned, admins,
       tuitions, courses, goods, shares, hiddenCount,
       openReports, pendingPayments, pendingWithdrawals, pendingKyc,
+      pendingModeration, pendingComments,
       coinSum, moneySum, commissionAgg, planPaidRows, milestonePaidSetting,
       recentUsersRows, signupRows, recentTxRows,
     ] = await Promise.all([
@@ -40,6 +41,8 @@ export async function GET() {
       db.topUpRequest.count({ where: { status: 'PENDING' } }),
       db.withdrawRequest.count({ where: { status: 'PENDING' } }),
       db.kycSubmission.count({ where: { status: 'PENDING' } }),
+      db.moderationItem.count({ where: { status: 'PENDING' } }),
+      db.comment.count({ where: { moderationStatus: 'PENDING' } }),
       db.user.aggregate({ _sum: { coins: true } }),
       db.user.aggregate({ _sum: { money: true } }),
       db.purchase.aggregate({ _sum: { commission: true } }),
@@ -76,6 +79,8 @@ export async function GET() {
         pendingWithdrawals,
         pendingKyc,
         pendingCoinRequests: pendingPayments,
+        pendingModeration,
+        pendingComments,
       },
       money: {
         coinsInCirculation: coinSum._sum.coins ?? 0,

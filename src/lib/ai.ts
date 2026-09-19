@@ -35,9 +35,13 @@ export interface AIPersona {
   mergeWindowSec: number // quiet period before generating one merged reply
   replyChance: number // 0..1 — probability the agent replies at all
   declineChances: string[] // polite excuses used when declining real users
+  /** 0..1 — how likely the agent engages with the feed when the activity cron runs. */
+  engagementChance?: number
+  /** 'short' (1-2 sentences) or 'detailed' (3-5 sentences) — controls review/question length. */
+  reviewQuality?: 'short' | 'detailed'
 }
 
-const DEFAULT_PERSONA: AIPersona = {
+export const DEFAULT_PERSONA: AIPersona = {
   tagline: 'Friendly StudySir user',
   style: 'Casual, warm, short WhatsApp-style messages.',
   activeFrom: 5, // 10:00 PKT
@@ -50,12 +54,14 @@ const DEFAULT_PERSONA: AIPersona = {
     'Sorry, mere schedule is full is month — aap try karein kisi aur teacher ko.',
     'Abhi main apni studies pe focus kar raha hun, tuition possible nahi hai.',
   ],
+  engagementChance: 0.5,
+  reviewQuality: 'short',
 }
 
 export function parsePersona(raw: string | null | undefined): AIPersona {
   if (!raw) return DEFAULT_PERSONA
   try {
-    return { ...DEFAULT_PERSONA, ...JSON.parse(raw) }
+    return { ...DEFAULT_PERSONA, ...(JSON.parse(raw) as Partial<AIPersona>) }
   } catch {
     return DEFAULT_PERSONA
   }
@@ -63,7 +69,7 @@ export function parsePersona(raw: string | null | undefined): AIPersona {
 
 /* ────────────────────────── LLM plumbing ────────────────────────── */
 
-type ChatMsg = { role: 'system' | 'user' | 'assistant'; content: string }
+export type ChatMsg = { role: 'system' | 'user' | 'assistant'; content: string }
 
 let llmChainNote = 'zai-gpt' // which provider answered last (for admin diagnostics)
 
@@ -71,7 +77,12 @@ export function lastLLMProvider(): string {
   return llmChainNote
 }
 
-async function callLLM(messages: ChatMsg[]): Promise<string | null> {
+/**
+ * Calls the LLM chain (OpenRouter → z-ai GPT) and returns the raw assistant
+ * reply, or null if both providers failed. Exported so the background activity
+ * engine can reuse it for review text / questions / tuition descriptions.
+ */
+export async function callLLM(messages: ChatMsg[]): Promise<string | null> {
   // 1) OpenRouter first (only when a key is configured)
   const openRouterKey = process.env.OPENROUTER_API_KEY
   if (openRouterKey) {
@@ -250,6 +261,7 @@ function isAwake(persona: AIPersona): boolean {
   if (persona.activeFrom <= persona.activeTo) return h >= persona.activeFrom && h < persona.activeTo
   return h >= persona.activeFrom || h < persona.activeTo // overnight window
 }
+export { isAwake as isAgentAwake }
 
 function clearTimers(connectionId: string) {
   const q = pending.get(connectionId)

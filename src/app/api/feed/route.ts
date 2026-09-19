@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 
   if (type === 'all' || type === 'tuition') {
     const tuitions = await db.tuitionPost.findMany({
-      where: { status: { not: 'CLOSED' }, hidden: false },
+      where: { status: { not: 'CLOSED' }, hidden: false, moderationStatus: 'APPROVED' },
       orderBy: { createdAt: 'desc' },
       take: 50,
       include: { author: true },
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (type === 'all' || type === 'course') {
-    const courses = await db.course.findMany({ where: { hidden: false }, orderBy: { createdAt: 'desc' }, take: 50, include: { teacher: true } })
+    const courses = await db.course.findMany({ where: { hidden: false, moderationStatus: 'APPROVED' }, orderBy: { createdAt: 'desc' }, take: 50, include: { teacher: true } })
     for (const c of courses) {
       if (!matchQ(c.title, c.description, c.subject, c.teacher.name)) continue
       items.push({ kind: 'course', createdAt: c.createdAt.toISOString(), course: await toCourseDTO(c, viewerId) })
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (type === 'all' || type === 'good') {
-    const goods = await db.digitalGood.findMany({ where: { hidden: false }, orderBy: { createdAt: 'desc' }, take: 50, include: { seller: true } })
+    const goods = await db.digitalGood.findMany({ where: { hidden: false, moderationStatus: 'APPROVED' }, orderBy: { createdAt: 'desc' }, take: 50, include: { seller: true } })
     for (const g of goods) {
       if (!matchQ(g.title, g.description, g.seller.name)) continue
       items.push({ kind: 'good', createdAt: g.createdAt.toISOString(), good: await toGoodDTO(g, viewerId) })
@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
   // Facebook-style shares ("<user> shared a post" with the original embedded).
   // Shown in the "all" feed and in a dedicated "shared" filter.
   if (type === 'all' || type === 'shared') {
-    const shares = await db.sharedPost.findMany({ where: { hidden: false }, orderBy: { createdAt: 'desc' }, take: 50, include: { author: true } })
+    const shares = await db.sharedPost.findMany({ where: { hidden: false, moderationStatus: 'APPROVED' }, orderBy: { createdAt: 'desc' }, take: 50, include: { author: true } })
     for (const s of shares) {
       if (!matchQ(s.text, s.author.name)) continue
       const dto = await toSharedPostDTO(s, viewerId)

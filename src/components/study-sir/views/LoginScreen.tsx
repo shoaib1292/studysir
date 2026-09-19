@@ -106,6 +106,8 @@ export function LoginScreen({
   function done(user: UserDTO) {
     setMe(user)
     resetNav()
+    // Platform admins go straight into the admin console — no need to click "Admin Console".
+    if (user.isAdmin) useAppStore.getState().go('admin', {})
   }
 
   async function pick(user: UserDTO) {

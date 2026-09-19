@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 import { useMoney } from '@/store/useCurrencyStore'
 import { EmptyState } from '../shared/EmptyState'
 import { UserAvatar } from '../shared/UserAvatar'
+import { Footer } from '../layout/Footer'
 
 interface ReferralLandingProps {
   code: string
@@ -264,11 +265,7 @@ export function ReferralLanding({ code, onLogin, onSignup }: ReferralLandingProp
         ) : null}
       </main>
 
-      <footer className="mt-auto border-t bg-card py-4 text-center">
-        <p className="text-xs text-muted-foreground">
-          <span className="font-logo">StudySir</span> © 2025 · Connecting Students &amp; Teachers
-        </p>
-      </footer>
+      <Footer />
     </div>
   )
 }

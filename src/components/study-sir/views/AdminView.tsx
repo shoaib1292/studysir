@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
   ArrowLeft,
@@ -12,12 +12,17 @@ import {
   LogOut,
   Menu,
   Moon,
+  ScrollText,
+  Settings,
   ShieldAlert,
   ShieldCheck,
   Sun,
   User,
+  UserCog,
   Users,
   Wallet,
+  CreditCard,
+  Banknote,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { api } from '@/lib/api'
@@ -45,20 +50,44 @@ import { KycTab } from './admin/KycTab'
 import { EconomyTab } from './admin/EconomyTab'
 import { AiEngineTab } from './admin/AiEngineTab'
 import { AnalyticsTab } from './AnalyticsTab'
+import { ModerationTab } from './admin/ModerationTab'
+import { StaffTab } from './admin/StaffTab'
+import { hasModuleAccess, accessibleModules, type AdminModule } from '@/lib/permissions'
 
 const SECTION_META: Record<AdminSection, { title: string; description: string }> = {
   overview: { title: 'Overview', description: 'Everything happening on StudySir at a glance.' },
   users: { title: 'Users', description: 'Search, review and manage every account.' },
-  reports: { title: 'Reports', description: 'Review reports and take moderation action.' },
-  payments: { title: 'Payments', description: 'Verify payment proofs and process withdrawals.' },
+  reports: { title: 'Reports', description: 'Review user-submitted reports and take action.' },
+  moderation: { title: 'Content Moderation', description: 'Auto-flagged links & contact info. Approve links to make them visible.' },
+  payments: { title: 'Payments', description: 'Verify top-up payment proofs.' },
+  withdrawals: { title: 'Withdrawals', description: 'Process money-wallet withdrawal requests.' },
   kyc: { title: 'KYC', description: 'Verify teacher identity documents.' },
-  economy: { title: 'Economy', description: 'Currency rates, bank accounts, commission and milestone.' },
-  ai: { title: 'AI Engine', description: 'AI agents, personas and wasted-coin tracking.' },
+  plans: { title: 'Premium Plans', description: 'Approve or reject teacher plan purchases.' },
+  'bank-accounts': { title: 'Bank Accounts', description: 'Manage platform payment accounts.' },
+  economy: { title: 'Economy', description: 'Currency rates, commission and milestone.' },
+  ai: { title: 'AI Engine', description: 'AI agents, personas, engagement and wasted-coin tracking.' },
   analytics: { title: 'Analytics', description: 'Platform growth analytics.' },
+  staff: { title: 'Staff Management', description: 'Add staff & grant custom module-by-module access.' },
+  settings: { title: 'Platform Settings', description: 'Commission rate and milestone payout.' },
 }
 
-/** STAFF sub-accounts only see moderation; the owner manages the whole platform. */
-const STAFF_SECTIONS: AdminSection[] = ['overview', 'users', 'reports']
+/** Maps an admin section to its permission module key (for access checks). */
+const SECTION_TO_MODULE: Record<AdminSection, AdminModule> = {
+  overview: 'overview',
+  users: 'users',
+  reports: 'reports',
+  moderation: 'moderation',
+  payments: 'payments',
+  withdrawals: 'withdrawals',
+  kyc: 'kyc',
+  plans: 'plans',
+  'bank-accounts': 'bank-accounts',
+  economy: 'economy',
+  ai: 'ai',
+  analytics: 'analytics',
+  staff: 'staff',
+  settings: 'settings',
+}
 
 const GENERAL_NAV: Array<{ key: AdminSection; label: string; icon: LucideIcon }> = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -67,17 +96,23 @@ const GENERAL_NAV: Array<{ key: AdminSection; label: string; icon: LucideIcon }>
 
 const MODERATION_NAV: Array<{ key: AdminSection; label: string; icon: LucideIcon }> = [
   { key: 'reports', label: 'Reports', icon: ShieldAlert },
+  { key: 'moderation', label: 'Content Moderation', icon: ScrollText },
   { key: 'payments', label: 'Payments', icon: Wallet },
+  { key: 'withdrawals', label: 'Withdrawals', icon: CreditCard },
   { key: 'kyc', label: 'KYC', icon: IdCard },
+  { key: 'plans', label: 'Plans', icon: Banknote },
 ]
 
 const PLATFORM_NAV: Array<{ key: AdminSection; label: string; icon: LucideIcon }> = [
+  { key: 'bank-accounts', label: 'Bank Accounts', icon: Landmark },
   { key: 'economy', label: 'Economy', icon: Landmark },
   { key: 'ai', label: 'AI Engine', icon: Bot },
   { key: 'analytics', label: 'Analytics', icon: BarChart3 },
+  { key: 'settings', label: 'Settings', icon: Settings },
+  { key: 'staff', label: 'Staff', icon: UserCog },
 ]
 
-type BadgeCounts = { reports: number; payments: number; kyc: number }
+type BadgeCounts = { reports: number; payments: number; kyc: number; moderation: number }
 
 function NavBadge({ count, className }: { count: number; className: string }) {
   if (count <= 0) return null
@@ -118,56 +153,70 @@ function NavHeading({ children }: { children: string }) {
   return <p className="px-3 pt-3 text-[10px] font-bold uppercase tracking-wider text-zinc-500">{children}</p>
 }
 
-/** Shared sidebar navigation — rendered in the desktop <aside> and the mobile Sheet. */
+/** Shared sidebar navigation — rendered in the desktop <aside> and the mobile Sheet.
+ * Each item is gated by the viewer's custom module permissions (owner = all). */
 function AdminNav({
   active,
   onSelect,
-  isOwner,
+  me,
   badges,
 }: {
   active: AdminSection
   onSelect: (s: AdminSection) => void
-  isOwner: boolean
+  me: { isAdmin: boolean; subRole?: string | null; permissions?: string | null }
   badges: BadgeCounts | null
 }) {
+  const isOwner = !me.subRole || me.subRole === 'OWNER'
+  const allowed = (s: AdminSection) => hasModuleAccess(me, SECTION_TO_MODULE[s])
+
   const badge = (key: AdminSection): number => {
     if (!badges) return 0
     if (key === 'reports') return badges.reports
     if (key === 'payments') return badges.payments
     if (key === 'kyc') return badges.kyc
+    if (key === 'moderation') return badges.moderation
     return 0
   }
+
+  // Show the Platform group only when the viewer owns at least one platform module.
+  const platformVisible = PLATFORM_NAV.some((i) => allowed(i.key))
+  const modVisible = MODERATION_NAV.some((i) => allowed(i.key))
 
   return (
     <nav aria-label="Admin sections" className="flex flex-col">
       <NavHeading>General</NavHeading>
       <div className="mt-1 flex flex-col gap-1">
-        {GENERAL_NAV.map((item) => (
+        {GENERAL_NAV.filter((i) => allowed(i.key)).map((item) => (
           <NavButton key={item.key} icon={item.icon} label={item.label} active={active === item.key} onClick={() => onSelect(item.key)} />
         ))}
       </div>
 
-      <NavHeading>Moderation</NavHeading>
-      <div className="mt-1 flex flex-col gap-1">
-        {MODERATION_NAV.filter((i) => isOwner || STAFF_SECTIONS.includes(i.key)).map((item) => (
-          <NavButton key={item.key} icon={item.icon} label={item.label} active={active === item.key} onClick={() => onSelect(item.key)}>
-            <NavBadge
-              count={badge(item.key)}
-              className={cn(
-                item.key === 'reports' && 'bg-amber-500/20 text-amber-300',
-                item.key === 'payments' && 'bg-green-500/20 text-green-300',
-                item.key === 'kyc' && 'bg-sky-500/20 text-sky-300'
-              )}
-            />
-          </NavButton>
-        ))}
-      </div>
+      {modVisible ? (
+        <>
+          <NavHeading>Moderation</NavHeading>
+          <div className="mt-1 flex flex-col gap-1">
+            {MODERATION_NAV.filter((i) => allowed(i.key)).map((item) => (
+              <NavButton key={item.key} icon={item.icon} label={item.label} active={active === item.key} onClick={() => onSelect(item.key)}>
+                <NavBadge
+                  count={badge(item.key)}
+                  className={cn(
+                    item.key === 'reports' && 'bg-amber-500/20 text-amber-300',
+                    item.key === 'moderation' && 'bg-amber-500/20 text-amber-300',
+                    item.key === 'payments' && 'bg-green-500/20 text-green-300',
+                    item.key === 'kyc' && 'bg-sky-500/20 text-sky-300'
+                  )}
+                />
+              </NavButton>
+            ))}
+          </div>
+        </>
+      ) : null}
 
-      {isOwner ? (
+      {platformVisible ? (
         <>
           <NavHeading>Platform</NavHeading>
           <div className="mt-1 flex flex-col gap-1">
-            {PLATFORM_NAV.map((item) => (
+            {PLATFORM_NAV.filter((i) => isOwner || allowed(i.key)).map((item) => (
               <NavButton key={item.key} icon={item.icon} label={item.label} active={active === item.key} onClick={() => onSelect(item.key)} />
             ))}
           </div>
@@ -252,6 +301,12 @@ export function AdminView() {
   /** Fetched on mount + polled for the sidebar queue badges — each tab loads its own data. */
   const [badges, setBadges] = useState<BadgeCounts | null>(null)
 
+  // Defensive: if the viewer no longer has access to the active section (e.g. after
+  // an owner trimmed their permissions), fall back to the first section they can open.
+  // Computed before any early return so the hook order stays stable.
+  const accessible = useMemo(() => accessibleModules(me), [me])
+  const canOpen = (s: AdminSection) => hasModuleAccess(me, SECTION_TO_MODULE[s])
+
   useEffect(() => {
     if (!isAdmin) return
     let cancelled = false
@@ -264,6 +319,7 @@ export function AdminView() {
             reports: d.overview.queues.openReports,
             payments: d.overview.queues.pendingPayments + d.overview.queues.pendingWithdrawals,
             kyc: d.overview.queues.pendingKyc,
+            moderation: d.overview.queues.pendingModeration,
           })
         })
         .catch(() => null)
@@ -284,8 +340,7 @@ export function AdminView() {
     )
   }
 
-  // Defensive: a restricted section (e.g. after a role change) falls back to Overview for STAFF.
-  const current: AdminSection = isOwner || STAFF_SECTIONS.includes(section) ? section : 'overview'
+  const current: AdminSection = canOpen(section) ? section : (accessible[0] ? (SECTION_TO_MODULE as Record<string, AdminSection>)[accessible[0]] ?? 'overview' : 'overview')
   const meta = SECTION_META[current]
 
   function selectSection(s: AdminSection) {
@@ -301,6 +356,8 @@ export function AdminView() {
         return <UsersTab />
       case 'reports':
         return <ReportsTab />
+      case 'moderation':
+        return <ModerationTab />
       case 'payments':
         return <PaymentsTab />
       case 'kyc':
@@ -311,6 +368,11 @@ export function AdminView() {
         return <AiEngineTab />
       case 'analytics':
         return <AnalyticsTab />
+      case 'staff':
+        return <StaffTab />
+      default:
+        // Sections not yet wired to a dedicated tab fall back to Overview.
+        return <OverviewTab onNavigate={selectSection} />
     }
   }
 
@@ -329,7 +391,7 @@ export function AdminView() {
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col gap-1 overflow-y-auto border-r border-zinc-800/80 bg-zinc-950 p-3 text-zinc-300 lg:flex">
         <AdminBrand isOwner={isOwner} />
         <div className="mt-1 flex flex-1 flex-col">
-          <AdminNav active={current} onSelect={selectSection} isOwner={isOwner} badges={badges} />
+          <AdminNav active={current} onSelect={selectSection} me={me} badges={badges} />
         </div>
         <AdminFooter onBack={() => go('feed', {})} name={me.name} />
       </aside>
@@ -356,7 +418,7 @@ export function AdminView() {
                 <div className="flex h-full flex-col p-3">
                   <AdminBrand isOwner={isOwner} />
                   <div className="mt-1 flex-1 overflow-y-auto">
-                    <AdminNav active={current} onSelect={selectSection} isOwner={isOwner} badges={badges} />
+                    <AdminNav active={current} onSelect={selectSection} me={me} badges={badges} />
                   </div>
                   <AdminFooter onBack={() => go('feed', {})} name={me.name} />
                 </div>

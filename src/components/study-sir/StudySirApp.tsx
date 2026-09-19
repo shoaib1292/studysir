@@ -118,13 +118,23 @@ export default function StudySirApp() {
     window.scrollTo({ top: 0 })
   }, [view, nonce])
 
-  // Session bootstrap
+  // Session bootstrap — restore the logged-in user (and send platform admins
+  // straight into the admin console on a fresh load, matching the login flow).
   useEffect(() => {
     let cancelled = false
     api
       .getSession()
       .then((d) => {
-        if (!cancelled) setMe(d.user)
+        if (cancelled) return
+        setMe(d.user)
+        if (d.user?.isAdmin) {
+          // Only auto-open the console on a fresh session restore (view is still
+          // the default 'feed'); if the admin navigated somewhere before refresh
+          // we leave them where they were.
+          if (useAppStore.getState().view === 'feed' && useAppStore.getState().nonce === 0) {
+            useAppStore.getState().go('admin', {})
+          }
+        }
       })
       .catch(() => {
         // stay logged out

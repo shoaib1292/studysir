@@ -153,6 +153,10 @@ export interface CourseInput {
   classesPerWeek?: string
   format?: string
   fee: number
+  /** YouTube watch/share URL. When provided the backend validates + auto-extracts a thumbnail. */
+  videoUrl?: string
+  /** INTRO = paid teaser (join to access) | FULL = complete free course (anyone watches, forces fee 0) */
+  videoKind?: 'INTRO' | 'FULL'
 }
 
 export interface GoodInput {
@@ -431,8 +435,75 @@ export const api = {
     request<{ agent: AiAgentDTO }>(`/api/admin/ai/agents/${id}`, { method: 'PATCH', body }),
   adminDeleteAiAgent: (id: string) =>
     request<{ ok: true }>(`/api/admin/ai/agents/${id}`, { method: 'DELETE' }),
-  adminAiStats: () => request<{ agents: AiAgentDTO[]; llmProvider: string; wastedCoinsByRealTeachers: { teacherId: string; teacherName: string; coins: number }[]; aiMessages: number }>('/api/admin/ai'),
+  adminAiStats: () => request<{
+    agents: AiAgentDTO[]
+    llmProvider: string
+    wastedCoinsByRealTeachers: { teacherId: string; teacherName: string; coins: number }[]
+    aiMessages: number
+    activity: {
+      agentsChecked: number
+      actionsTaken: number
+      byType: { likes: number; reviews: number; questions: number; tuitions: number }
+      lastRunAt: string | null
+    }
+  }>('/api/admin/ai'),
   adminOverview: () => request<{ overview: AdminOverview }>('/api/admin/overview'),
+
+  // content moderation queue (auto-flagged links & contact info)
+  adminModeration: (status?: string) =>
+    request<{
+      items: Array<{
+        id: string
+        targetType: string
+        targetId: string
+        authorId: string
+        author: { id: string; name: string; avatar: string | null; email: string }
+        reason: string
+        snippet: string
+        status: string
+        adminNote: string | null
+        decidedAt: string | null
+        createdAt: string
+      }>
+      counts: Record<string, number>
+      byReason: Record<string, number>
+    }>(`/api/admin/moderation${status ? `?status=${encodeURIComponent(status)}` : ''}`),
+  adminModerationAction: (id: string, action: 'APPROVE' | 'REJECT', note?: string) =>
+    request<{ ok: true; status: string }>(`/api/admin/moderation/${id}`, {
+      method: 'POST',
+      body: { action, ...(note ? { note } : {}) },
+    }),
+
+  // staff management (create/edit/delete custom-access staff accounts)
+  adminStaff: () =>
+    request<{
+      staff: Array<{
+        id: string
+        name: string
+        email: string
+        avatar: string | null
+        subRole: string | null
+        permissions: string[] | null
+        staffCreatedBy: string | null
+        status: string
+        createdAt: string
+      }>
+    }>('/api/admin/staff'),
+  adminCreateStaff: (body: { name: string; email: string; password: string; permissions: string[] }) =>
+    request<{ user: UserDTO }>('/api/admin/staff', { method: 'POST', body }),
+  adminUpdateStaff: (id: string, body: { name?: string; permissions?: string[]; status?: string; password?: string }) =>
+    request<{ user: { id: string; name: string; email: string; permissions: string[] | null; status: string } }>(
+      `/api/admin/staff/${id}`,
+      { method: 'PATCH', body }
+    ),
+  adminDeleteStaff: (id: string) =>
+    request<{ ok: true }>(`/api/admin/staff/${id}`, { method: 'DELETE' }),
+
+  // AI engagement cron (likes / reviews / questions)
+  aiEngageNow: () =>
+    request<{ ok: true; stats: { agentsChecked: number; actionsTaken: number; byType: { likes: number; reviews: number; questions: number; tuitions: number }; lastRunAt: string | null } }>(
+      '/api/cron/ai-activity'
+    ),
 }
 
 export function errorMessage(e: unknown): string {

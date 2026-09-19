@@ -141,6 +141,16 @@ export async function toCourseDTO(c: AnyRecord, viewerId?: string | null): Promi
       : Promise.resolve(null),
   ])
   const fee = (c.fee as number) ?? 0
+  // Parse the YouTube video id from the stored watch URL so the client can build
+  // an embed/thumbnail without re-parsing.
+  const videoUrl = (c.videoUrl as string | null) ?? null
+  let videoId: string | null = null
+  if (videoUrl) {
+    const m = /[?&]v=([A-Za-z0-9_-]{11})|youtu\.be\/([A-Za-z0-9_-]{11})|\/embed\/([A-Za-z0-9_-]{11})/.exec(videoUrl)
+    videoId = (m?.[1] ?? m?.[2] ?? m?.[3] ?? null) ?? null
+  }
+  const videoKindRaw = (c.videoKind as string | null) ?? null
+  const videoKind: 'INTRO' | 'FULL' | null = videoKindRaw === 'INTRO' || videoKindRaw === 'FULL' ? videoKindRaw : null
   return {
     id: c.id as string,
     teacherId: c.teacherId as string,
@@ -156,6 +166,9 @@ export async function toCourseDTO(c: AnyRecord, viewerId?: string | null): Promi
     classesPerWeek: (c.classesPerWeek as string) ?? null,
     format: (c.format as string) ?? null,
     fee,
+    videoUrl,
+    videoKind,
+    videoId,
     likeCount: like.likeCount,
     myLike: like.myLike,
     createdAt: (c.createdAt as Date).toISOString(),
@@ -266,19 +279,22 @@ export function toMessageDTO(m: AnyRecord): MessageDTO {
     groups.set(emoji, arr)
   }
   const deleted = Boolean(m.deletedAt)
+  const pendingReview = (m.moderationStatus as string) === 'PENDING'
   return {
     id: m.id as string,
     connectionId: m.connectionId as string,
     senderId: m.senderId as string,
     sender: pickUser(m.sender as AnyRecord),
     // Unsent messages never leak their original content to clients.
-    content: deleted ? '' : (m.content as string),
-    image: deleted ? null : ((m.image as string) ?? null),
+    // Messages held for link review show a placeholder instead of the content.
+    content: deleted ? '' : pendingReview ? '⏳ Message held for review — a StudySir admin will check the link shortly.' : (m.content as string),
+    image: deleted || pendingReview ? null : ((m.image as string) ?? null),
     system: m.system as boolean,
     forwarded: Boolean(m.forwarded),
     createdAt: (m.createdAt as Date).toISOString(),
     readAt: m.readAt ? (m.readAt as Date).toISOString() : null,
     deleted,
+    moderationStatus: (m.moderationStatus as string) ?? 'APPROVED',
     reactions: [...groups.entries()].map(([emoji, userIds]) => ({ emoji, count: userIds.length, userIds })),
   }
 }

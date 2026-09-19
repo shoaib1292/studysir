@@ -5,6 +5,7 @@ import { notify } from '@/lib/coins'
 import { rtEmit, RT_EVENTS } from '@/lib/realtime'
 import { toMessageDTO } from '@/lib/dto'
 import { onMessageToAI } from '@/lib/ai'
+import { scanContent, blockReason, excerpt, MODERATION_REASONS, MODERATION_STATUS } from '@/lib/moderation'
 
 const LOCKED = ['HIRED', 'REJECTED', 'EXPIRED']
 // data-URL size guard (~700KB ≈ 525KB binary after base64 overhead)
@@ -53,6 +54,17 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       }
     }
 
+    // Content moderation: block direct contact info (phone/email) outright.
+    // Messages with links are held for review — the recipient sees a placeholder
+    // until a StudySir admin approves the link.
+    let moderationStatus: string = MODERATION_STATUS.APPROVED
+    if (content) {
+      const scan = scanContent(content)
+      const blocked = blockReason(scan)
+      if (blocked) return NextResponse.json({ error: blocked }, { status: 400 })
+      if (scan.hasUnapprovedLink) moderationStatus = MODERATION_STATUS.PENDING
+    }
+
     // The "decider" is the side that did NOT pay (student for tuition flow, teacher for direct contact).
     // Chat officially starts when the decider replies — until then the refund window keeps running.
     const deciderId = connection.payerId === connection.teacherId ? connection.studentId : connection.teacherId
@@ -65,6 +77,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
           senderId: me.id,
           content: content.slice(0, 2000) || (image ? '📷 Photo' : ''),
           image: image || null,
+          moderationStatus,
         },
         include: { sender: true },
       }),
@@ -76,6 +89,19 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         },
       }),
     ])
+
+    // If the message has an unapproved link, create a moderation item for admin review.
+    if (moderationStatus === MODERATION_STATUS.PENDING) {
+      await db.moderationItem.create({
+        data: {
+          targetType: 'MESSAGE',
+          targetId: message.id,
+          authorId: me.id,
+          reason: MODERATION_REASONS.UNAPPROVED_LINK,
+          snippet: excerpt(content, scanContent(content).linkMatches),
+        },
+      })
+    }
 
     const recipient = me.id === connection.teacherId ? connection.studentId : connection.teacherId
     await notify(recipient, 'MESSAGE', `New message from ${me.name}`, image && !content ? '📷 Sent a photo' : content.slice(0, 80), 'chats')
