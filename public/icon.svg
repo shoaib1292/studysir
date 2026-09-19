@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="108" fill="#1877F2"/>
+  <!-- graduation cap -->
+  <g>
+    <path d="M256 128 96 208l160 80 160-80z" fill="#FFFFFF"/>
+    <path d="M256 128 96 208l160 80 160-80z" fill="#FFFFFF" opacity="0.95"/>
+    <path d="M176 244v56c0 26 36 46 80 46s80-20 80-46v-56l-80 40z" fill="#FFFFFF" opacity="0.92"/>
+    <path d="M400 216v96" stroke="#FFFFFF" stroke-width="16" stroke-linecap="round"/>
+    <circle cx="400" cy="328" r="22" fill="#FFD84D"/>
+  </g>
+  <text x="256" y="452" font-family="Arial, Helvetica, sans-serif" font-size="92" font-weight="800" fill="#FFFFFF" text-anchor="middle">StudySir</text>
+</svg>

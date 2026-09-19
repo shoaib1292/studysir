@@ -1,0 +1,440 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// role: STUDENT | PARENT | TEACHER
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String
+  role          String   @default("STUDENT")
+  password      String? // scrypt hash (null = demo-only account until first signup-style login)
+  avatar        String?
+  coverImage    String?
+  headline      String? // e.g. "Business Coach"
+  bio           String?
+  city          String?
+  country       String? @default("India")
+  gender        String?
+  qualification String?
+  subjects      String? // comma separated
+  languages     String? // comma separated
+  feeMin        Float?
+  feeMax        Float?
+  coins         Int      @default(0)
+  money         Float    @default(0)
+  isVerified    Boolean  @default(false)
+  emailVerified Boolean  @default(false) // email verification completed (signup OTP flow)
+  emailVerificationCode          String?
+  emailVerificationCodeExpiresAt DateTime?
+  kycStatus     String   @default("NONE") // teacher KYC: NONE | PENDING | APPROVED | REJECTED
+  isAdmin       Boolean  @default(false) // platform-admin access (separate login entry)
+  subRole       String? // admin sub-role: OWNER (full) | STAFF (reports+users only)
+  isAI          Boolean  @default(false) // AI-powered demo agent (teacher or student)
+  aiPersona     String? // JSON: { style, activeFrom, activeTo, minDelaySec, maxDelaySec, replyChance, ... }
+  currency      String? // preferred display currency code (USD/EUR/INR/PKR)
+  affiliateCode     String? @unique // affiliate program referral code ("SS-XXXXXX")
+  affiliateEarnings Float   @default(0) // lifetime affiliate commission credited to the money wallet (PKR)
+  bankName          String? // withdrawal destination (saved bank details)
+  bankAccountTitle  String?
+  bankAccountNumber String?
+  status        String   @default("ACTIVE") // ACTIVE | BANNED (moderation)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tuitionPosts    TuitionPost[]
+  courses         Course[]
+  digitalGoods    DigitalGood[]
+  transactions    CoinTransaction[]
+  withdrawRequests WithdrawRequest[]
+  kycSubmission   KycSubmission?
+  topUpRequests   TopUpRequest[]
+  teacherLinks    Connection[] @relation("teacherLink")
+  studentLinks    Connection[] @relation("studentLink")
+  payerLinks      Connection[] @relation("payerLink")
+  messagesSent    Message[]
+  reviewsReceived Review[]     @relation("reviewReceived")
+  reviewsGiven    Review[]     @relation("reviewGiven")
+  blocksMade      Block[]      @relation("blocker")
+  blocksReceived  Block[]      @relation("blocked")
+  notifications   Notification[]
+  likes           Like[]
+  availabilities  Availability[]
+  saves           Save[]
+  reportsMade     Report[]     @relation("reporter")
+  reportsAgainst  Report[]     @relation("reportedUser")
+  reactions       Reaction[]
+  shares          SharedPost[]
+  planPurchases   PlanPurchase[] @relation("planBuyer")
+  affiliateSales  PlanPurchase[] @relation("planAffiliate")
+  affiliateEarns  AffiliateEarning[]
+}
+
+// mode: ONLINE | HOME | CENTER  | status: OPEN | HIRED | CLOSED
+model TuitionPost {
+  id            String   @id @default(cuid())
+  authorId      String
+  author        User     @relation(fields: [authorId], references: [id])
+  title         String
+  description   String
+  image         String? // optional photo attached to the tuition request
+  mode          String   @default("ONLINE")
+  city          String?
+  subjects      String?
+  languages     String?
+  qualification String?
+  feeMin        Float    @default(0)
+  feeMax        Float    @default(0)
+  timing        String?
+  coinCost      Int      @default(10)
+  status        String   @default("OPEN")
+  hidden        Boolean  @default(false) // moderation: soft-hidden from feeds
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  connections Connection[]
+  saves       Save[]
+}
+
+// status: PENDING | ACTIVE | HIRED | REJECTED | EXPIRED  (REFUNDED reflected via refunded flag)
+model Connection {
+  id            String       @id @default(cuid())
+  teacherId     String
+  teacher       User         @relation("teacherLink", fields: [teacherId], references: [id])
+  studentId     String
+  student       User         @relation("studentLink", fields: [studentId], references: [id])
+  payerId       String
+  payer         User         @relation("payerLink", fields: [payerId], references: [id])
+  tuitionPostId String?
+  tuitionPost   TuitionPost? @relation(fields: [tuitionPostId], references: [id])
+  coinsSpent    Int          @default(0)
+  status        String       @default("PENDING")
+  chatStartedAt DateTime?
+  decidedAt     DateTime?
+  refunded      Boolean      @default(false)
+  blockedBy     String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  messages     Message[]
+  transactions CoinTransaction[]
+  reports      Report[]
+}
+
+model Message {
+  id           String     @id @default(cuid())
+  connectionId String
+  connection   Connection @relation(fields: [connectionId], references: [id])
+  senderId     String
+  sender       User       @relation(fields: [senderId], references: [id])
+  content      String
+  image        String?    // data URL for in-chat photo attachments
+  system       Boolean    @default(false)
+  forwarded    Boolean    @default(false) // true when the message was forwarded from another chat
+  readAt       DateTime?
+  deletedAt    DateTime?  // "unsend" — soft delete, renders as an Unsent placeholder
+  createdAt    DateTime   @default(now())
+
+  reactions Reaction[]
+}
+
+// Facebook-style message reactions (one per user per message, toggle to change)
+model Reaction {
+  id        String   @id @default(cuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  emoji     String
+  createdAt DateTime @default(now())
+
+  @@unique([messageId, userId])
+}
+
+model Course {
+  id             String   @id @default(cuid())
+  teacherId      String
+  teacher        User     @relation(fields: [teacherId], references: [id])
+  title          String
+  description    String
+  cover          String?
+  language       String?
+  subject        String?
+  duration       String?
+  timing         String?
+  classDuration  String?
+  classesPerWeek String?
+  format         String?
+  fee            Float    @default(0)
+  status         String   @default("OPEN")
+  hidden         Boolean  @default(false) // moderation: soft-hidden from feeds
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// type: WELCOME | PURCHASE | SPEND_CONTACT | REFUND_AUTO | REFUND_REJECT | HIRE_BONUS | MONETIZE
+model CoinTransaction {
+  id           String      @id @default(cuid())
+  userId       String
+  user         User        @relation(fields: [userId], references: [id])
+  amount       Int
+  type         String
+  description  String?
+  connectionId String?
+  createdAt    DateTime    @default(now())
+  connection   Connection? @relation(fields: [connectionId], references: [id])
+}
+
+model Block {
+  id        String   @id @default(cuid())
+  blockerId String
+  blocker   User     @relation("blocker", fields: [blockerId], references: [id])
+  blockedId String
+  blocked   User     @relation("blocked", fields: [blockedId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  authorId  String
+  author    User     @relation("reviewGiven", fields: [authorId], references: [id])
+  targetId  String
+  target    User     @relation("reviewReceived", fields: [targetId], references: [id])
+  rating    Int      @default(5)
+  comment   String?
+  createdAt DateTime @default(now())
+}
+
+// targetType: TEACHER | COURSE | GOOD | TUITION
+model Like {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  targetType String
+  targetId   String
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, targetType, targetId])
+}
+
+// type: CONNECT_REQUEST | MESSAGE | HIRED | REJECTED | REFUND | BLOCK | SYSTEM
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  type      String
+  title     String
+  body      String?
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Availability {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+  day    String
+  slots  String
+}
+
+// Money-wallet purchase of a digital good
+model Purchase {
+  id         String      @id @default(cuid())
+  userId     String
+  goodId     String
+  good       DigitalGood @relation(fields: [goodId], references: [id])
+  amount     Float
+  commission Float       @default(0) // platform cut (PKR) kept at purchase time
+  createdAt  DateTime    @default(now())
+}
+
+// Student/teacher request to withdraw money wallet balance (min 1000 PKR, manual bank transfer)
+// status: PENDING | APPROVED | REJECTED
+model WithdrawRequest {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  amount        Float
+  bankName      String
+  accountTitle  String
+  accountNumber String
+  status        String    @default("PENDING")
+  adminNote     String?
+  decidedAt     DateTime?
+  createdAt     DateTime  @default(now())
+}
+
+// Teacher KYC verification (CNIC / document upload, admin-approved)
+// status: PENDING | APPROVED | REJECTED
+model KycSubmission {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  user          User      @relation(fields: [userId], references: [id])
+  fullName      String
+  cnic          String
+  phone         String
+  city          String
+  documentImage String // data URL of CNIC / id document
+  selfieImage   String?
+  status        String    @default("PENDING")
+  adminNote     String?
+  decidedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// Payment proof uploaded by users.
+// kind: TEACHER_COINS (teacher buys coins — credited INSTANTLY, clawed back if admin rejects)
+//     | STUDENT_MONEY (student tops up wallet — credited ONLY after admin verifies)
+// status: PENDING | APPROVED | REJECTED
+model TopUpRequest {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  kind         String
+  amount       Float // PKR sent to the platform account
+  method       String // which platform bank account / wallet was used
+  reference    String? // transaction id / sender reference typed by user
+  screenshot   String // data URL of the payment proof
+  coinsGranted Int       @default(0) // set for TEACHER_COINS (clawback amount on rejection)
+  status       String    @default("PENDING")
+  adminNote    String?
+  decidedAt    DateTime?
+  createdAt    DateTime  @default(now())
+}
+
+// Platform bank / wallet accounts shown to users for manual payments (admin-managed)
+model PlatformBankAccount {
+  id            String   @id @default(cuid())
+  bankName      String
+  accountTitle  String
+  accountNumber String
+  instructions  String?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+}
+
+// Admin-editable currency rates. `code` PKR is the base (pkrPer = 1).
+model ExchangeRate {
+  code     String   @id // USD | EUR | INR | PKR
+  label    String
+  symbol   String
+  pkrPer   Float // how many PKR one unit of this currency is worth
+  updatedAt DateTime @updatedAt
+}
+
+// Simple key/value platform settings (commissionRate, milestonePaid, ...)
+model PlatformSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// Bookmarked tuition posts ("Saved" list)
+model Save {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id])
+  tuitionPostId String
+  tuitionPost   TuitionPost @relation(fields: [tuitionPostId], references: [id])
+  createdAt     DateTime    @default(now())
+
+  @@unique([userId, tuitionPostId])
+}
+
+model DigitalGood {
+  id          String   @id @default(cuid())
+  sellerId    String
+  seller      User     @relation(fields: [sellerId], references: [id])
+  title       String
+  description String
+  image       String? // cover/thumbnail image
+  assetType   String  @default("file") // file | link
+  accessLink  String? // external access/download link (assetType = link)
+  price       Float    @default(0)
+  fileUrl     String? // uploaded digital asset file (assetType = file)
+  hidden      Boolean  @default(false) // moderation: soft-hidden from feeds
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  purchases Purchase[]
+}
+
+// Moderation queue. status: OPEN | RESOLVED | DISMISSED
+// targetType: CHAT | GOOD | COURSE | TUITION | USER
+model Report {
+  id           String      @id @default(cuid())
+  reporterId   String
+  reporter     User        @relation("reporter", fields: [reporterId], references: [id])
+  targetType   String
+  targetId     String?     // good/course/tuition id (for CHAT: connectionId)
+  targetUserId String?
+  targetUser   User?       @relation("reportedUser", fields: [targetUserId], references: [id])
+  connectionId String?
+  connection   Connection? @relation(fields: [connectionId], references: [id])
+  reason       String
+  details      String?
+  status       String      @default("OPEN")
+  note         String?     // moderator note on resolve/dismiss
+  resolvedAt   DateTime?
+  createdAt    DateTime    @default(now())
+}
+
+// Facebook-style re-share: a user posts a feed item (tuition/course/good/teacher)
+// to their own feed with an optional caption. targetType: TUITION | COURSE | GOOD | TEACHER
+model SharedPost {
+  id          String   @id @default(cuid())
+  authorId    String
+  author      User     @relation(fields: [authorId], references: [id])
+  text        String   @default("") // caption ("Write something...")
+  targetType  String
+  tuitionId   String?
+  courseId    String?
+  goodId      String?
+  teacherId   String?
+  hidden      Boolean  @default(false) // moderation: soft-hidden from feeds
+  createdAt   DateTime @default(now())
+}
+
+// Premium teacher plan purchase (Basic / Pro / Academy).
+// Payment proof flow: coins are credited INSTANTLY at submit and clawed back if admin rejects.
+// A teacher with an ACTIVE purchase is a "paid teacher" (counts toward the 1,000 milestone).
+// status: PENDING | ACTIVE | REJECTED
+model PlanPurchase {
+  id                  String    @id @default(cuid())
+  userId              String
+  user                User      @relation("planBuyer", fields: [userId], references: [id])
+  tier                String // BASIC | PRO | ACADEMY
+  price               Float // PKR paid by the buyer (affiliate-discounted for Basic via a referral)
+  coinsGranted        Int // credited instantly, clawed back on rejection
+  method              String // which platform bank account / wallet was used
+  reference           String?
+  screenshot          String // data URL of the payment proof
+  affiliateId         String? // affiliate who referred this purchase (commission on approve)
+  affiliate           User?     @relation("planAffiliate", fields: [affiliateId], references: [id])
+  affiliateCommission Float     @default(0) // PKR paid to the affiliate when approved
+  status              String    @default("PENDING")
+  adminNote           String?
+  decidedAt           DateTime?
+  createdAt           DateTime  @default(now())
+}
+
+// Affiliate commission ledger — one row per approved plan sale (money wallet credit).
+model AffiliateEarning {
+  id          String   @id @default(cuid())
+  affiliateId String
+  affiliate   User     @relation(fields: [affiliateId], references: [id])
+  purchaseId  String?
+  buyerId     String?
+  tier        String? // BASIC | PRO | ACADEMY
+  amount      Float // PKR credited to the affiliate's money wallet
+  createdAt   DateTime @default(now())
+}
